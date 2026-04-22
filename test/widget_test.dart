@@ -8,7 +8,7 @@ void main() {
     await tester.pumpWidget(const MobileWalletDemoApp());
 
     expect(find.text('Mobile Wallet Demo'), findsOneWidget);
-    expect(find.text('v0.1'), findsOneWidget);
+    expect(find.text('v0.2'), findsOneWidget);
     expect(find.textContaining('Минимальный стартовый экран'), findsOneWidget);
   });
 }
