@@ -32,9 +32,7 @@ jobs:
       - name: Cache pub packages
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.pub-cache
-            .dart_tool
+          path: ~/.pub-cache
           key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
           restore-keys: |
             ${{ runner.os }}-pub-
@@ -72,9 +70,7 @@ jobs:
       - name: Cache pub packages
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.pub-cache
-            .dart_tool
+          path: ~/.pub-cache
           key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
           restore-keys: |
             ${{ runner.os }}-pub-
@@ -107,9 +103,7 @@ jobs:
       - name: Cache pub packages
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.pub-cache
-            .dart_tool
+          path: ~/.pub-cache
           key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
           restore-keys: |
             ${{ runner.os }}-pub-
@@ -157,9 +151,7 @@ jobs:
       - name: Cache pub packages
         uses: actions/cache@v4
         with:
-          path: |
-            ~\AppData\Local\Pub\Cache
-            .dart_tool
+          path: ~\AppData\Local\Pub\Cache
           key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
           restore-keys: |
             ${{ runner.os }}-pub-
