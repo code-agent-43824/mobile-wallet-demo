@@ -313,7 +313,7 @@ class _Header extends StatelessWidget {
       case WalletFlowStage.locked:
         return 'Кошелёк инициализирован, но заблокирован. Дальше доступ в приложение идёт через PIN, а позже сюда же добавится реальная биометрия.';
       case WalletFlowStage.unlocked:
-        return 'Onboarding/auth shell готов. Теперь поверх него подключён read-only EVM foundation с Mainnet/Sepolia и публичным RPC fallback.';
+        return 'Onboarding/auth shell готов. Теперь поверх него строим первый действительно полезный read-only wallet слой: баланс, токены, история и локальный кэш.';
     }
   }
 }
@@ -876,8 +876,21 @@ class _UnlockedStageState extends State<_UnlockedStage> {
                 label: 'Обновлено',
                 value: snapshot.fetchedAtUtc.toIso8601String(),
               ),
+              const SizedBox(height: 10),
+              _SummaryTile(
+                label: 'Источник данных',
+                value: snapshot.loadedFromCache
+                    ? 'Локальный кэш'
+                    : 'Живой запрос к сети',
+              ),
             ],
           ),
+        if (snapshot != null) ...[
+          const SizedBox(height: 20),
+          _TokenBalancesSection(snapshot: snapshot),
+          const SizedBox(height: 20),
+          _RecentTransactionsSection(snapshot: snapshot),
+        ],
         const SizedBox(height: 20),
         Wrap(
           spacing: 10,
@@ -886,6 +899,8 @@ class _UnlockedStageState extends State<_UnlockedStage> {
             const _StatusChip(label: 'Unlocked'),
             const _StatusChip(label: 'Read-only RPC'),
             _StatusChip(label: 'Chain ${config.chainId}'),
+            if (snapshot?.loadedFromCache ?? false)
+              const _StatusChip(label: 'Cached fallback'),
           ],
         ),
         const SizedBox(height: 20),
@@ -905,6 +920,81 @@ class _UnlockedStageState extends State<_UnlockedStage> {
             ),
           ],
         ),
+      ],
+    );
+  }
+}
+
+class _TokenBalancesSection extends StatelessWidget {
+  const _TokenBalancesSection({required this.snapshot});
+
+  final WalletChainSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle('Токены'),
+        const SizedBox(height: 12),
+        if (snapshot.tokenBalances.isEmpty)
+          const _SummaryTile(
+            label: 'Token balances',
+            value:
+                'Пока пусто или публичный индексер не вернул ненулевые токены.',
+          )
+        else
+          Column(
+            children: snapshot.tokenBalances
+                .map(
+                  (token) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _SummaryTile(
+                      label: '${token.symbol} · ${token.name}',
+                      value:
+                          '${token.balanceFormatted}\n${token.contractAddress}',
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          ),
+      ],
+    );
+  }
+}
+
+class _RecentTransactionsSection extends StatelessWidget {
+  const _RecentTransactionsSection({required this.snapshot});
+
+  final WalletChainSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle('Последние транзакции'),
+        const SizedBox(height: 12),
+        if (snapshot.recentTransactions.isEmpty)
+          const _SummaryTile(
+            label: 'История',
+            value: 'Пока пусто или индексер не вернул недавние операции.',
+          )
+        else
+          Column(
+            children: snapshot.recentTransactions
+                .map(
+                  (tx) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _SummaryTile(
+                      label: '${tx.directionLabel} · ${tx.statusLabel}',
+                      value:
+                          '${tx.valueFormatted}\n${tx.counterparty}\n${tx.hash}\n${tx.timestampUtc?.toIso8601String() ?? 'Время неизвестно'}',
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          ),
       ],
     );
   }

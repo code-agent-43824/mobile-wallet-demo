@@ -7,6 +7,7 @@ class EvmNetworkConfig {
     required this.name,
     required this.nativeSymbol,
     required this.rpcUrls,
+    required this.explorerApiBaseUrl,
   });
 
   final EvmNetwork network;
@@ -14,6 +15,7 @@ class EvmNetworkConfig {
   final String name;
   final String nativeSymbol;
   final List<String> rpcUrls;
+  final String explorerApiBaseUrl;
 }
 
 const Map<EvmNetwork, EvmNetworkConfig> evmNetworkConfigs =
@@ -27,6 +29,7 @@ const Map<EvmNetwork, EvmNetworkConfig> evmNetworkConfigs =
           'https://cloudflare-eth.com',
           'https://rpc.ankr.com/eth',
         ],
+        explorerApiBaseUrl: 'https://eth.blockscout.com/api/v2',
       ),
       EvmNetwork.ethereumSepolia: EvmNetworkConfig(
         network: EvmNetwork.ethereumSepolia,
@@ -37,5 +40,6 @@ const Map<EvmNetwork, EvmNetworkConfig> evmNetworkConfigs =
           'https://rpc.sepolia.org',
           'https://ethereum-sepolia-rpc.publicnode.com',
         ],
+        explorerApiBaseUrl: 'https://eth-sepolia.blockscout.com/api/v2',
       ),
     };

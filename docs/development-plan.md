@@ -10,7 +10,8 @@ Current factual status of the project:
 - ✅ Phase 1 is implemented as a user-facing flow
 - ◐ Phase 2 is partially implemented; PIN unlock flow is ready, real biometric integration is still pending
 - ✅ Phase 3 is implemented
-- ⏳ Phases 4-8 are not started yet
+- ✅ Phase 4 is implemented
+- ⏳ Phases 5-8 are not started yet
 
 Completed deliverables so far:
 - ✅ project module structure started (`auth`, `key_storage`)
@@ -24,6 +25,7 @@ Completed deliverables so far:
   - PIN unlock session primitive
 - ✅ unit tests for create/import/unlock flow
 - ✅ read-only RPC foundation for Ethereum Mainnet and Sepolia
+- ✅ read-only wallet experience with token balances, history, and local cache fallback
 
 Not implemented yet from the near-term plan:
 - ✅ onboarding UI flow
@@ -181,16 +183,16 @@ Deliverables:
 ## Phase 4 — read-only wallet experience
 Goal: first useful user-facing wallet release without send risk.
 
-Status: ◐ Partially completed
+Status: ✅ Completed
 
 Deliverables:
 - [x] wallet home screen
 - [x] address display
 - [x] current network switch/display
-- [ ] native and token balances
+- [x] native and token balances
 - [x] manual refresh
-- [ ] recent transaction history screen
-- [ ] local cache for last loaded blockchain state
+- [x] recent transaction history screen
+- [x] local cache for last loaded blockchain state
 
 ## Phase 5 — transfer preparation
 Goal: prepare safe transaction composition before enabling send.

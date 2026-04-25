@@ -19,6 +19,24 @@ class _FakeBlockchainProvider implements BlockchainProvider {
       baseFeeGwei: 12.345,
       providerLabel: 'fake-rpc.local',
       fetchedAtUtc: DateTime.utc(2026, 4, 25, 15, 32),
+      tokenBalances: const <TokenBalanceSnapshot>[
+        TokenBalanceSnapshot(
+          symbol: 'USDC',
+          name: 'USD Coin',
+          balanceFormatted: '42.5',
+          contractAddress: '0xToken',
+        ),
+      ],
+      recentTransactions: const <RecentTransactionSnapshot>[
+        RecentTransactionSnapshot(
+          hash: '0xTx',
+          timestampUtc: null,
+          directionLabel: 'Входящая',
+          counterparty: '0xCounterparty',
+          valueFormatted: '0.25 ETH',
+          statusLabel: 'Confirmed',
+        ),
+      ],
     );
   }
 }
@@ -39,7 +57,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Mobile Wallet Demo'), findsOneWidget);
-    expect(find.text('v0.5'), findsOneWidget);
+    expect(find.text('v0.6'), findsOneWidget);
     expect(find.text('Создать новый кошелёк'), findsOneWidget);
     expect(find.text('Импортировать seed-фразу'), findsOneWidget);
   });

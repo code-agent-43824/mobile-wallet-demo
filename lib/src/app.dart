@@ -19,6 +19,7 @@ class MobileWalletDemoApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveStore = _store ?? FlutterSecureKeyValueStore();
     final theme = ThemeData(
       colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2D6CDF)),
       scaffoldBackgroundColor: const Color(0xFFF5F7FB),
@@ -46,9 +47,10 @@ class MobileWalletDemoApp extends StatelessWidget {
         );
       },
       home: WalletFlowScreen(
-        store: _store ?? FlutterSecureKeyValueStore(),
+        store: effectiveStore,
         blockchainProvider:
-            _blockchainProvider ?? PublicRpcBlockchainProvider(),
+            _blockchainProvider ??
+            PublicRpcBlockchainProvider(cacheStore: effectiveStore),
       ),
     );
   }
