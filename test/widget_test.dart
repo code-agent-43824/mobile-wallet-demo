@@ -8,7 +8,7 @@ void main() {
     await tester.pumpWidget(const MobileWalletDemoApp());
 
     expect(find.text('Mobile Wallet Demo'), findsOneWidget);
-    expect(find.text('v0.3'), findsOneWidget);
+    expect(find.text('v0.3.1'), findsOneWidget);
     expect(find.textContaining('Архитектурный фундамент'), findsOneWidget);
     expect(find.text('Secure Vault'), findsOneWidget);
     expect(find.text('PIN auth'), findsOneWidget);

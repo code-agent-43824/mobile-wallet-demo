@@ -237,8 +237,8 @@ Deliverables:
 - [ ] state model prepared for external signing/session flows
 
 ## Suggested release sequence
-- `v0.3` — architecture skeleton + onboarding/auth shell
-- `v0.4` — create/import seed + secure phone vault + address derivation
+- `v0.3` — architecture skeleton + secure vault foundation
+- `v0.4` — onboarding/auth shell + create/import UI + one-time seed display flow
 - `v0.5` — Ethereum Mainnet + Sepolia read-only balances
 - `v0.6` — tokens + history + local cache
 - `v0.7` — send form + gas estimation + preview
