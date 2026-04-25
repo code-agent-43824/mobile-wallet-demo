@@ -124,16 +124,11 @@ jobs:
       - name: Build iOS simulator app
         run: flutter build ios --simulator --debug
 
-      - name: Package iOS artifact
-        run: |
-          cd build/ios/iphonesimulator
-          ditto -c -k --sequesterRsrc --keepParent Runner.app ios-simulator-app.zip
-
       - name: Upload iOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-simulator-app
-          path: build/ios/iphonesimulator/ios-simulator-app.zip
+          path: build/ios/iphonesimulator/Runner.app
           if-no-files-found: error
 
   windows:
@@ -162,13 +157,9 @@ jobs:
       - name: Build Windows app
         run: flutter build windows --release
 
-      - name: Package Windows artifact
-        shell: pwsh
-        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath build/windows/x64/runner/mobile-wallet-demo-windows-x64.zip -Force
-
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-x64
-          path: build/windows/x64/runner/mobile-wallet-demo-windows-x64.zip
+          path: build/windows/x64/runner/Release
           if-no-files-found: error

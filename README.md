@@ -29,11 +29,11 @@
 
 ## Артефакты CI
 
-Workflow публикует скачиваемые артефакты:
+Workflow публикует скачиваемые артефакты так, чтобы при скачивании с GitHub был нужен только один `unzip`:
 
 - Android: `app-release.apk`
-- iOS: zip с `Runner.app` для iOS Simulator
-- Windows x64: zip с собранным приложением
+- iOS: один архив GitHub Artifact с `Runner.app` для iOS Simulator внутри
+- Windows x64: один архив GitHub Artifact с содержимым `Release/` внутри
 
 ## Локальный запуск
 

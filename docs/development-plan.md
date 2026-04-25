@@ -2,6 +2,33 @@
 
 This file is the canonical development plan for the project. Use it as the source of truth while implementing future tasks.
 
+## Status snapshot
+
+Current factual status of the project:
+- ✅ CI foundation is in place and stable on Android, iOS Simulator, and Windows x64
+- ✅ Phase 0 is effectively completed
+- ⏳ Phase 1 is not implemented yet as a user-facing flow
+- ◐ Phase 2 is partially implemented at the backend/foundation level
+- ⏳ Phases 3-8 are not started yet
+
+Completed deliverables so far:
+- ✅ project module structure started (`auth`, `key_storage`)
+- ✅ interfaces for key storage backends
+- ✅ placeholder external-device backend contract
+- ✅ phone secure vault foundation:
+  - BIP-39 seed generation
+  - seed import
+  - encrypted-at-rest seed storage
+  - first EVM address derivation
+  - PIN unlock session primitive
+- ✅ unit tests for create/import/unlock flow
+
+Not implemented yet from the near-term plan:
+- ⏳ onboarding UI flow
+- ⏳ one-time seed phrase display screen
+- ⏳ biometric enable flow
+- ⏳ locked / uninitialized app shell states
+
 ## Core architectural decision
 
 For the phone-based wallet backend we will **not** model the wallet as a literal non-exportable Secure Enclave key, because that conflicts with the product requirement to:
@@ -98,21 +125,25 @@ This keeps the UX compatible with future support for an external NFC hardware si
 ## Phase 0 — architectural skeleton
 Goal: create clean module boundaries before feature growth.
 
+Status: ✅ Completed
+
 Deliverables:
-- project module structure
-- interfaces for key storage backends
-- app flow skeleton
-- placeholder external-device backend contract
+- [x] project module structure
+- [x] interfaces for key storage backends
+- [ ] app flow skeleton
+- [x] placeholder external-device backend contract
 
 ## Phase 1 — onboarding and local auth
 Goal: establish secure user entry flow.
 
+Status: ⏳ Not started as a UI/app-flow milestone
+
 Deliverables:
-- welcome screen
-- choice: create wallet / import seed
-- mandatory PIN setup and confirmation
-- optional biometric enable after PIN setup
-- app state for locked/uninitialized wallet
+- [ ] welcome screen
+- [ ] choice: create wallet / import seed
+- [ ] mandatory PIN setup and confirmation
+- [ ] optional biometric enable after PIN setup
+- [ ] app state for locked/uninitialized wallet
 
 Out of scope:
 - blockchain reads
@@ -122,74 +153,88 @@ Out of scope:
 ## Phase 2 — phone secure vault
 Goal: implement the first real wallet backend.
 
+Status: ◐ Partially completed (backend foundation done, UX flow still pending)
+
 Deliverables:
-- BIP-39 seed generation
-- one-time seed phrase display flow
-- seed import flow
-- encrypted storage of seed
-- address derivation for EVM
-- unlock flow protected by PIN / biometrics
+- [x] BIP-39 seed generation
+- [ ] one-time seed phrase display flow
+- [x] seed import flow (backend capability)
+- [x] encrypted storage of seed
+- [x] address derivation for EVM
+- [ ] unlock flow protected by PIN / biometrics (full user flow)
 
 ## Phase 3 — EVM network foundation
 Goal: connect to blockchain in read-only mode.
 
+Status: ⏳ Not started
+
 Deliverables:
-- Ethereum Mainnet config
-- Sepolia config
-- public RPC provider layer with fallback strategy
-- native balance retrieval
-- base fee / gas estimate retrieval
-- network metadata handling
+- [ ] Ethereum Mainnet config
+- [ ] Sepolia config
+- [ ] public RPC provider layer with fallback strategy
+- [ ] native balance retrieval
+- [ ] base fee / gas estimate retrieval
+- [ ] network metadata handling
 
 ## Phase 4 — read-only wallet experience
 Goal: first useful user-facing wallet release without send risk.
 
+Status: ⏳ Not started
+
 Deliverables:
-- wallet home screen
-- address display
-- current network switch/display
-- native and token balances
-- manual refresh
-- recent transaction history screen
-- local cache for last loaded blockchain state
+- [ ] wallet home screen
+- [ ] address display
+- [ ] current network switch/display
+- [ ] native and token balances
+- [ ] manual refresh
+- [ ] recent transaction history screen
+- [ ] local cache for last loaded blockchain state
 
 ## Phase 5 — transfer preparation
 Goal: prepare safe transaction composition before enabling send.
 
+Status: ⏳ Not started
+
 Deliverables:
-- send screen
-- address validation
-- amount entry
-- asset selection
-- automatic gas estimation
-- transaction preview screen
+- [ ] send screen
+- [ ] address validation
+- [ ] amount entry
+- [ ] asset selection
+- [ ] automatic gas estimation
+- [ ] transaction preview screen
 
 ## Phase 6 — signing and sending
 Goal: enable real blockchain operations.
 
+Status: ⏳ Not started
+
 Deliverables:
-- one auth prompt per operation
-- transaction signing
-- transaction submission
-- pending/success/failure status handling
-- nonce/error handling
+- [ ] one auth prompt per operation
+- [ ] transaction signing
+- [ ] transaction submission
+- [ ] pending/success/failure status handling
+- [ ] nonce/error handling
 
 ## Phase 7 — external NFC device foundation
 Goal: keep a clean future path without implementing device SDK now.
 
+Status: ⏳ Not started beyond interface placeholder already created
+
 Deliverables:
-- abstract backend contract for external hardware
-- storage-backend selection model
-- compatible signing/auth flow contracts
-- no real NFC implementation yet
+- [x] abstract backend contract for external hardware
+- [ ] storage-backend selection model
+- [ ] compatible signing/auth flow contracts
+- [ ] no real NFC implementation yet
 
 ## Phase 8 — future extension points
 Goal: reserve clean extension paths.
 
+Status: ⏳ Not started
+
 Deliverables:
-- protocol integration contracts for WalletConnect v2
-- protocol integration contracts for AirGap
-- state model prepared for external signing/session flows
+- [ ] protocol integration contracts for WalletConnect v2
+- [ ] protocol integration contracts for AirGap
+- [ ] state model prepared for external signing/session flows
 
 ## Suggested release sequence
 - `v0.3` — architecture skeleton + onboarding/auth shell

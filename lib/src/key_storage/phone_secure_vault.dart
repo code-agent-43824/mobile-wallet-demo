@@ -55,7 +55,7 @@ class PhoneSecureVault implements KeyStorageBackend {
 
     return StoredWalletSummary(
       address: payload.address,
-      backendId: backendId,
+      backendId: payload.backendId,
       createdAtUtc: DateTime.parse(payload.createdAtUtc),
     );
   }
@@ -91,35 +91,22 @@ class PhoneSecureVault implements KeyStorageBackend {
     }
 
     try {
-      final secretKey = await _deriveEncryptionKey(
+      final decryptedMnemonic = await _decryptMnemonic(
+        payload: payload,
         pin: pin,
-        salt: hex.decode(payload.pinSaltHex),
       );
-      final decryptedBytes = await _cipher.decrypt(
-        SecretBox(
-          hex.decode(payload.cipherTextHex),
-          nonce: hex.decode(payload.cipherNonceHex),
-          mac: Mac(hex.decode(payload.macHex)),
-        ),
-        secretKey: secretKey,
+      final material = _deriveWalletMaterial(
+        mnemonic: decryptedMnemonic,
+        derivationPath: payload.derivationPath,
       );
 
-      final mnemonic = utf8.decode(decryptedBytes);
-      if (!bip39.validateMnemonic(mnemonic)) {
-        throw const InvalidPinFailure();
-      }
-
-      final material = _deriveWalletMaterial(mnemonic);
       if (material.address.toLowerCase() != payload.address.toLowerCase()) {
         throw const InvalidPinFailure();
       }
 
-      _cachedMaterial = material;
-      _session.unlock();
-      return material;
+      return _cacheUnlockedMaterial(material);
     } catch (_) {
-      _session.lock();
-      _cachedMaterial = null;
+      lock();
       throw const InvalidPinFailure();
     }
   }
@@ -140,13 +127,19 @@ class PhoneSecureVault implements KeyStorageBackend {
     required String mnemonic,
     required String pin,
   }) async {
-    final material = _deriveWalletMaterial(mnemonic);
+    final material = _deriveWalletMaterial(
+      mnemonic: mnemonic,
+      derivationPath: derivationPath,
+    );
     final salt = _randomBytes(_pinSaltLength);
     final nonce = _randomBytes(_cipherNonceLength);
-    final secretKey = await _deriveEncryptionKey(pin: pin, salt: salt);
     final encryptedBox = await _cipher.encrypt(
       utf8.encode(material.mnemonic),
-      secretKey: secretKey,
+      secretKey: await _deriveEncryptionKey(
+        pin: pin,
+        salt: salt,
+        iterations: _pinIterations,
+      ),
       nonce: nonce,
     );
 
@@ -164,9 +157,7 @@ class PhoneSecureVault implements KeyStorageBackend {
     );
 
     await _store.write(storageKey, jsonEncode(payload.toJson()));
-    _cachedMaterial = material;
-    _session.unlock();
-    return material;
+    return _cacheUnlockedMaterial(material);
   }
 
   Future<_VaultPayload?> _readPayload() async {
@@ -178,13 +169,41 @@ class PhoneSecureVault implements KeyStorageBackend {
     return _VaultPayload.fromJson(jsonDecode(raw) as Map<String, dynamic>);
   }
 
+  Future<String> _decryptMnemonic({
+    required _VaultPayload payload,
+    required String pin,
+  }) async {
+    final secretKey = await _deriveEncryptionKey(
+      pin: pin,
+      salt: hex.decode(payload.pinSaltHex),
+      iterations: payload.pinIterations,
+    );
+
+    final decryptedBytes = await _cipher.decrypt(
+      SecretBox(
+        hex.decode(payload.cipherTextHex),
+        nonce: hex.decode(payload.cipherNonceHex),
+        mac: Mac(hex.decode(payload.macHex)),
+      ),
+      secretKey: secretKey,
+    );
+
+    final mnemonic = utf8.decode(decryptedBytes);
+    if (!bip39.validateMnemonic(mnemonic)) {
+      throw const InvalidPinFailure();
+    }
+
+    return mnemonic;
+  }
+
   Future<SecretKey> _deriveEncryptionKey({
     required String pin,
     required List<int> salt,
+    required int iterations,
   }) {
     final pbkdf2 = Pbkdf2(
       macAlgorithm: Hmac.sha256(),
-      iterations: _pinIterations,
+      iterations: iterations,
       bits: 256,
     );
 
@@ -194,7 +213,10 @@ class PhoneSecureVault implements KeyStorageBackend {
     );
   }
 
-  WalletMaterial _deriveWalletMaterial(String mnemonic) {
+  WalletMaterial _deriveWalletMaterial({
+    required String mnemonic,
+    required String derivationPath,
+  }) {
     final seed = bip39.mnemonicToSeed(mnemonic);
     final node = bip32.BIP32.fromSeed(seed).derivePath(derivationPath);
     final privateKeyBytes = node.privateKey;
@@ -210,6 +232,12 @@ class PhoneSecureVault implements KeyStorageBackend {
       mnemonic: mnemonic,
       privateKeyHex: privateKeyHex,
     );
+  }
+
+  WalletMaterial _cacheUnlockedMaterial(WalletMaterial material) {
+    _cachedMaterial = material;
+    _session.unlock();
+    return material;
   }
 
   String _normalizeMnemonic(String mnemonic) {
