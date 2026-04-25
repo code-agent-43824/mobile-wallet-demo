@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 
 import 'app_version.dart';
+import 'blockchain/blockchain_provider.dart';
 import 'key_storage/secure_key_value_store.dart';
 import 'wallet_flow_screen.dart';
 import 'widgets/version_banner.dart';
 
 class MobileWalletDemoApp extends StatelessWidget {
-  const MobileWalletDemoApp({super.key, SecureKeyValueStore? store})
-    : _store = store;
+  const MobileWalletDemoApp({
+    super.key,
+    SecureKeyValueStore? store,
+    BlockchainProvider? blockchainProvider,
+  }) : _store = store,
+       _blockchainProvider = blockchainProvider;
 
   final SecureKeyValueStore? _store;
+  final BlockchainProvider? _blockchainProvider;
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +45,11 @@ class MobileWalletDemoApp extends StatelessWidget {
           ],
         );
       },
-      home: WalletFlowScreen(store: _store ?? FlutterSecureKeyValueStore()),
+      home: WalletFlowScreen(
+        store: _store ?? FlutterSecureKeyValueStore(),
+        blockchainProvider:
+            _blockchainProvider ?? PublicRpcBlockchainProvider(),
+      ),
     );
   }
 }

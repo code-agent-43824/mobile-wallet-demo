@@ -1,7 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/app.dart';
+import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
+import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
+
+class _FakeBlockchainProvider implements BlockchainProvider {
+  @override
+  Future<WalletChainSnapshot> loadSnapshot({
+    required EvmNetwork network,
+    required String address,
+  }) async {
+    return WalletChainSnapshot(
+      network: network,
+      address: address,
+      nativeBalanceWei: BigInt.parse('1230000000000000000'),
+      nativeBalanceFormatted: '1.23',
+      baseFeeGwei: 12.345,
+      providerLabel: 'fake-rpc.local',
+      fetchedAtUtc: DateTime.utc(2026, 4, 25, 15, 32),
+    );
+  }
+}
 
 void main() {
   testWidgets('renders onboarding welcome shell for uninitialized wallet', (
@@ -11,12 +31,15 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
-      MobileWalletDemoApp(store: InMemorySecureKeyValueStore()),
+      MobileWalletDemoApp(
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _FakeBlockchainProvider(),
+      ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Mobile Wallet Demo'), findsOneWidget);
-    expect(find.text('v0.4'), findsOneWidget);
+    expect(find.text('v0.5'), findsOneWidget);
     expect(find.text('Создать новый кошелёк'), findsOneWidget);
     expect(find.text('Импортировать seed-фразу'), findsOneWidget);
   });
@@ -28,7 +51,10 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
-      MobileWalletDemoApp(store: InMemorySecureKeyValueStore()),
+      MobileWalletDemoApp(
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _FakeBlockchainProvider(),
+      ),
     );
     await tester.pumpAndSettle();
 

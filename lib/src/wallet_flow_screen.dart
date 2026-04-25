@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'blockchain/blockchain_provider.dart';
+import 'blockchain/network_config.dart';
 import 'key_storage/key_storage_backend.dart';
 import 'key_storage/phone_secure_vault.dart';
 import 'key_storage/secure_key_value_store.dart';
@@ -16,9 +18,14 @@ enum WalletFlowStage {
 }
 
 class WalletFlowScreen extends StatefulWidget {
-  const WalletFlowScreen({required this.store, super.key});
+  const WalletFlowScreen({
+    required this.store,
+    required this.blockchainProvider,
+    super.key,
+  });
 
   final SecureKeyValueStore store;
+  final BlockchainProvider blockchainProvider;
 
   @override
   State<WalletFlowScreen> createState() => _WalletFlowScreenState();
@@ -235,6 +242,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
         );
       case WalletFlowStage.unlocked:
         return _UnlockedStage(
+          blockchainProvider: widget.blockchainProvider,
           material: _material,
           summary: _summary,
           biometricsEnabled: _biometricsEnabled,
@@ -305,7 +313,7 @@ class _Header extends StatelessWidget {
       case WalletFlowStage.locked:
         return 'Кошелёк инициализирован, но заблокирован. Дальше доступ в приложение идёт через PIN, а позже сюда же добавится реальная биометрия.';
       case WalletFlowStage.unlocked:
-        return 'Onboarding/auth shell готов: кошелёк разблокирован, foundation подключён, дальше можно переходить к read-only blockchain experience.';
+        return 'Onboarding/auth shell готов. Теперь поверх него подключён read-only EVM foundation с Mainnet/Sepolia и публичным RPC fallback.';
     }
   }
 }
@@ -720,52 +728,182 @@ class _LockedStageState extends State<_LockedStage> {
   }
 }
 
-class _UnlockedStage extends StatelessWidget {
+class _UnlockedStage extends StatefulWidget {
   const _UnlockedStage({
+    required this.blockchainProvider,
     required this.material,
     required this.summary,
     required this.biometricsEnabled,
     required this.onLock,
   });
 
+  final BlockchainProvider blockchainProvider;
   final WalletMaterial? material;
   final StoredWalletSummary? summary;
   final bool biometricsEnabled;
   final VoidCallback onLock;
 
   @override
+  State<_UnlockedStage> createState() => _UnlockedStageState();
+}
+
+class _UnlockedStageState extends State<_UnlockedStage> {
+  EvmNetwork _selectedNetwork = EvmNetwork.ethereumMainnet;
+  WalletChainSnapshot? _snapshot;
+  String? _error;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final address = widget.material?.address ?? widget.summary?.address;
+    if (address == null) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final snapshot = await widget.blockchainProvider.loadSnapshot(
+        network: _selectedNetwork,
+        address: address,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _snapshot = snapshot;
+      });
+    } on BlockchainFailure catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = error.message;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final address = material?.address ?? summary?.address ?? '—';
+    final address = widget.material?.address ?? widget.summary?.address ?? '—';
+    final config = evmNetworkConfigs[_selectedNetwork]!;
+    final snapshot = _snapshot;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle('Wallet shell готов'),
+        const _SectionTitle('Read-only wallet foundation'),
         const SizedBox(height: 12),
         const Text(
-          'Read-only blockchain screen ещё впереди, но onboarding и локальная auth-модель уже собраны в связный поток. Теперь состояние приложения честно разделено на uninitialized, locked и unlocked.',
+          'Следующий шаг после onboarding — реальное чтение данных из сети. Здесь уже есть Mainnet/Sepolia switch, публичный RPC fallback и ручное обновление баланса без send-риска. Очень цивилизованно.',
         ),
         const SizedBox(height: 20),
         _SummaryTile(label: 'Активный адрес', value: address),
         const SizedBox(height: 10),
         _SummaryTile(
           label: 'Биометрия',
-          value: biometricsEnabled ? 'Включена в shell-flow' : 'Пока выключена',
+          value: widget.biometricsEnabled
+              ? 'Включена в shell-flow'
+              : 'Пока выключена',
         ),
+        const SizedBox(height: 20),
+        DropdownButtonFormField<EvmNetwork>(
+          initialValue: _selectedNetwork,
+          decoration: const InputDecoration(
+            labelText: 'Сеть',
+            border: OutlineInputBorder(),
+          ),
+          items: EvmNetwork.values
+              .map(
+                (network) => DropdownMenuItem<EvmNetwork>(
+                  value: network,
+                  child: Text(evmNetworkConfigs[network]!.name),
+                ),
+              )
+              .toList(),
+          onChanged: (network) {
+            if (network == null) {
+              return;
+            }
+
+            setState(() {
+              _selectedNetwork = network;
+            });
+            _refresh();
+          },
+        ),
+        const SizedBox(height: 16),
+        if (_isLoading)
+          const LinearProgressIndicator()
+        else if (_error != null)
+          _ErrorBanner(message: _error!)
+        else if (snapshot != null)
+          Column(
+            children: [
+              _SummaryTile(
+                label: 'Нативный баланс',
+                value:
+                    '${snapshot.nativeBalanceFormatted} ${config.nativeSymbol}',
+              ),
+              const SizedBox(height: 10),
+              _SummaryTile(
+                label: 'Base fee',
+                value: snapshot.baseFeeGwei == null
+                    ? 'Недоступно'
+                    : '${snapshot.baseFeeGwei!.toStringAsFixed(3)} gwei',
+              ),
+              const SizedBox(height: 10),
+              _SummaryTile(
+                label: 'RPC endpoint',
+                value: snapshot.providerLabel,
+              ),
+              const SizedBox(height: 10),
+              _SummaryTile(
+                label: 'Обновлено',
+                value: snapshot.fetchedAtUtc.toIso8601String(),
+              ),
+            ],
+          ),
         const SizedBox(height: 20),
         Wrap(
           spacing: 10,
           runSpacing: 10,
-          children: const [
-            _StatusChip(label: 'Unlocked'),
-            _StatusChip(label: 'Onboarding done'),
+          children: [
+            const _StatusChip(label: 'Unlocked'),
+            const _StatusChip(label: 'Read-only RPC'),
+            _StatusChip(label: 'Chain ${config.chainId}'),
           ],
         ),
         const SizedBox(height: 20),
-        FilledButton.icon(
-          onPressed: onLock,
-          icon: const Icon(Icons.lock_outline),
-          label: const Text('Заблокировать снова'),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            FilledButton.icon(
+              onPressed: _refresh,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Обновить с блокчейна'),
+            ),
+            OutlinedButton.icon(
+              onPressed: widget.onLock,
+              icon: const Icon(Icons.lock_outline),
+              label: const Text('Заблокировать снова'),
+            ),
+          ],
         ),
       ],
     );

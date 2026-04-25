@@ -13,15 +13,20 @@
   - one-time seed display flow
   - biometric choice shell
   - locked / unlocked app states
+- Read-only EVM foundation:
+  - Ethereum Mainnet + Sepolia
+  - публичный RPC provider layer с fallback
+  - чтение native balance
+  - чтение latest base fee
+  - ручное обновление данных
 - Контракты для `KeyStorageBackend` и задел под внешний hardware backend
-- Реализация `PhoneSecureVault` с шифрованием seed, PIN unlock session и EVM-деривацией первого адреса
 - Unit- и widget-тесты для ключевых flow
 - GitHub Actions для сборки и публикации артефактов
 - Артефакты iOS / Windows без двойной упаковки
 
 ## Версионирование
 
-- Текущая версия: `v0.4` (`0.4.0+5`)
+- Текущая версия: `v0.5` (`0.5.0+6`)
 - По договорённости в этом проекте дальше повышаем минорную версию с каждым функциональным шагом
 
 ## Что покрывает текущий этап
@@ -35,6 +40,9 @@
 - хранение seed в зашифрованном виде
 - derivation первого EVM-адреса (`m/44'/60'/0'/0/0`)
 - locked / unlocked state для приложения
+- выбор между Ethereum Mainnet и Sepolia
+- read-only чтение нативного баланса и base fee из публичных RPC
+- fallback между несколькими RPC endpoints
 
 ## Артефакты CI
 

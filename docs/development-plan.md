@@ -8,8 +8,9 @@ Current factual status of the project:
 - ✅ CI foundation is in place and stable on Android, iOS Simulator, and Windows x64
 - ✅ Phase 0 is effectively completed
 - ✅ Phase 1 is implemented as a user-facing flow
-- ◐ Phase 2 is partially implemented; backend foundation and major onboarding-linked parts are ready
-- ⏳ Phases 3-8 are not started yet
+- ◐ Phase 2 is partially implemented; PIN unlock flow is ready, real biometric integration is still pending
+- ✅ Phase 3 is implemented
+- ⏳ Phases 4-8 are not started yet
 
 Completed deliverables so far:
 - ✅ project module structure started (`auth`, `key_storage`)
@@ -22,6 +23,7 @@ Completed deliverables so far:
   - first EVM address derivation
   - PIN unlock session primitive
 - ✅ unit tests for create/import/unlock flow
+- ✅ read-only RPC foundation for Ethereum Mainnet and Sepolia
 
 Not implemented yet from the near-term plan:
 - ✅ onboarding UI flow
@@ -166,27 +168,27 @@ Deliverables:
 ## Phase 3 — EVM network foundation
 Goal: connect to blockchain in read-only mode.
 
-Status: ⏳ Not started
+Status: ✅ Completed
 
 Deliverables:
-- [ ] Ethereum Mainnet config
-- [ ] Sepolia config
-- [ ] public RPC provider layer with fallback strategy
-- [ ] native balance retrieval
-- [ ] base fee / gas estimate retrieval
-- [ ] network metadata handling
+- [x] Ethereum Mainnet config
+- [x] Sepolia config
+- [x] public RPC provider layer with fallback strategy
+- [x] native balance retrieval
+- [x] base fee / gas estimate retrieval
+- [x] network metadata handling
 
 ## Phase 4 — read-only wallet experience
 Goal: first useful user-facing wallet release without send risk.
 
-Status: ⏳ Not started
+Status: ◐ Partially completed
 
 Deliverables:
-- [ ] wallet home screen
-- [ ] address display
-- [ ] current network switch/display
+- [x] wallet home screen
+- [x] address display
+- [x] current network switch/display
 - [ ] native and token balances
-- [ ] manual refresh
+- [x] manual refresh
 - [ ] recent transaction history screen
 - [ ] local cache for last loaded blockchain state
 
