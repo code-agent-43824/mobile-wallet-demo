@@ -5,29 +5,36 @@
 ## Что уже есть
 
 - Flutter-проект с платформами: Android, iOS, Windows x64
-- Базовый архитектурный фундамент Secure Vault
+- Базовый Secure Vault foundation для phone backend
+- Полноценный onboarding/auth shell:
+  - welcome screen
+  - выбор create / import
+  - обязательный PIN setup
+  - one-time seed display flow
+  - biometric choice shell
+  - locked / unlocked app states
 - Контракты для `KeyStorageBackend` и задел под внешний hardware backend
 - Реализация `PhoneSecureVault` с шифрованием seed, PIN unlock session и EVM-деривацией первого адреса
-- Unit-тесты на create/import/unlock flow
-- Глобальный баннер версии в правом верхнем углу на всех экранах
+- Unit- и widget-тесты для ключевых flow
 - GitHub Actions для сборки и публикации артефактов
-- Кэширование часто используемых компонентов CI: Flutter SDK, pub cache, Gradle, CocoaPods
-- Каждое изменение доводится до push в GitHub и проверки сборки через Actions
+- Артефакты iOS / Windows без двойной упаковки
 
 ## Версионирование
 
-- Текущая версия: `v0.3.1` (`0.3.1+4`)
-- Базовый ориентир для проекта — двигаться по понятной последовательности релизов; при необходимости допустим и точечный patch-релиз без изменения продуктового объёма
+- Текущая версия: `v0.4` (`0.4.0+5`)
+- По договорённости в этом проекте дальше повышаем минорную версию с каждым функциональным шагом
 
 ## Что покрывает текущий этап
 
 - архитектурный skeleton проекта
-- базовый Secure Vault foundation
+- secure vault foundation
+- onboarding/auth shell
 - генерация новой BIP-39 seed phrase
 - импорт существующей seed phrase
+- one-time показ seed-фразы после создания нового кошелька
 - хранение seed в зашифрованном виде
 - derivation первого EVM-адреса (`m/44'/60'/0'/0/0`)
-- базовая unlock-сессия после PIN
+- locked / unlocked state для приложения
 
 ## Артефакты CI
 

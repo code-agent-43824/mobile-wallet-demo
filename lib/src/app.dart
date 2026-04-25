@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 
 import 'app_version.dart';
-import 'home_screen.dart';
+import 'key_storage/secure_key_value_store.dart';
+import 'wallet_flow_screen.dart';
 import 'widgets/version_banner.dart';
 
 class MobileWalletDemoApp extends StatelessWidget {
-  const MobileWalletDemoApp({super.key});
+  const MobileWalletDemoApp({super.key, SecureKeyValueStore? store})
+    : _store = store;
+
+  final SecureKeyValueStore? _store;
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +39,7 @@ class MobileWalletDemoApp extends StatelessWidget {
           ],
         );
       },
-      home: const HomeScreen(),
+      home: WalletFlowScreen(store: _store ?? FlutterSecureKeyValueStore()),
     );
   }
 }

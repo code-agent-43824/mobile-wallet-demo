@@ -7,8 +7,8 @@ This file is the canonical development plan for the project. Use it as the sourc
 Current factual status of the project:
 - ✅ CI foundation is in place and stable on Android, iOS Simulator, and Windows x64
 - ✅ Phase 0 is effectively completed
-- ⏳ Phase 1 is not implemented yet as a user-facing flow
-- ◐ Phase 2 is partially implemented at the backend/foundation level
+- ✅ Phase 1 is implemented as a user-facing flow
+- ◐ Phase 2 is partially implemented; backend foundation and major onboarding-linked parts are ready
 - ⏳ Phases 3-8 are not started yet
 
 Completed deliverables so far:
@@ -24,10 +24,10 @@ Completed deliverables so far:
 - ✅ unit tests for create/import/unlock flow
 
 Not implemented yet from the near-term plan:
-- ⏳ onboarding UI flow
-- ⏳ one-time seed phrase display screen
-- ⏳ biometric enable flow
-- ⏳ locked / uninitialized app shell states
+- ✅ onboarding UI flow
+- ✅ one-time seed phrase display screen
+- ✅ biometric enable flow (shell state, platform integration later)
+- ✅ locked / uninitialized app shell states
 
 ## Core architectural decision
 
@@ -136,14 +136,14 @@ Deliverables:
 ## Phase 1 — onboarding and local auth
 Goal: establish secure user entry flow.
 
-Status: ⏳ Not started as a UI/app-flow milestone
+Status: ✅ Completed
 
 Deliverables:
-- [ ] welcome screen
-- [ ] choice: create wallet / import seed
-- [ ] mandatory PIN setup and confirmation
-- [ ] optional biometric enable after PIN setup
-- [ ] app state for locked/uninitialized wallet
+- [x] welcome screen
+- [x] choice: create wallet / import seed
+- [x] mandatory PIN setup and confirmation
+- [x] optional biometric enable after PIN setup
+- [x] app state for locked/uninitialized wallet
 
 Out of scope:
 - blockchain reads
@@ -153,15 +153,15 @@ Out of scope:
 ## Phase 2 — phone secure vault
 Goal: implement the first real wallet backend.
 
-Status: ◐ Partially completed (backend foundation done, UX flow still pending)
+Status: ◐ Partially completed (foundation, create/import UX and seed display are ready; full production biometrics/integration layers still pending)
 
 Deliverables:
 - [x] BIP-39 seed generation
-- [ ] one-time seed phrase display flow
-- [x] seed import flow (backend capability)
+- [x] one-time seed phrase display flow
+- [x] seed import flow
 - [x] encrypted storage of seed
 - [x] address derivation for EVM
-- [ ] unlock flow protected by PIN / biometrics (full user flow)
+- [ ] unlock flow protected by PIN / biometrics (PIN flow implemented; real biometric auth integration still pending)
 
 ## Phase 3 — EVM network foundation
 Goal: connect to blockchain in read-only mode.
