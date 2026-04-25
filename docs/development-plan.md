@@ -11,7 +11,8 @@ Current factual status of the project:
 - ◐ Phase 2 is partially implemented; PIN unlock flow is ready, real biometric integration is still pending
 - ✅ Phase 3 is implemented
 - ✅ Phase 4 is implemented
-- ⏳ Phases 5-8 are not started yet
+- ✅ Phase 5 is implemented
+- ⏳ Phases 6-8 are not started yet
 
 Completed deliverables so far:
 - ✅ project module structure started (`auth`, `key_storage`)
@@ -26,6 +27,7 @@ Completed deliverables so far:
 - ✅ unit tests for create/import/unlock flow
 - ✅ read-only RPC foundation for Ethereum Mainnet and Sepolia
 - ✅ read-only wallet experience with token balances, history, and local cache fallback
+- ✅ transfer preparation flow with preview-only validation and gas estimation
 
 Not implemented yet from the near-term plan:
 - ✅ onboarding UI flow
@@ -197,15 +199,15 @@ Deliverables:
 ## Phase 5 — transfer preparation
 Goal: prepare safe transaction composition before enabling send.
 
-Status: ⏳ Not started
+Status: ✅ Completed
 
 Deliverables:
-- [ ] send screen
-- [ ] address validation
-- [ ] amount entry
-- [ ] asset selection
-- [ ] automatic gas estimation
-- [ ] transaction preview screen
+- [x] send screen
+- [x] address validation
+- [x] amount entry
+- [x] asset selection
+- [x] automatic gas estimation
+- [x] transaction preview screen
 
 ## Phase 6 — signing and sending
 Goal: enable real blockchain operations.

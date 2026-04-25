@@ -44,12 +44,16 @@ class TokenBalanceSnapshot {
     required this.symbol,
     required this.name,
     required this.balanceFormatted,
+    required this.rawBalance,
+    required this.decimals,
     required this.contractAddress,
   });
 
   final String symbol;
   final String name;
   final String balanceFormatted;
+  final BigInt rawBalance;
+  final int decimals;
   final String contractAddress;
 }
 
@@ -301,9 +305,11 @@ class PublicRpcBlockchainProvider implements BlockchainProvider {
 
           final valueRaw = item['value'] as String? ?? '0';
           final decimalsRaw = token['decimals'] as String? ?? '18';
+          final decimals = int.tryParse(decimalsRaw) ?? 18;
+          final rawBalance = BigInt.tryParse(valueRaw) ?? BigInt.zero;
           final formatted = _formatTokenAmount(
             rawValue: valueRaw,
-            decimals: int.tryParse(decimalsRaw) ?? 18,
+            decimals: decimals,
           );
 
           if (formatted == '0') {
@@ -314,6 +320,8 @@ class PublicRpcBlockchainProvider implements BlockchainProvider {
             symbol: token['symbol'] as String? ?? 'TOKEN',
             name: token['name'] as String? ?? 'Unknown token',
             balanceFormatted: formatted,
+            rawBalance: rawBalance,
+            decimals: decimals,
             contractAddress: token['address_hash'] as String? ?? '—',
           );
         })
@@ -457,6 +465,10 @@ class PublicRpcBlockchainProvider implements BlockchainProvider {
                 symbol: item['symbol'] as String? ?? 'TOKEN',
                 name: item['name'] as String? ?? 'Unknown token',
                 balanceFormatted: item['balanceFormatted'] as String? ?? '0',
+                rawBalance:
+                    BigInt.tryParse(item['rawBalance'] as String? ?? '0') ??
+                    BigInt.zero,
+                decimals: item['decimals'] as int? ?? 18,
                 contractAddress: item['contractAddress'] as String? ?? '—',
               ),
             )
@@ -505,6 +517,8 @@ class PublicRpcBlockchainProvider implements BlockchainProvider {
                 'symbol': token.symbol,
                 'name': token.name,
                 'balanceFormatted': token.balanceFormatted,
+                'rawBalance': token.rawBalance.toString(),
+                'decimals': token.decimals,
                 'contractAddress': token.contractAddress,
               },
             )

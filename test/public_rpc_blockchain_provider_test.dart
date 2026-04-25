@@ -125,7 +125,7 @@ void main() {
 
     await store.write(
       'wallet_snapshot.ethereumMainnet.0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266',
-      '{"address":"0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266","nativeBalanceWei":"1230000000000000000","nativeBalanceFormatted":"1.23","baseFeeGwei":12.3,"providerLabel":"fake-cache","fetchedAtUtc":"2026-04-25T15:32:00.000Z","tokenBalances":[{"symbol":"USDC","name":"USD Coin","balanceFormatted":"42.5","contractAddress":"0xToken"}],"recentTransactions":[{"hash":"0xabc","timestampUtc":"2026-04-25T15:30:00.000Z","directionLabel":"Входящая","counterparty":"0xfeed","valueFormatted":"0.1 ETH","statusLabel":"Confirmed"}]}',
+      '{"address":"0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266","nativeBalanceWei":"1230000000000000000","nativeBalanceFormatted":"1.23","baseFeeGwei":12.3,"providerLabel":"fake-cache","fetchedAtUtc":"2026-04-25T15:32:00.000Z","tokenBalances":[{"symbol":"USDC","name":"USD Coin","balanceFormatted":"42.5","rawBalance":"42500000","decimals":6,"contractAddress":"0xToken"}],"recentTransactions":[{"hash":"0xabc","timestampUtc":"2026-04-25T15:30:00.000Z","directionLabel":"Входящая","counterparty":"0xfeed","valueFormatted":"0.1 ETH","statusLabel":"Confirmed"}]}',
     );
 
     final snapshot = await provider.loadSnapshot(
@@ -136,6 +136,7 @@ void main() {
     expect(snapshot.loadedFromCache, isTrue);
     expect(snapshot.providerLabel, 'fake-cache');
     expect(snapshot.tokenBalances.single.symbol, 'USDC');
+    expect(snapshot.tokenBalances.single.rawBalance, BigInt.from(42500000));
     expect(snapshot.recentTransactions.single.hash, '0xabc');
   });
 }

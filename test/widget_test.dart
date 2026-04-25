@@ -19,11 +19,13 @@ class _FakeBlockchainProvider implements BlockchainProvider {
       baseFeeGwei: 12.345,
       providerLabel: 'fake-rpc.local',
       fetchedAtUtc: DateTime.utc(2026, 4, 25, 15, 32),
-      tokenBalances: const <TokenBalanceSnapshot>[
+      tokenBalances: <TokenBalanceSnapshot>[
         TokenBalanceSnapshot(
           symbol: 'USDC',
           name: 'USD Coin',
           balanceFormatted: '42.5',
+          rawBalance: BigInt.from(42500000),
+          decimals: 6,
           contractAddress: '0xToken',
         ),
       ],
@@ -57,7 +59,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Mobile Wallet Demo'), findsOneWidget);
-    expect(find.text('v0.6'), findsOneWidget);
+    expect(find.text('v0.7'), findsOneWidget);
     expect(find.text('Создать новый кошелёк'), findsOneWidget);
     expect(find.text('Импортировать seed-фразу'), findsOneWidget);
   });
@@ -89,5 +91,59 @@ void main() {
 
     expect(find.text('Сохраните seed-фразу'), findsOneWidget);
     expect(find.text('Я сохранил seed-фразу'), findsOneWidget);
+  });
+
+  testWidgets('shows transfer preparation preview for unlocked wallet', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _FakeBlockchainProvider(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Создать новый кошелёк'));
+    await tester.pumpAndSettle();
+
+    final setupFields = find.byType(TextField);
+    await tester.enterText(setupFields.at(0), '1234');
+    await tester.enterText(setupFields.at(1), '1234');
+    await tester.tap(find.text('Создать кошелёк'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Я сохранил seed-фразу'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Пока без биометрии'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, '1234');
+    await tester.tap(find.text('Разблокировать'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Подготовка перевода'), findsOneWidget);
+
+    final sendFields = find.byType(TextField);
+    await tester.enterText(
+      sendFields.at(0),
+      '0x1111111111111111111111111111111111111111',
+    );
+    await tester.enterText(sendFields.at(1), '0.1');
+    final previewButton = find.text('Оценить и показать preview');
+    await tester.ensureVisible(previewButton);
+    await tester.tap(previewButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Итоговый debit'), findsOneWidget);
+    expect(find.text('Получатель'), findsOneWidget);
+    expect(
+      find.textContaining('Это только preparation/preview'),
+      findsOneWidget,
+    );
   });
 }

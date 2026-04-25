@@ -5,6 +5,7 @@ import 'blockchain/network_config.dart';
 import 'key_storage/key_storage_backend.dart';
 import 'key_storage/phone_secure_vault.dart';
 import 'key_storage/secure_key_value_store.dart';
+import 'transactions/transaction_service.dart';
 
 enum WalletFlowStage {
   loading,
@@ -748,6 +749,8 @@ class _UnlockedStage extends StatefulWidget {
 }
 
 class _UnlockedStageState extends State<_UnlockedStage> {
+  static const _transactionService = ReadOnlyTransactionService();
+
   EvmNetwork _selectedNetwork = EvmNetwork.ethereumMainnet;
   WalletChainSnapshot? _snapshot;
   String? _error;
@@ -809,7 +812,7 @@ class _UnlockedStageState extends State<_UnlockedStage> {
         const _SectionTitle('Read-only wallet foundation'),
         const SizedBox(height: 12),
         const Text(
-          'Следующий шаг после onboarding — реальное чтение данных из сети. Здесь уже есть Mainnet/Sepolia switch, публичный RPC fallback и ручное обновление баланса без send-риска. Очень цивилизованно.',
+          'Следующий шаг после onboarding — уже не только чтение, но и подготовка перевода. Здесь есть Mainnet/Sepolia switch, публичный RPC fallback, история, токены и безопасный preview без реальной отправки.',
         ),
         const SizedBox(height: 20),
         _SummaryTile(label: 'Активный адрес', value: address),
@@ -890,6 +893,13 @@ class _UnlockedStageState extends State<_UnlockedStage> {
           _TokenBalancesSection(snapshot: snapshot),
           const SizedBox(height: 20),
           _RecentTransactionsSection(snapshot: snapshot),
+          const SizedBox(height: 20),
+          _TransferPreparationSection(
+            snapshot: snapshot,
+            fromAddress: address,
+            networkConfig: config,
+            transactionService: _transactionService,
+          ),
         ],
         const SizedBox(height: 20),
         Wrap(
@@ -898,6 +908,7 @@ class _UnlockedStageState extends State<_UnlockedStage> {
           children: [
             const _StatusChip(label: 'Unlocked'),
             const _StatusChip(label: 'Read-only RPC'),
+            const _StatusChip(label: 'Transfer preview'),
             _StatusChip(label: 'Chain ${config.chainId}'),
             if (snapshot?.loadedFromCache ?? false)
               const _StatusChip(label: 'Cached fallback'),
@@ -920,6 +931,194 @@ class _UnlockedStageState extends State<_UnlockedStage> {
             ),
           ],
         ),
+      ],
+    );
+  }
+}
+
+class _TransferPreparationSection extends StatefulWidget {
+  const _TransferPreparationSection({
+    required this.snapshot,
+    required this.fromAddress,
+    required this.networkConfig,
+    required this.transactionService,
+  });
+
+  final WalletChainSnapshot snapshot;
+  final String fromAddress;
+  final EvmNetworkConfig networkConfig;
+  final TransactionService transactionService;
+
+  @override
+  State<_TransferPreparationSection> createState() =>
+      _TransferPreparationSectionState();
+}
+
+class _TransferPreparationSectionState
+    extends State<_TransferPreparationSection> {
+  late final TextEditingController _addressController;
+  late final TextEditingController _amountController;
+
+  TransferAssetOption? _selectedAsset;
+  TransferPreview? _preview;
+  String? _error;
+
+  List<TransferAssetOption> get _assets =>
+      widget.transactionService.availableAssets(
+        snapshot: widget.snapshot,
+        networkConfig: widget.networkConfig,
+      );
+
+  @override
+  void initState() {
+    super.initState();
+    _addressController = TextEditingController();
+    _amountController = TextEditingController();
+    final assets = _assets;
+    _selectedAsset = assets.isEmpty ? null : assets.first;
+  }
+
+  @override
+  void didUpdateWidget(covariant _TransferPreparationSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final assets = _assets;
+    final selectedId = _selectedAsset?.id;
+    final stillExists = assets.any((asset) => asset.id == selectedId);
+    if (!stillExists) {
+      _selectedAsset = assets.isEmpty ? null : assets.first;
+      _preview = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _addressController.dispose();
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  void _buildPreview() {
+    final asset = _selectedAsset;
+    if (asset == null) {
+      return;
+    }
+
+    try {
+      final preview = widget.transactionService.preparePreview(
+        snapshot: widget.snapshot,
+        fromAddress: widget.fromAddress,
+        toAddress: _addressController.text,
+        amountText: _amountController.text,
+        asset: asset,
+      );
+      setState(() {
+        _preview = preview;
+        _error = null;
+      });
+    } on TransactionFailure catch (error) {
+      setState(() {
+        _preview = null;
+        _error = error.message;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final preview = _preview;
+    final assets = _assets;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle('Подготовка перевода'),
+        const SizedBox(height: 12),
+        const Text(
+          'Это Phase 5: можно выбрать актив, ввести адрес и сумму, автоматически оценить gas и посмотреть preview. Реальной подписи/отправки тут ещё нет — сначала здравый смысл, потом кнопка launch.',
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          initialValue: _selectedAsset?.id,
+          decoration: const InputDecoration(
+            labelText: 'Актив',
+            border: OutlineInputBorder(),
+          ),
+          items: assets
+              .map(
+                (asset) => DropdownMenuItem<String>(
+                  value: asset.id,
+                  child: Text('${asset.symbol} · ${asset.balanceFormatted}'),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: (value) {
+            final nextAsset = assets.firstWhere((asset) => asset.id == value);
+            setState(() {
+              _selectedAsset = nextAsset;
+              _preview = null;
+              _error = null;
+            });
+          },
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _addressController,
+          decoration: const InputDecoration(
+            labelText: 'Адрес получателя',
+            hintText: '0x…',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _amountController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(
+            labelText: 'Сумма',
+            hintText: 'Например 0.1',
+            helperText: _selectedAsset == null
+                ? null
+                : 'Доступно: ${_selectedAsset!.balanceFormatted} ${_selectedAsset!.symbol}',
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: FilledButton.icon(
+            onPressed: _buildPreview,
+            icon: const Icon(Icons.visibility_outlined),
+            label: const Text('Оценить и показать preview'),
+          ),
+        ),
+        if (_error case final String message) ...[
+          const SizedBox(height: 12),
+          _ErrorBanner(message: message),
+        ],
+        if (preview != null) ...[
+          const SizedBox(height: 16),
+          _SummaryTile(label: 'Получатель', value: preview.toAddress),
+          const SizedBox(height: 10),
+          _SummaryTile(label: 'Актив и сумма', value: preview.amountFormatted),
+          const SizedBox(height: 10),
+          _SummaryTile(
+            label: 'Estimated gas',
+            value:
+                '${preview.gasLimit} gas\nmax fee ≈ ${preview.maxFeePerGasGwei.toStringAsFixed(3)} gwei',
+          ),
+          const SizedBox(height: 10),
+          _SummaryTile(
+            label: 'Estimated network fee',
+            value: preview.estimatedNetworkFeeNativeFormatted,
+          ),
+          const SizedBox(height: 10),
+          _SummaryTile(
+            label: 'Итоговый debit',
+            value: preview.totalDebitFormatted,
+          ),
+          const SizedBox(height: 10),
+          _SummaryTile(label: 'Статус', value: preview.previewNote),
+        ],
       ],
     );
   }
