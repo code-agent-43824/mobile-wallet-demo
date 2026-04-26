@@ -12,7 +12,7 @@ Current factual status of the project:
 - ✅ Phase 3 is implemented
 - ✅ Phase 4 is implemented
 - ✅ Phase 5 is implemented
-- ◐ Phase 6 is partially implemented in the domain layer (prepare → sign → submit abstraction); UI submission states and nonce/error hardening are still pending
+- ◐ Phase 6 is largely implemented end-to-end (prepare → nonce → sign → submit + UI submission states); deeper nonce/error hardening and tx lifecycle polling are still pending
 - ⏳ Phases 7-8 are not started yet
 
 Completed deliverables so far:
@@ -30,7 +30,9 @@ Completed deliverables so far:
 - ✅ read-only wallet experience with token balances, history, and local cache fallback
 - ✅ transfer preparation flow with preview-only validation and gas estimation
 - ✅ local EIP-1559 signing for native / ERC-20 prepared transfers
+- ✅ public-RPC nonce loading for send flow
 - ✅ raw transaction submission abstraction with public RPC broadcaster
+- ✅ send flow UI states: pending / success / failure
 
 Not implemented yet from the near-term plan:
 - ✅ onboarding UI flow
@@ -215,14 +217,15 @@ Deliverables:
 ## Phase 6 — signing and sending
 Goal: enable real blockchain operations.
 
-Status: ◐ Partially completed (domain layer now supports prepare → sign and raw submission abstraction; UI state handling and nonce/error hardening are still pending)
+Status: ◐ Partially completed (end-to-end send flow is now wired through preview → nonce → sign → submit with visible UI states; advanced nonce/error hardening and post-submit tracking are still pending)
 
 Deliverables:
 - [x] one auth prompt per operation (domain-layer signing flow contract)
 - [x] transaction signing
 - [x] transaction submission
-- [ ] pending/success/failure status handling
-- [ ] nonce/error handling
+- [x] pending/success/failure status handling
+- [x] basic nonce/error handling through public RPC lookup and surfaced failures
+- [ ] advanced nonce/error hardening (replacement tx, stale nonce reconciliation, richer RPC-specific recovery)
 
 ## Phase 7 — external NFC device foundation
 Goal: keep a clean future path without implementing device SDK now.

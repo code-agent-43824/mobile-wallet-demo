@@ -23,7 +23,9 @@
   - локальный кэш последнего успешного snapshot для offline/fallback сценария
   - подготовка перевода: asset selection, address validation, amount entry, gas preview
   - локальная подпись prepared transaction
+  - загрузка nonce через публичный RPC
   - RPC broadcaster abstraction для raw transaction submission
+  - UI-состояния отправки: pending / success / failure
   - ручное обновление данных
 - Контракты для `KeyStorageBackend` и задел под внешний hardware backend
 - Unit- и widget-тесты для ключевых flow
@@ -32,7 +34,7 @@
 
 ## Версионирование
 
-- Текущая версия: `v0.8` (`0.8.0+9`)
+- Текущая версия: `v0.9` (`0.9.0+10`)
 - По договорённости в этом проекте дальше повышаем минорную версию с каждым функциональным шагом
 
 ## Что покрывает текущий этап

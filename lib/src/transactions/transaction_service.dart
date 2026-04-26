@@ -118,6 +118,29 @@ class SubmittedTransfer {
   final DateTime submittedAtUtc;
 }
 
+class LoadedNonce {
+  const LoadedNonce({
+    required this.network,
+    required this.address,
+    required this.nonce,
+    required this.providerLabel,
+    required this.loadedAtUtc,
+  });
+
+  final EvmNetwork network;
+  final String address;
+  final int nonce;
+  final String providerLabel;
+  final DateTime loadedAtUtc;
+}
+
+abstract interface class NonceProvider {
+  Future<LoadedNonce> loadNextNonce({
+    required EvmNetworkConfig networkConfig,
+    required String address,
+  });
+}
+
 abstract interface class TransactionBroadcaster {
   Future<SubmittedTransfer> submit({required SignedTransfer signedTransfer});
 }
@@ -515,6 +538,77 @@ class PublicRpcTransactionBroadcaster implements TransactionBroadcaster {
     throw lastFailure ??
         const TransactionFailure(
           'No RPC endpoints are configured for submission.',
+        );
+  }
+}
+
+class PublicRpcNonceProvider implements NonceProvider {
+  PublicRpcNonceProvider({JsonRpcTransport? rpcTransport})
+    : _rpcTransport = rpcTransport ?? HttpJsonRpcTransport();
+
+  final JsonRpcTransport _rpcTransport;
+
+  @override
+  Future<LoadedNonce> loadNextNonce({
+    required EvmNetworkConfig networkConfig,
+    required String address,
+  }) async {
+    TransactionFailure? lastFailure;
+
+    for (final rpcUrl in networkConfig.rpcUrls) {
+      final uri = Uri.parse(rpcUrl);
+
+      try {
+        final response = await _rpcTransport.post(
+          uri: uri,
+          payload: <String, dynamic>{
+            'jsonrpc': '2.0',
+            'id': 1,
+            'method': 'eth_getTransactionCount',
+            'params': <dynamic>[address, 'pending'],
+          },
+        );
+
+        final error = response['error'];
+        if (error != null) {
+          throw TransactionFailure(
+            'RPC ${uri.host} rejected nonce lookup: $error',
+          );
+        }
+
+        final result = response['result'] as String?;
+        if (result == null || result.isEmpty) {
+          throw TransactionFailure('RPC ${uri.host} returned empty nonce.');
+        }
+
+        final nonce = int.tryParse(result.replaceFirst('0x', ''), radix: 16);
+        if (nonce == null) {
+          throw TransactionFailure(
+            'RPC ${uri.host} returned invalid nonce value: $result',
+          );
+        }
+
+        return LoadedNonce(
+          network: networkConfig.network,
+          address: address,
+          nonce: nonce,
+          providerLabel: uri.host,
+          loadedAtUtc: DateTime.now().toUtc(),
+        );
+      } on TransactionFailure catch (error) {
+        lastFailure = error;
+      } on BlockchainFailure catch (error) {
+        lastFailure = TransactionFailure(error.message);
+      } catch (error) {
+        lastFailure = TransactionFailure(
+          'RPC ${uri.host} failed during nonce lookup: $error',
+        );
+      }
+    }
+
+    throw lastFailure ??
+        const TransactionFailure(
+          'No RPC endpoints are configured for nonce lookup.',
         );
   }
 }

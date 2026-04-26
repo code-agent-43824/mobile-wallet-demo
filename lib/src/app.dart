@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app_version.dart';
 import 'blockchain/blockchain_provider.dart';
 import 'key_storage/secure_key_value_store.dart';
+import 'transactions/transaction_service.dart';
 import 'wallet_flow_screen.dart';
 import 'widgets/version_banner.dart';
 
@@ -11,11 +12,20 @@ class MobileWalletDemoApp extends StatelessWidget {
     super.key,
     SecureKeyValueStore? store,
     BlockchainProvider? blockchainProvider,
+    TransactionService? transactionService,
+    TransactionBroadcaster? transactionBroadcaster,
+    NonceProvider? nonceProvider,
   }) : _store = store,
-       _blockchainProvider = blockchainProvider;
+       _blockchainProvider = blockchainProvider,
+       _transactionService = transactionService,
+       _transactionBroadcaster = transactionBroadcaster,
+       _nonceProvider = nonceProvider;
 
   final SecureKeyValueStore? _store;
   final BlockchainProvider? _blockchainProvider;
+  final TransactionService? _transactionService;
+  final TransactionBroadcaster? _transactionBroadcaster;
+  final NonceProvider? _nonceProvider;
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +61,11 @@ class MobileWalletDemoApp extends StatelessWidget {
         blockchainProvider:
             _blockchainProvider ??
             PublicRpcBlockchainProvider(cacheStore: effectiveStore),
+        transactionService:
+            _transactionService ?? const ReadOnlyTransactionService(),
+        transactionBroadcaster:
+            _transactionBroadcaster ?? PublicRpcTransactionBroadcaster(),
+        nonceProvider: _nonceProvider ?? PublicRpcNonceProvider(),
       ),
     );
   }

@@ -22,11 +22,17 @@ class WalletFlowScreen extends StatefulWidget {
   const WalletFlowScreen({
     required this.store,
     required this.blockchainProvider,
+    required this.transactionService,
+    required this.transactionBroadcaster,
+    required this.nonceProvider,
     super.key,
   });
 
   final SecureKeyValueStore store;
   final BlockchainProvider blockchainProvider;
+  final TransactionService transactionService;
+  final TransactionBroadcaster transactionBroadcaster;
+  final NonceProvider nonceProvider;
 
   @override
   State<WalletFlowScreen> createState() => _WalletFlowScreenState();
@@ -244,6 +250,9 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       case WalletFlowStage.unlocked:
         return _UnlockedStage(
           blockchainProvider: widget.blockchainProvider,
+          transactionService: widget.transactionService,
+          transactionBroadcaster: widget.transactionBroadcaster,
+          nonceProvider: widget.nonceProvider,
           material: _material,
           summary: _summary,
           biometricsEnabled: _biometricsEnabled,
@@ -732,6 +741,9 @@ class _LockedStageState extends State<_LockedStage> {
 class _UnlockedStage extends StatefulWidget {
   const _UnlockedStage({
     required this.blockchainProvider,
+    required this.transactionService,
+    required this.transactionBroadcaster,
+    required this.nonceProvider,
     required this.material,
     required this.summary,
     required this.biometricsEnabled,
@@ -739,6 +751,9 @@ class _UnlockedStage extends StatefulWidget {
   });
 
   final BlockchainProvider blockchainProvider;
+  final TransactionService transactionService;
+  final TransactionBroadcaster transactionBroadcaster;
+  final NonceProvider nonceProvider;
   final WalletMaterial? material;
   final StoredWalletSummary? summary;
   final bool biometricsEnabled;
@@ -749,8 +764,6 @@ class _UnlockedStage extends StatefulWidget {
 }
 
 class _UnlockedStageState extends State<_UnlockedStage> {
-  static const _transactionService = ReadOnlyTransactionService();
-
   EvmNetwork _selectedNetwork = EvmNetwork.ethereumMainnet;
   WalletChainSnapshot? _snapshot;
   String? _error;
@@ -812,7 +825,7 @@ class _UnlockedStageState extends State<_UnlockedStage> {
         const _SectionTitle('Read-only wallet foundation'),
         const SizedBox(height: 12),
         const Text(
-          'Следующий шаг после onboarding — уже не только чтение, но и подготовка перевода. Здесь есть Mainnet/Sepolia switch, публичный RPC fallback, история, токены и безопасный preview без реальной отправки.',
+          'Сейчас кошелёк уже умеет читать сеть и готовить перевод. Следующий шаг — нормальный signing/send flow с понятными состояниями отправки, а не немая магия в фоне.',
         ),
         const SizedBox(height: 20),
         _SummaryTile(label: 'Активный адрес', value: address),
@@ -898,7 +911,10 @@ class _UnlockedStageState extends State<_UnlockedStage> {
             snapshot: snapshot,
             fromAddress: address,
             networkConfig: config,
-            transactionService: _transactionService,
+            walletMaterial: widget.material,
+            transactionService: widget.transactionService,
+            transactionBroadcaster: widget.transactionBroadcaster,
+            nonceProvider: widget.nonceProvider,
           ),
         ],
         const SizedBox(height: 20),
@@ -908,7 +924,7 @@ class _UnlockedStageState extends State<_UnlockedStage> {
           children: [
             const _StatusChip(label: 'Unlocked'),
             const _StatusChip(label: 'Read-only RPC'),
-            const _StatusChip(label: 'Transfer preview'),
+            const _StatusChip(label: 'Signing + send flow'),
             _StatusChip(label: 'Chain ${config.chainId}'),
             if (snapshot?.loadedFromCache ?? false)
               const _StatusChip(label: 'Cached fallback'),
@@ -941,13 +957,19 @@ class _TransferPreparationSection extends StatefulWidget {
     required this.snapshot,
     required this.fromAddress,
     required this.networkConfig,
+    required this.walletMaterial,
     required this.transactionService,
+    required this.transactionBroadcaster,
+    required this.nonceProvider,
   });
 
   final WalletChainSnapshot snapshot;
   final String fromAddress;
   final EvmNetworkConfig networkConfig;
+  final WalletMaterial? walletMaterial;
   final TransactionService transactionService;
+  final TransactionBroadcaster transactionBroadcaster;
+  final NonceProvider nonceProvider;
 
   @override
   State<_TransferPreparationSection> createState() =>
@@ -961,7 +983,11 @@ class _TransferPreparationSectionState
 
   TransferAssetOption? _selectedAsset;
   TransferPreview? _preview;
+  LoadedNonce? _loadedNonce;
+  SignedTransfer? _signedTransfer;
+  SubmittedTransfer? _submittedTransfer;
   String? _error;
+  bool _isSubmitting = false;
 
   List<TransferAssetOption> get _assets =>
       widget.transactionService.availableAssets(
@@ -987,6 +1013,9 @@ class _TransferPreparationSectionState
     if (!stillExists) {
       _selectedAsset = assets.isEmpty ? null : assets.first;
       _preview = null;
+      _loadedNonce = null;
+      _signedTransfer = null;
+      _submittedTransfer = null;
     }
   }
 
@@ -1013,13 +1042,87 @@ class _TransferPreparationSectionState
       );
       setState(() {
         _preview = preview;
+        _loadedNonce = null;
+        _signedTransfer = null;
+        _submittedTransfer = null;
         _error = null;
       });
     } on TransactionFailure catch (error) {
       setState(() {
         _preview = null;
+        _loadedNonce = null;
+        _signedTransfer = null;
+        _submittedTransfer = null;
         _error = error.message;
       });
+    }
+  }
+
+  Future<void> _signAndSubmit() async {
+    final asset = _selectedAsset;
+    final walletMaterial = widget.walletMaterial;
+    if (asset == null || walletMaterial == null) {
+      setState(() {
+        _error = 'Кошелёк не разблокирован для подписания.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _error = null;
+      _loadedNonce = null;
+      _signedTransfer = null;
+      _submittedTransfer = null;
+    });
+
+    try {
+      final preparedTransfer = widget.transactionService.prepareTransfer(
+        snapshot: widget.snapshot,
+        fromAddress: widget.fromAddress,
+        toAddress: _addressController.text,
+        amountText: _amountController.text,
+        asset: asset,
+      );
+      final loadedNonce = await widget.nonceProvider.loadNextNonce(
+        networkConfig: widget.networkConfig,
+        address: widget.fromAddress,
+      );
+      final signedTransfer = widget.transactionService.signPreparedTransfer(
+        preparedTransfer: preparedTransfer,
+        walletMaterial: walletMaterial,
+        nonce: loadedNonce.nonce,
+      );
+      final submittedTransfer = await widget.transactionService
+          .submitSignedTransfer(
+            signedTransfer: signedTransfer,
+            broadcaster: widget.transactionBroadcaster,
+          );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _preview = preparedTransfer.preview;
+        _loadedNonce = loadedNonce;
+        _signedTransfer = signedTransfer;
+        _submittedTransfer = submittedTransfer;
+        _error = null;
+      });
+    } on TransactionFailure catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = error.message;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
     }
   }
 
@@ -1027,14 +1130,17 @@ class _TransferPreparationSectionState
   Widget build(BuildContext context) {
     final preview = _preview;
     final assets = _assets;
+    final submittedTransfer = _submittedTransfer;
+    final signedTransfer = _signedTransfer;
+    final loadedNonce = _loadedNonce;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle('Подготовка перевода'),
+        const _SectionTitle('Подготовка и отправка перевода'),
         const SizedBox(height: 12),
         const Text(
-          'Это Phase 5: можно выбрать актив, ввести адрес и сумму, автоматически оценить gas и посмотреть preview. Реальной подписи/отправки тут ещё нет — сначала здравый смысл, потом кнопка launch.',
+          'Это добор Phase 6: preview остаётся, но теперь поверх него есть реальная последовательность prepare → nonce → sign → submit с явным результатом на экране.',
         ),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
@@ -1056,6 +1162,9 @@ class _TransferPreparationSectionState
             setState(() {
               _selectedAsset = nextAsset;
               _preview = null;
+              _loadedNonce = null;
+              _signedTransfer = null;
+              _submittedTransfer = null;
               _error = null;
             });
           },
@@ -1085,10 +1194,29 @@ class _TransferPreparationSectionState
         const SizedBox(height: 12),
         Align(
           alignment: Alignment.centerLeft,
-          child: FilledButton.icon(
-            onPressed: _buildPreview,
-            icon: const Icon(Icons.visibility_outlined),
-            label: const Text('Оценить и показать preview'),
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              FilledButton.icon(
+                onPressed: _isSubmitting ? null : _buildPreview,
+                icon: const Icon(Icons.visibility_outlined),
+                label: const Text('Оценить и показать preview'),
+              ),
+              FilledButton.icon(
+                onPressed: _isSubmitting ? null : _signAndSubmit,
+                icon: _isSubmitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send_outlined),
+                label: Text(
+                  _isSubmitting ? 'Отправка…' : 'Подписать и отправить',
+                ),
+              ),
+            ],
           ),
         ),
         if (_error case final String message) ...[
@@ -1118,6 +1246,38 @@ class _TransferPreparationSectionState
           ),
           const SizedBox(height: 10),
           _SummaryTile(label: 'Статус', value: preview.previewNote),
+        ],
+        if (_isSubmitting) ...[
+          const SizedBox(height: 16),
+          const _SummaryTile(
+            label: 'Состояние отправки',
+            value:
+                'Идёт операция: получаем nonce, подписываем локально и отправляем raw transaction в RPC.',
+          ),
+        ],
+        if (loadedNonce != null) ...[
+          const SizedBox(height: 16),
+          _SummaryTile(
+            label: 'Loaded nonce',
+            value:
+                '${loadedNonce.nonce}\nRPC: ${loadedNonce.providerLabel}\n${loadedNonce.loadedAtUtc.toIso8601String()}',
+          ),
+        ],
+        if (signedTransfer != null) ...[
+          const SizedBox(height: 10),
+          _SummaryTile(
+            label: 'Signed transaction',
+            value:
+                '${signedTransfer.transactionHashHex}\n${signedTransfer.signingNote}',
+          ),
+        ],
+        if (submittedTransfer != null) ...[
+          const SizedBox(height: 10),
+          _SummaryTile(
+            label: 'Успешная отправка',
+            value:
+                '${submittedTransfer.networkTransactionHash}\nRPC: ${submittedTransfer.providerLabel}\n${submittedTransfer.submittedAtUtc.toIso8601String()}',
+          ),
         ],
       ],
     );
