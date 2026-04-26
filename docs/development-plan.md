@@ -12,7 +12,8 @@ Current factual status of the project:
 - ✅ Phase 3 is implemented
 - ✅ Phase 4 is implemented
 - ✅ Phase 5 is implemented
-- ⏳ Phases 6-8 are not started yet
+- ◐ Phase 6 is partially implemented in the domain layer (prepare → sign → submit abstraction); UI submission states and nonce/error hardening are still pending
+- ⏳ Phases 7-8 are not started yet
 
 Completed deliverables so far:
 - ✅ project module structure started (`auth`, `key_storage`)
@@ -28,6 +29,8 @@ Completed deliverables so far:
 - ✅ read-only RPC foundation for Ethereum Mainnet and Sepolia
 - ✅ read-only wallet experience with token balances, history, and local cache fallback
 - ✅ transfer preparation flow with preview-only validation and gas estimation
+- ✅ local EIP-1559 signing for native / ERC-20 prepared transfers
+- ✅ raw transaction submission abstraction with public RPC broadcaster
 
 Not implemented yet from the near-term plan:
 - ✅ onboarding UI flow
@@ -212,12 +215,12 @@ Deliverables:
 ## Phase 6 — signing and sending
 Goal: enable real blockchain operations.
 
-Status: ⏳ Not started
+Status: ◐ Partially completed (domain layer now supports prepare → sign and raw submission abstraction; UI state handling and nonce/error hardening are still pending)
 
 Deliverables:
-- [ ] one auth prompt per operation
-- [ ] transaction signing
-- [ ] transaction submission
+- [x] one auth prompt per operation (domain-layer signing flow contract)
+- [x] transaction signing
+- [x] transaction submission
 - [ ] pending/success/failure status handling
 - [ ] nonce/error handling
 

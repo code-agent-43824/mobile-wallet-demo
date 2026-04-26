@@ -59,7 +59,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Mobile Wallet Demo'), findsOneWidget);
-    expect(find.text('v0.7'), findsOneWidget);
+    expect(find.text('v0.8'), findsOneWidget);
     expect(find.text('Создать новый кошелёк'), findsOneWidget);
     expect(find.text('Импортировать seed-фразу'), findsOneWidget);
   });

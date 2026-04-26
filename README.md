@@ -22,6 +22,8 @@
   - чтение recent transaction history
   - локальный кэш последнего успешного snapshot для offline/fallback сценария
   - подготовка перевода: asset selection, address validation, amount entry, gas preview
+  - локальная подпись prepared transaction
+  - RPC broadcaster abstraction для raw transaction submission
   - ручное обновление данных
 - Контракты для `KeyStorageBackend` и задел под внешний hardware backend
 - Unit- и widget-тесты для ключевых flow
@@ -30,7 +32,7 @@
 
 ## Версионирование
 
-- Текущая версия: `v0.7` (`0.7.0+8`)
+- Текущая версия: `v0.8` (`0.8.0+9`)
 - По договорённости в этом проекте дальше повышаем минорную версию с каждым функциональным шагом
 
 ## Что покрывает текущий этап
@@ -51,6 +53,8 @@
 - read-only экран recent transaction history
 - локальный cache fallback для последнего успешного blockchain snapshot
 - send preparation screen с address validation, amount entry, asset selection и preview gas/fee
+- локальная EIP-1559 подпись native/ERC-20 transfer после одного auth flow на операцию
+- raw transaction submission abstraction с публичным RPC broadcaster
 
 ## Артефакты CI
 

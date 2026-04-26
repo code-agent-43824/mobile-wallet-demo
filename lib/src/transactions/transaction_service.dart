@@ -1,5 +1,11 @@
+import 'dart:typed_data';
+
+import 'package:web3dart/crypto.dart';
+import 'package:web3dart/web3dart.dart';
+
 import '../blockchain/blockchain_provider.dart';
 import '../blockchain/network_config.dart';
+import '../key_storage/key_storage_backend.dart';
 
 class TransactionFailure implements Exception {
   const TransactionFailure(this.message);
@@ -60,6 +66,62 @@ class TransferPreview {
   final String previewNote;
 }
 
+class PreparedTransfer {
+  const PreparedTransfer({
+    required this.preview,
+    required this.networkConfig,
+    required this.amountUnits,
+    required this.maxFeePerGasWei,
+    required this.maxPriorityFeePerGasWei,
+    required this.estimatedFeeWei,
+    required this.transaction,
+  });
+
+  final TransferPreview preview;
+  final EvmNetworkConfig networkConfig;
+  final BigInt amountUnits;
+  final BigInt maxFeePerGasWei;
+  final BigInt maxPriorityFeePerGasWei;
+  final BigInt estimatedFeeWei;
+  final Transaction transaction;
+}
+
+class SignedTransfer {
+  const SignedTransfer({
+    required this.preview,
+    required this.networkConfig,
+    required this.rawTransactionBytes,
+    required this.rawTransactionHex,
+    required this.transactionHashHex,
+    required this.signingNote,
+  });
+
+  final TransferPreview preview;
+  final EvmNetworkConfig networkConfig;
+  final Uint8List rawTransactionBytes;
+  final String rawTransactionHex;
+  final String transactionHashHex;
+  final String signingNote;
+}
+
+class SubmittedTransfer {
+  const SubmittedTransfer({
+    required this.signedTransfer,
+    required this.providerLabel,
+    required this.networkTransactionHash,
+    required this.submittedAtUtc,
+  });
+
+  final SignedTransfer signedTransfer;
+  final String providerLabel;
+  final String networkTransactionHash;
+  final DateTime submittedAtUtc;
+}
+
+abstract interface class TransactionBroadcaster {
+  Future<SubmittedTransfer> submit({required SignedTransfer signedTransfer});
+}
+
 abstract interface class TransactionService {
   List<TransferAssetOption> availableAssets({
     required WalletChainSnapshot snapshot,
@@ -72,6 +134,25 @@ abstract interface class TransactionService {
     required String toAddress,
     required String amountText,
     required TransferAssetOption asset,
+  });
+
+  PreparedTransfer prepareTransfer({
+    required WalletChainSnapshot snapshot,
+    required String fromAddress,
+    required String toAddress,
+    required String amountText,
+    required TransferAssetOption asset,
+  });
+
+  SignedTransfer signPreparedTransfer({
+    required PreparedTransfer preparedTransfer,
+    required WalletMaterial walletMaterial,
+    required int nonce,
+  });
+
+  Future<SubmittedTransfer> submitSignedTransfer({
+    required SignedTransfer signedTransfer,
+    required TransactionBroadcaster broadcaster,
   });
 }
 
@@ -119,6 +200,23 @@ class ReadOnlyTransactionService implements TransactionService {
     required String amountText,
     required TransferAssetOption asset,
   }) {
+    return prepareTransfer(
+      snapshot: snapshot,
+      fromAddress: fromAddress,
+      toAddress: toAddress,
+      amountText: amountText,
+      asset: asset,
+    ).preview;
+  }
+
+  @override
+  PreparedTransfer prepareTransfer({
+    required WalletChainSnapshot snapshot,
+    required String fromAddress,
+    required String toAddress,
+    required String amountText,
+    required TransferAssetOption asset,
+  }) {
     final normalizedTarget = toAddress.trim();
     if (!_isValidEvmAddress(normalizedTarget)) {
       throw const TransactionFailure(
@@ -140,11 +238,13 @@ class ReadOnlyTransactionService implements TransactionService {
     final gasLimit = asset.kind == TransferAssetKind.native
         ? _nativeTransferGasLimit
         : _erc20TransferGasLimit;
+    final maxPriorityFeePerGasWei = BigInt.from(1500000000);
     final maxFeePerGasGwei =
         (snapshot.baseFeeGwei ?? _fallbackBaseFeeGwei) + _priorityFeeGwei;
-    final feeWei =
-        BigInt.from((maxFeePerGasGwei * 1000000000).round()) *
-        BigInt.from(gasLimit);
+    final maxFeePerGasWei = BigInt.from(
+      (maxFeePerGasGwei * 1000000000).round(),
+    );
+    final feeWei = maxFeePerGasWei * BigInt.from(gasLimit);
 
     if (asset.kind == TransferAssetKind.native &&
         amountUnits + feeWei > snapshot.nativeBalanceWei) {
@@ -162,11 +262,12 @@ class ReadOnlyTransactionService implements TransactionService {
 
     final amountFormatted = _formatUnits(amountUnits, asset.decimals);
     final estimatedFeeFormatted = _formatUnits(feeWei, 18);
+    final networkConfig = evmNetworkConfigs[snapshot.network]!;
     final totalDebitFormatted = asset.kind == TransferAssetKind.native
         ? '${_formatUnits(amountUnits + feeWei, 18)} ${asset.symbol}'
-        : '$amountFormatted ${asset.symbol} + $estimatedFeeFormatted ${evmNetworkConfigs[snapshot.network]!.nativeSymbol} fee';
+        : '$amountFormatted ${asset.symbol} + $estimatedFeeFormatted ${networkConfig.nativeSymbol} fee';
 
-    return TransferPreview(
+    final preview = TransferPreview(
       network: snapshot.network,
       fromAddress: fromAddress,
       toAddress: normalizedTarget,
@@ -175,11 +276,127 @@ class ReadOnlyTransactionService implements TransactionService {
       gasLimit: gasLimit,
       maxFeePerGasGwei: maxFeePerGasGwei,
       estimatedNetworkFeeNativeFormatted:
-          '$estimatedFeeFormatted ${evmNetworkConfigs[snapshot.network]!.nativeSymbol}',
+          '$estimatedFeeFormatted ${networkConfig.nativeSymbol}',
       totalDebitFormatted: totalDebitFormatted,
       previewNote:
           'Это только preparation/preview. Подпись и отправка ещё не включены.',
     );
+
+    return PreparedTransfer(
+      preview: preview,
+      networkConfig: networkConfig,
+      amountUnits: amountUnits,
+      maxFeePerGasWei: maxFeePerGasWei,
+      maxPriorityFeePerGasWei: maxPriorityFeePerGasWei,
+      estimatedFeeWei: feeWei,
+      transaction: _buildTransaction(
+        preview: preview,
+        amountUnits: amountUnits,
+        maxFeePerGasWei: maxFeePerGasWei,
+        maxPriorityFeePerGasWei: maxPriorityFeePerGasWei,
+      ),
+    );
+  }
+
+  @override
+  SignedTransfer signPreparedTransfer({
+    required PreparedTransfer preparedTransfer,
+    required WalletMaterial walletMaterial,
+    required int nonce,
+  }) {
+    if (nonce < 0) {
+      throw const TransactionFailure('Nonce должен быть неотрицательным.');
+    }
+
+    if (walletMaterial.address.toLowerCase() !=
+        preparedTransfer.preview.fromAddress.toLowerCase()) {
+      throw const TransactionFailure(
+        'Материал кошелька не соответствует адресу отправителя.',
+      );
+    }
+
+    final credentials = EthPrivateKey.fromHex(walletMaterial.privateKeyHex);
+    final unsigned = preparedTransfer.transaction.copyWith(
+      from: EthereumAddress.fromHex(preparedTransfer.preview.fromAddress),
+      nonce: nonce,
+    );
+
+    var signedBytes = signTransactionRaw(
+      unsigned,
+      credentials,
+      chainId: preparedTransfer.networkConfig.chainId,
+    );
+    if (unsigned.isEIP1559) {
+      signedBytes = prependTransactionType(0x02, signedBytes);
+    }
+
+    final rawTransactionHex = bytesToHex(signedBytes, include0x: true);
+    final transactionHashHex = bytesToHex(
+      keccak256(signedBytes),
+      include0x: true,
+    );
+
+    return SignedTransfer(
+      preview: preparedTransfer.preview,
+      networkConfig: preparedTransfer.networkConfig,
+      rawTransactionBytes: signedBytes,
+      rawTransactionHex: rawTransactionHex,
+      transactionHashHex: transactionHashHex,
+      signingNote:
+          'Транзакция локально подписана. Для этой операции PIN нужен только один раз на весь high-level signing flow.',
+    );
+  }
+
+  @override
+  Future<SubmittedTransfer> submitSignedTransfer({
+    required SignedTransfer signedTransfer,
+    required TransactionBroadcaster broadcaster,
+  }) {
+    return broadcaster.submit(signedTransfer: signedTransfer);
+  }
+
+  Transaction _buildTransaction({
+    required TransferPreview preview,
+    required BigInt amountUnits,
+    required BigInt maxFeePerGasWei,
+    required BigInt maxPriorityFeePerGasWei,
+  }) {
+    final to = EthereumAddress.fromHex(preview.toAddress);
+    final isNative = preview.asset.kind == TransferAssetKind.native;
+
+    return Transaction(
+      to: isNative
+          ? to
+          : EthereumAddress.fromHex(preview.asset.contractAddress!),
+      maxGas: preview.gasLimit,
+      value: isNative ? EtherAmount.inWei(amountUnits) : EtherAmount.zero(),
+      data: isNative
+          ? Uint8List(0)
+          : _buildErc20TransferData(recipient: to, amountUnits: amountUnits),
+      maxFeePerGas: EtherAmount.inWei(maxFeePerGasWei),
+      maxPriorityFeePerGas: EtherAmount.inWei(maxPriorityFeePerGasWei),
+    );
+  }
+
+  Uint8List _buildErc20TransferData({
+    required EthereumAddress recipient,
+    required BigInt amountUnits,
+  }) {
+    final selector = hexToBytes('a9059cbb');
+    final paddedAddress = Uint8List(32)
+      ..setRange(12, 32, recipient.addressBytes);
+    final paddedAmount = _bigIntToFixedBytes(amountUnits, 32);
+
+    return Uint8List.fromList(<int>[
+      ...selector,
+      ...paddedAddress,
+      ...paddedAmount,
+    ]);
+  }
+
+  Uint8List _bigIntToFixedBytes(BigInt value, int byteLength) {
+    final hexValue = value.toRadixString(16).padLeft(byteLength * 2, '0');
+    return Uint8List.fromList(hexToBytes(hexValue));
   }
 
   bool _isValidEvmAddress(String value) {
@@ -235,5 +452,69 @@ class ReadOnlyTransactionService implements TransactionService {
         ? fractional.substring(0, 6)
         : fractional;
     return '$whole.$compact';
+  }
+}
+
+class PublicRpcTransactionBroadcaster implements TransactionBroadcaster {
+  PublicRpcTransactionBroadcaster({JsonRpcTransport? rpcTransport})
+    : _rpcTransport = rpcTransport ?? HttpJsonRpcTransport();
+
+  final JsonRpcTransport _rpcTransport;
+
+  @override
+  Future<SubmittedTransfer> submit({
+    required SignedTransfer signedTransfer,
+  }) async {
+    TransactionFailure? lastFailure;
+
+    for (final rpcUrl in signedTransfer.networkConfig.rpcUrls) {
+      final uri = Uri.parse(rpcUrl);
+
+      try {
+        final response = await _rpcTransport.post(
+          uri: uri,
+          payload: <String, dynamic>{
+            'jsonrpc': '2.0',
+            'id': 1,
+            'method': 'eth_sendRawTransaction',
+            'params': <dynamic>[signedTransfer.rawTransactionHex],
+          },
+        );
+
+        final error = response['error'];
+        if (error != null) {
+          throw TransactionFailure(
+            'RPC ${uri.host} rejected signed transaction: $error',
+          );
+        }
+
+        final result = response['result'] as String?;
+        if (result == null || result.isEmpty) {
+          throw TransactionFailure(
+            'RPC ${uri.host} returned an empty transaction hash.',
+          );
+        }
+
+        return SubmittedTransfer(
+          signedTransfer: signedTransfer,
+          providerLabel: uri.host,
+          networkTransactionHash: result,
+          submittedAtUtc: DateTime.now().toUtc(),
+        );
+      } on TransactionFailure catch (error) {
+        lastFailure = error;
+      } on BlockchainFailure catch (error) {
+        lastFailure = TransactionFailure(error.message);
+      } catch (error) {
+        lastFailure = TransactionFailure(
+          'RPC ${uri.host} failed during raw submission: $error',
+        );
+      }
+    }
+
+    throw lastFailure ??
+        const TransactionFailure(
+          'No RPC endpoints are configured for submission.',
+        );
   }
 }
