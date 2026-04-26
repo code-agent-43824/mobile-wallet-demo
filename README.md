@@ -56,7 +56,9 @@
 - локальный cache fallback для последнего успешного blockchain snapshot
 - send preparation screen с address validation, amount entry, asset selection и preview gas/fee
 - локальная EIP-1559 подпись native/ERC-20 transfer после одного auth flow на операцию
+- загрузка nonce через public RPC перед подписанием
 - raw transaction submission abstraction с публичным RPC broadcaster
+- видимые UI-состояния отправки: pending / success / failure
 
 ## Артефакты CI
 

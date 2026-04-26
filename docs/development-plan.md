@@ -141,7 +141,7 @@ Status: ✅ Completed
 Deliverables:
 - [x] project module structure
 - [x] interfaces for key storage backends
-- [ ] app flow skeleton
+- [x] app flow skeleton
 - [x] placeholder external-device backend contract
 
 ## Phase 1 — onboarding and local auth
@@ -254,8 +254,9 @@ Deliverables:
 - `v0.5` — Ethereum Mainnet + Sepolia read-only balances
 - `v0.6` — tokens + history + local cache
 - `v0.7` — send form + gas estimation + preview
-- `v0.8` — signing + transaction send
-- `v0.9` — hardening + NFC/WalletConnect/AirGap extension groundwork
+- `v0.8` — signing foundation + raw transaction submission abstraction
+- `v0.9` — visible send flow states + nonce lookup + end-to-end submit wiring
+- `v1.0` — advanced send hardening + groundwork for Phase 7 extension path
 
 ## Non-goals for now
 - no hardware-device SDK implementation yet
