@@ -172,7 +172,7 @@ Deliverables:
 - [x] seed import flow
 - [x] encrypted storage of seed
 - [x] address derivation for EVM
-- [ ] unlock flow protected by PIN / biometrics (PIN flow implemented; real biometric auth integration still pending)
+- [x] unlock flow protected by PIN / biometrics (PIN flow implemented; real biometric auth integration completed)
 
 ## Phase 3 — EVM network foundation
 Goal: connect to blockchain in read-only mode.
@@ -225,7 +225,7 @@ Deliverables:
 - [x] transaction submission
 - [x] pending/success/failure status handling
 - [x] basic nonce/error handling through public RPC lookup and surfaced failures
-- [ ] advanced nonce/error hardening (replacement tx, stale nonce reconciliation, richer RPC-specific recovery)
+- [x] advanced nonce/error hardening (replacement tx, stale nonce reconciliation, richer RPC-specific recovery)
 
 ## Phase 7 — external NFC device foundation
 Goal: keep a clean future path without implementing device SDK now.
@@ -256,7 +256,7 @@ Deliverables:
 - `v0.7` — send form + gas estimation + preview
 - `v0.8` — signing foundation + raw transaction submission abstraction
 - `v0.9` — visible send flow states + nonce lookup + end-to-end submit wiring
-- `v1.0` — advanced send hardening + groundwork for Phase 7 extension path
+- `v1.0` — transaction tracking, advanced error hardening, complete biometric unlock
 
 ## Non-goals for now
 - no hardware-device SDK implementation yet

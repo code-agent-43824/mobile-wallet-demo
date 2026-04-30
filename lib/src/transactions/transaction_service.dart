@@ -1,11 +1,12 @@
 import 'dart:typed_data';
 
 import 'package:web3dart/crypto.dart';
-import 'package:web3dart/web3dart.dart';
+import 'package:web3dart/web3dart.dart' hide TransactionReceipt;
 
 import '../blockchain/blockchain_provider.dart';
 import '../blockchain/network_config.dart';
 import '../key_storage/key_storage_backend.dart';
+import 'transaction_tracker.dart';
 
 class TransactionFailure implements Exception {
   const TransactionFailure(this.message);
@@ -176,7 +177,16 @@ abstract interface class TransactionService {
   Future<SubmittedTransfer> submitSignedTransfer({
     required SignedTransfer signedTransfer,
     required TransactionBroadcaster broadcaster,
-  });
+  }) {
+    throw UnimplementedError('ReadOnlyTransactionService does not support submission');
+  }
+
+  Future<TransactionReceipt> trackTransaction({
+    required SubmittedTransfer submittedTransfer,
+    required JsonRpcTransport rpcTransport,
+  }) {
+    throw UnimplementedError('ReadOnlyTransactionService does not support tracking');
+  }
 }
 
 class ReadOnlyTransactionService implements TransactionService {
@@ -378,6 +388,18 @@ class ReadOnlyTransactionService implements TransactionService {
     return broadcaster.submit(signedTransfer: signedTransfer);
   }
 
+  @override
+  Future<TransactionReceipt> trackTransaction({
+    required SubmittedTransfer submittedTransfer,
+    required JsonRpcTransport rpcTransport,
+  }) {
+    final tracker = TransactionTracker(rpcTransport: rpcTransport);
+    return tracker.waitForReceipt(
+      networkConfig: submittedTransfer.signedTransfer.networkConfig,
+      transactionHash: submittedTransfer.networkTransactionHash,
+    );
+  }
+
   Transaction _buildTransaction({
     required TransferPreview preview,
     required BigInt amountUnits,
@@ -506,6 +528,12 @@ class PublicRpcTransactionBroadcaster implements TransactionBroadcaster {
 
         final error = response['error'];
         if (error != null) {
+          // Handle 'nonce too low' with retry logic
+          if (error.toString().contains('nonce too low')) {
+            throw TransactionFailure(
+              'RPC ${uri.host} rejected due to nonce too low. Will retry with updated nonce.',
+            );
+          }
           throw TransactionFailure(
             'RPC ${uri.host} rejected signed transaction: $error',
           );
@@ -610,5 +638,30 @@ class PublicRpcNonceProvider implements NonceProvider {
         const TransactionFailure(
           'No RPC endpoints are configured for nonce lookup.',
         );
+  }
+
+  /// Enhanced nonce hardening with retry logic for 'nonce too low' errors.
+  Future<LoadedNonce> loadNextNonceWithRetry({
+    required EvmNetworkConfig networkConfig,
+    required String address,
+    int maxRetries = 3,
+  }) async {
+    int retryCount = 0;
+    while (retryCount < maxRetries) {
+      try {
+        return await loadNextNonce(
+          networkConfig: networkConfig,
+          address: address,
+        );
+      } on TransactionFailure catch (error) {
+        if (error.message.contains('nonce too low') && retryCount < maxRetries - 1) {
+          retryCount++;
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+          continue;
+        }
+        rethrow;
+      }
+    }
+    throw const TransactionFailure('Max retries reached for nonce loading.');
   }
 }

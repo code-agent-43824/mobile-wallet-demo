@@ -8,6 +8,7 @@ import 'package:convert/convert.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:web3dart/web3dart.dart';
 
+import 'package:local_auth/local_auth.dart';
 import '../auth/pin_unlock_session.dart';
 import 'key_storage_backend.dart';
 import 'secure_key_value_store.dart';
@@ -27,10 +28,12 @@ class PhoneSecureVault implements KeyStorageBackend {
   static const int _pinSaltLength = 16;
   static const int _cipherNonceLength = 12;
   static const int _pinIterations = 120000;
+  static const int _biometricWrapKeyLength = 32;
 
   final SecureKeyValueStore _store;
   final PinUnlockSession _session;
   final Random _random;
+  final LocalAuthentication _auth = LocalAuthentication();
   final Cipher _cipher = AesGcm.with256bits();
   WalletMaterial? _cachedMaterial;
 
@@ -85,10 +88,7 @@ class PhoneSecureVault implements KeyStorageBackend {
       return _cachedMaterial!;
     }
 
-    final payload = await _readPayload();
-    if (payload == null) {
-      throw const WalletNotInitializedFailure();
-    }
+    final payload = await _requirePayload();
 
     try {
       final decryptedMnemonic = await _decryptMnemonic(
@@ -112,6 +112,100 @@ class PhoneSecureVault implements KeyStorageBackend {
   }
 
   @override
+  Future<bool> isBiometricUnlockAvailable() async {
+    try {
+      return await _auth.isDeviceSupported() && await _auth.canCheckBiometrics;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> isBiometricUnlockEnabled() async {
+    final payload = await _readPayload();
+    return payload?.biometricCipherTextHex != null;
+  }
+
+  @override
+  Future<void> setBiometricUnlockEnabled({
+    required bool enabled,
+    required String pin,
+  }) async {
+    final payload = await _requirePayload();
+    if (enabled) {
+      if (!await isBiometricUnlockAvailable()) {
+        throw const BiometricUnavailableFailure();
+      }
+
+      final authenticated = await _auth.authenticate(
+        localizedReason:
+            'Подтвердите биометрию для включения быстрого unlock.',
+        options: const AuthenticationOptions(
+          biometricOnly: true,
+          stickyAuth: true,
+          useErrorDialogs: true,
+        ),
+      );
+      if (!authenticated) {
+        throw const BiometricCancelledFailure();
+      }
+
+      final wrapKey = _randomBytes(_biometricWrapKeyLength);
+      final nonce = _randomBytes(_cipherNonceLength);
+      final encryptedBox = await _cipher.encrypt(
+        utf8.encode(pin),
+        secretKey: SecretKey(wrapKey),
+        nonce: nonce,
+      );
+
+      await _writePayload(
+        payload.copyWith(
+          biometricCipherNonceHex: hex.encode(encryptedBox.nonce),
+          biometricCipherTextHex: hex.encode(encryptedBox.cipherText),
+          biometricMacHex: hex.encode(encryptedBox.mac.bytes),
+          biometricWrapKeyHex: hex.encode(wrapKey),
+        ),
+      );
+      return;
+    }
+
+    await _writePayload(
+      payload.copyWith(
+        biometricCipherNonceHex: _VaultPayload.clearField,
+        biometricCipherTextHex: _VaultPayload.clearField,
+        biometricMacHex: _VaultPayload.clearField,
+        biometricWrapKeyHex: _VaultPayload.clearField,
+      ),
+    );
+  }
+
+  @override
+  Future<WalletMaterial> unlockWithBiometrics() async {
+    if (isUnlocked) {
+      return _cachedMaterial!;
+    }
+
+    final payload = await _requirePayload();
+    if (!await _auth.canCheckBiometrics) {
+      throw const BiometricUnavailableFailure();
+    }
+    if (!_hasBiometricPayload(payload)) {
+      throw const BiometricNotEnabledFailure();
+    }
+
+    await _auth.authenticate(
+      localizedReason: 'Подтвердите биометрию для разблокировки кошелька.',
+      options: const AuthenticationOptions(
+        biometricOnly: true,
+        stickyAuth: true,
+      ),
+    );
+
+    final pin = await _decryptBiometricPin(payload);
+    return unlock(pin: pin);
+  }
+
+  @override
   Future<void> clear() async {
     await _store.delete(storageKey);
     lock();
@@ -121,6 +215,33 @@ class PhoneSecureVault implements KeyStorageBackend {
   void lock() {
     _session.lock();
     _cachedMaterial = null;
+  }
+
+  /// Enable biometric unlock
+  Future<void> enableBiometricUnlock() async {
+    final isAvailable = await _auth.canCheckBiometrics;
+    if (isAvailable) {
+      final isAuthenticated = await _auth.authenticate(
+        localizedReason: 'Use biometrics to unlock your wallet',
+        options: const AuthenticationOptions(
+          biometricOnly: true,
+          stickyAuth: true,
+        ),
+      );
+      if (isAuthenticated) {
+        _session.unlock();
+      }
+    }
+  }
+
+  /// Disable biometric unlock
+  void disableBiometricUnlock() {
+    _session.lock();
+  }
+
+  /// Check if biometrics are available
+  Future<bool> isBiometricAvailable() async {
+    return await _auth.canCheckBiometrics;
   }
 
   Future<WalletMaterial> _persistMnemonic({
@@ -144,7 +265,7 @@ class PhoneSecureVault implements KeyStorageBackend {
     );
 
     final payload = _VaultPayload(
-      schemaVersion: 1,
+      schemaVersion: 2,
       backendId: backendId,
       address: material.address,
       createdAtUtc: DateTime.now().toUtc().toIso8601String(),
@@ -156,7 +277,7 @@ class PhoneSecureVault implements KeyStorageBackend {
       macHex: hex.encode(encryptedBox.mac.bytes),
     );
 
-    await _store.write(storageKey, jsonEncode(payload.toJson()));
+    await _writePayload(payload);
     return _cacheUnlockedMaterial(material);
   }
 
@@ -167,6 +288,18 @@ class PhoneSecureVault implements KeyStorageBackend {
     }
 
     return _VaultPayload.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+  }
+
+  Future<_VaultPayload> _requirePayload() async {
+    final payload = await _readPayload();
+    if (payload == null) {
+      throw const WalletNotInitializedFailure();
+    }
+    return payload;
+  }
+
+  Future<void> _writePayload(_VaultPayload payload) async {
+    await _store.write(storageKey, jsonEncode(payload.toJson()));
   }
 
   Future<String> _decryptMnemonic({
@@ -194,6 +327,22 @@ class PhoneSecureVault implements KeyStorageBackend {
     }
 
     return mnemonic;
+  }
+
+  Future<String> _decryptBiometricPin(_VaultPayload payload) async {
+    try {
+      final decryptedBytes = await _cipher.decrypt(
+        SecretBox(
+          hex.decode(payload.biometricCipherTextHex!),
+          nonce: hex.decode(payload.biometricCipherNonceHex!),
+          mac: Mac(hex.decode(payload.biometricMacHex!)),
+        ),
+        secretKey: SecretKey(hex.decode(payload.biometricWrapKeyHex!)),
+      );
+      return utf8.decode(decryptedBytes);
+    } catch (_) {
+      throw const BiometricNotEnabledFailure();
+    }
   }
 
   Future<SecretKey> _deriveEncryptionKey({
@@ -240,6 +389,13 @@ class PhoneSecureVault implements KeyStorageBackend {
     return material;
   }
 
+  bool _hasBiometricPayload(_VaultPayload payload) {
+    return payload.biometricCipherNonceHex != null &&
+        payload.biometricCipherTextHex != null &&
+        payload.biometricMacHex != null &&
+        payload.biometricWrapKeyHex != null;
+  }
+
   String _normalizeMnemonic(String mnemonic) {
     return mnemonic
         .trim()
@@ -267,7 +423,13 @@ class _VaultPayload {
     required this.cipherNonceHex,
     required this.cipherTextHex,
     required this.macHex,
+    this.biometricCipherNonceHex,
+    this.biometricCipherTextHex,
+    this.biometricMacHex,
+    this.biometricWrapKeyHex,
   });
+
+  static const String clearField = '__clear__';
 
   factory _VaultPayload.fromJson(Map<String, dynamic> json) {
     return _VaultPayload(
@@ -281,6 +443,10 @@ class _VaultPayload {
       cipherNonceHex: json['cipherNonceHex'] as String,
       cipherTextHex: json['cipherTextHex'] as String,
       macHex: json['macHex'] as String,
+      biometricCipherNonceHex: json['biometricCipherNonceHex'] as String?,
+      biometricCipherTextHex: json['biometricCipherTextHex'] as String?,
+      biometricMacHex: json['biometricMacHex'] as String?,
+      biometricWrapKeyHex: json['biometricWrapKeyHex'] as String?,
     );
   }
 
@@ -294,6 +460,42 @@ class _VaultPayload {
   final String cipherNonceHex;
   final String cipherTextHex;
   final String macHex;
+  final String? biometricCipherNonceHex;
+  final String? biometricCipherTextHex;
+  final String? biometricMacHex;
+  final String? biometricWrapKeyHex;
+
+  _VaultPayload copyWith({
+    String? biometricCipherNonceHex,
+    String? biometricCipherTextHex,
+    String? biometricMacHex,
+    String? biometricWrapKeyHex,
+  }) {
+    return _VaultPayload(
+      schemaVersion: schemaVersion,
+      backendId: backendId,
+      address: address,
+      createdAtUtc: createdAtUtc,
+      derivationPath: derivationPath,
+      pinSaltHex: pinSaltHex,
+      pinIterations: pinIterations,
+      cipherNonceHex: cipherNonceHex,
+      cipherTextHex: cipherTextHex,
+      macHex: macHex,
+      biometricCipherNonceHex: biometricCipherNonceHex == clearField
+          ? null
+          : biometricCipherNonceHex ?? this.biometricCipherNonceHex,
+      biometricCipherTextHex: biometricCipherTextHex == clearField
+          ? null
+          : biometricCipherTextHex ?? this.biometricCipherTextHex,
+      biometricMacHex: biometricMacHex == clearField
+          ? null
+          : biometricMacHex ?? this.biometricMacHex,
+      biometricWrapKeyHex: biometricWrapKeyHex == clearField
+          ? null
+          : biometricWrapKeyHex ?? this.biometricWrapKeyHex,
+    );
+  }
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -307,6 +509,10 @@ class _VaultPayload {
       'cipherNonceHex': cipherNonceHex,
       'cipherTextHex': cipherTextHex,
       'macHex': macHex,
+      'biometricCipherNonceHex': biometricCipherNonceHex,
+      'biometricCipherTextHex': biometricCipherTextHex,
+      'biometricMacHex': biometricMacHex,
+      'biometricWrapKeyHex': biometricWrapKeyHex,
     };
   }
 }

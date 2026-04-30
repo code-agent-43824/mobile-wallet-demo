@@ -45,6 +45,21 @@ class InvalidMnemonicFailure extends VaultFailure {
     : super('Seed phrase is invalid or unsupported.');
 }
 
+class BiometricUnavailableFailure extends VaultFailure {
+  const BiometricUnavailableFailure()
+    : super('Biometric unlock is unavailable on this device.');
+}
+
+class BiometricNotEnabledFailure extends VaultFailure {
+  const BiometricNotEnabledFailure()
+    : super('Biometric unlock is not enabled for this wallet.');
+}
+
+class BiometricCancelledFailure extends VaultFailure {
+  const BiometricCancelledFailure()
+    : super('Biometric authentication was cancelled.');
+}
+
 abstract interface class KeyStorageBackend {
   String get backendId;
   bool get isUnlocked;
@@ -57,6 +72,13 @@ abstract interface class KeyStorageBackend {
     required String pin,
   });
   Future<WalletMaterial> unlock({required String pin});
+  Future<bool> isBiometricUnlockAvailable();
+  Future<bool> isBiometricUnlockEnabled();
+  Future<void> setBiometricUnlockEnabled({
+    required bool enabled,
+    required String pin,
+  });
+  Future<WalletMaterial> unlockWithBiometrics();
   Future<void> clear();
   void lock();
 }

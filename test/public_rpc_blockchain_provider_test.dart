@@ -56,10 +56,10 @@ void main() {
   test('falls back to the next RPC endpoint when the first one fails', () async {
     final provider = PublicRpcBlockchainProvider(
       rpcTransport: _FakeJsonRpcTransport(<String, List<Object>>{
-        'cloudflare-eth.com': <Object>[
+        'ethereum-rpc.publicnode.com': <Object>[
           const BlockchainFailure('Primary RPC is down.'),
         ],
-        'rpc.ankr.com': <Object>[
+        'eth.llamarpc.com': <Object>[
           <String, dynamic>{'jsonrpc': '2.0', 'id': 1, 'result': '0x0'},
           <String, dynamic>{
             'jsonrpc': '2.0',
@@ -105,7 +105,7 @@ void main() {
       address: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
     );
 
-    expect(snapshot.providerLabel, 'rpc.ankr.com');
+    expect(snapshot.providerLabel, 'eth.llamarpc.com');
     expect(snapshot.nativeBalanceFormatted, '0');
     expect(snapshot.baseFeeGwei, 1);
     expect(snapshot.tokenBalances.single.symbol, 'USDC');
@@ -116,8 +116,10 @@ void main() {
     final store = InMemorySecureKeyValueStore();
     final provider = PublicRpcBlockchainProvider(
       rpcTransport: _FakeJsonRpcTransport(<String, List<Object>>{
-        'cloudflare-eth.com': <Object>[const BlockchainFailure('down')],
-        'rpc.ankr.com': <Object>[const BlockchainFailure('down')],
+        'ethereum-rpc.publicnode.com': <Object>[const BlockchainFailure('down')],
+        'eth.llamarpc.com': <Object>[const BlockchainFailure('down')],
+        '1rpc.io': <Object>[const BlockchainFailure('down')],
+        'gateway.tenderly.co': <Object>[const BlockchainFailure('down')],
       }),
       apiTransport: _FakeJsonApiTransport(<String, Object>{}),
       cacheStore: store,

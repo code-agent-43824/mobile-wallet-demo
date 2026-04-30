@@ -218,7 +218,7 @@ void main() {
       broadcaster: PublicRpcTransactionBroadcaster(
         rpcTransport: _FakeJsonRpcTransport(
           responses: <String, Map<String, dynamic>>{
-            'cloudflare-eth.com': <String, dynamic>{
+            'ethereum-rpc.publicnode.com': <String, dynamic>{
               'jsonrpc': '2.0',
               'id': 1,
               'result':
@@ -229,7 +229,7 @@ void main() {
       ),
     );
 
-    expect(submitted.providerLabel, 'cloudflare-eth.com');
+    expect(submitted.providerLabel, 'ethereum-rpc.publicnode.com');
     expect(submitted.networkTransactionHash, startsWith('0xaaaa'));
   });
 }
