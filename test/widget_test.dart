@@ -75,6 +75,30 @@ class _FakeBroadcaster implements TransactionBroadcaster {
   }
 }
 
+class _FakeTrackingTransport implements JsonRpcTransport {
+  const _FakeTrackingTransport();
+
+  @override
+  Future<Map<String, dynamic>> post({
+    required Uri uri,
+    required Map<String, dynamic> payload,
+  }) async {
+    if (payload['method'] == 'eth_getTransactionReceipt') {
+      return <String, dynamic>{
+        'jsonrpc': '2.0',
+        'id': 1,
+        'result': <String, dynamic>{
+          'status': '0x1',
+          'blockNumber': '0x10',
+          'gasUsed': '0x5208',
+        },
+      };
+    }
+
+    throw const BlockchainFailure('unexpected RPC method in test');
+  }
+}
+
 void main() {
   testWidgets('renders onboarding welcome shell for uninitialized wallet', (
     WidgetTester tester,
@@ -91,7 +115,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Mobile Wallet Demo'), findsOneWidget);
-    expect(find.text('v1.1'), findsOneWidget);
+    expect(find.text('v1.2.0+13'), findsOneWidget);
     expect(find.text('Создать новый кошелёк'), findsOneWidget);
     expect(find.text('Импортировать seed-фразу'), findsOneWidget);
   });
@@ -174,7 +198,7 @@ void main() {
     expect(find.text('Итоговый debit'), findsOneWidget);
     expect(find.text('Получатель'), findsOneWidget);
     expect(
-      find.textContaining('Это только preparation/preview'),
+      find.textContaining('Preview валиден'),
       findsOneWidget,
     );
   });
@@ -227,6 +251,7 @@ void main() {
         blockchainProvider: _FakeBlockchainProvider(),
         nonceProvider: _FakeNonceProvider(),
         transactionBroadcaster: _FakeBroadcaster(),
+        trackingTransport: const _FakeTrackingTransport(),
       ),
     );
     await tester.pumpAndSettle();
@@ -267,5 +292,7 @@ void main() {
     expect(find.textContaining('0xsubmittedhash'), findsOneWidget);
     expect(find.textContaining('broadcast.fake'), findsOneWidget);
     expect(find.textContaining('Loaded nonce'), findsOneWidget);
+    expect(find.textContaining('Статус: Confirmed'), findsOneWidget);
+    expect(find.textContaining('Block: 16'), findsOneWidget);
   });
 }

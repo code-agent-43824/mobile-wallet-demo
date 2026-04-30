@@ -17,6 +17,15 @@ class TransactionFailure implements Exception {
   String toString() => 'TransactionFailure: $message';
 }
 
+bool isRetryableNonceFailureMessage(String message) {
+  final normalized = message.toLowerCase();
+  return normalized.contains('nonce too low') ||
+      normalized.contains('nonce too high') ||
+      normalized.contains('already known') ||
+      normalized.contains('replacement transaction underpriced') ||
+      normalized.contains('transaction underpriced');
+}
+
 enum TransferAssetKind { native, erc20 }
 
 class TransferAssetOption {
@@ -166,6 +175,7 @@ abstract interface class TransactionService {
     required String toAddress,
     required String amountText,
     required TransferAssetOption asset,
+    double gasMultiplier = 1.0,
   });
 
   SignedTransfer signPreparedTransfer({
@@ -249,6 +259,7 @@ class ReadOnlyTransactionService implements TransactionService {
     required String toAddress,
     required String amountText,
     required TransferAssetOption asset,
+    double gasMultiplier = 1.0,
   }) {
     final normalizedTarget = toAddress.trim();
     if (!_isValidEvmAddress(normalizedTarget)) {
@@ -271,9 +282,11 @@ class ReadOnlyTransactionService implements TransactionService {
     final gasLimit = asset.kind == TransferAssetKind.native
         ? _nativeTransferGasLimit
         : _erc20TransferGasLimit;
-    final maxPriorityFeePerGasWei = BigInt.from(1500000000);
+    final maxPriorityFeePerGasWei =
+        BigInt.from((1500000000 * gasMultiplier).round());
     final maxFeePerGasGwei =
-        (snapshot.baseFeeGwei ?? _fallbackBaseFeeGwei) + _priorityFeeGwei;
+        ((snapshot.baseFeeGwei ?? _fallbackBaseFeeGwei) + _priorityFeeGwei) *
+        gasMultiplier;
     final maxFeePerGasWei = BigInt.from(
       (maxFeePerGasGwei * 1000000000).round(),
     );
@@ -312,7 +325,7 @@ class ReadOnlyTransactionService implements TransactionService {
           '$estimatedFeeFormatted ${networkConfig.nativeSymbol}',
       totalDebitFormatted: totalDebitFormatted,
       previewNote:
-          'Это только preparation/preview. Подпись и отправка ещё не включены.',
+          'Preview валиден. Дальше приложение подпишет, отправит транзакцию и отследит её lifecycle.',
     );
 
     return PreparedTransfer(
@@ -528,10 +541,10 @@ class PublicRpcTransactionBroadcaster implements TransactionBroadcaster {
 
         final error = response['error'];
         if (error != null) {
-          // Handle 'nonce too low' with retry logic
-          if (error.toString().contains('nonce too low')) {
+          final message = error.toString();
+          if (isRetryableNonceFailureMessage(message)) {
             throw TransactionFailure(
-              'RPC ${uri.host} rejected due to nonce too low. Will retry with updated nonce.',
+              'RPC ${uri.host} rejected signed transaction with a retryable nonce/pricing issue: $message',
             );
           }
           throw TransactionFailure(
@@ -654,7 +667,8 @@ class PublicRpcNonceProvider implements NonceProvider {
           address: address,
         );
       } on TransactionFailure catch (error) {
-        if (error.message.contains('nonce too low') && retryCount < maxRetries - 1) {
+        if (isRetryableNonceFailureMessage(error.message) &&
+            retryCount < maxRetries - 1) {
           retryCount++;
           await Future<void>.delayed(const Duration(milliseconds: 200));
           continue;

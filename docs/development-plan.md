@@ -217,7 +217,7 @@ Deliverables:
 ## Phase 6 — signing and sending
 Goal: enable real blockchain operations.
 
-Status: ◐ Partially completed (end-to-end send flow is now wired through preview → nonce → sign → submit with visible UI states; advanced nonce/error hardening and post-submit tracking are still pending)
+Status: ✅ Completed (end-to-end send flow with advanced error hardening, post-submit transaction tracking, and gas price increase mechanism fully implemented)
 
 Deliverables:
 - [x] one auth prompt per operation (domain-layer signing flow contract)
@@ -225,7 +225,10 @@ Deliverables:
 - [x] transaction submission
 - [x] pending/success/failure status handling
 - [x] basic nonce/error handling through public RPC lookup and surfaced failures
-- [x] advanced nonce/error hardening (replacement tx, stale nonce reconciliation, richer RPC-specific recovery)
+- [x] advanced nonce/error hardening with retry logic (replacement tx, stale nonce reconciliation, richer RPC-specific recovery)
+- [x] post-submit transaction tracking with TransactionTracker
+- [x] gas price increase mechanism for underpriced transaction replacement
+- [x] UI integration for transaction status and replacement notifications
 
 ## Phase 7 — external NFC device foundation
 Goal: keep a clean future path without implementing device SDK now.

@@ -232,6 +232,21 @@ void main() {
     expect(submitted.providerLabel, 'ethereum-rpc.publicnode.com');
     expect(submitted.networkTransactionHash, startsWith('0xaaaa'));
   });
+
+  test('classifies nonce/pricing failures as retryable', () {
+    expect(
+      isRetryableNonceFailureMessage('nonce too low'),
+      isTrue,
+    );
+    expect(
+      isRetryableNonceFailureMessage('replacement transaction underpriced'),
+      isTrue,
+    );
+    expect(
+      isRetryableNonceFailureMessage('execution reverted'),
+      isFalse,
+    );
+  });
 }
 
 class _FakeJsonRpcTransport implements JsonRpcTransport {

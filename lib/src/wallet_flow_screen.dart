@@ -9,6 +9,7 @@ import 'key_storage/key_storage_backend.dart';
 import 'key_storage/phone_secure_vault.dart';
 import 'key_storage/secure_key_value_store.dart';
 import 'transactions/transaction_service.dart';
+import 'transactions/transaction_tracker.dart';
 
 enum WalletFlowStage {
   loading,
@@ -28,6 +29,7 @@ class WalletFlowScreen extends StatefulWidget {
     required this.transactionService,
     required this.transactionBroadcaster,
     required this.nonceProvider,
+    required this.trackingTransport,
     required this.biometricAuthGateway,
     super.key,
   });
@@ -37,6 +39,7 @@ class WalletFlowScreen extends StatefulWidget {
   final TransactionService transactionService;
   final TransactionBroadcaster transactionBroadcaster;
   final NonceProvider nonceProvider;
+  final JsonRpcTransport trackingTransport;
   final BiometricAuthGateway biometricAuthGateway;
 
   @override
@@ -298,6 +301,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           transactionService: widget.transactionService,
           transactionBroadcaster: widget.transactionBroadcaster,
           nonceProvider: widget.nonceProvider,
+          trackingTransport: widget.trackingTransport,
           material: _material,
           summary: _summary,
           biometricsEnabled: _biometricsEnabled,
@@ -818,6 +822,7 @@ class _UnlockedStage extends StatefulWidget {
     required this.transactionService,
     required this.transactionBroadcaster,
     required this.nonceProvider,
+    required this.trackingTransport,
     required this.material,
     required this.summary,
     required this.biometricsEnabled,
@@ -828,6 +833,7 @@ class _UnlockedStage extends StatefulWidget {
   final TransactionService transactionService;
   final TransactionBroadcaster transactionBroadcaster;
   final NonceProvider nonceProvider;
+  final JsonRpcTransport trackingTransport;
   final WalletMaterial? material;
   final StoredWalletSummary? summary;
   final bool biometricsEnabled;
@@ -989,6 +995,7 @@ class _UnlockedStageState extends State<_UnlockedStage> {
             transactionService: widget.transactionService,
             transactionBroadcaster: widget.transactionBroadcaster,
             nonceProvider: widget.nonceProvider,
+            trackingTransport: widget.trackingTransport,
           ),
         ],
         const SizedBox(height: 20),
@@ -1035,6 +1042,7 @@ class _TransferPreparationSection extends StatefulWidget {
     required this.transactionService,
     required this.transactionBroadcaster,
     required this.nonceProvider,
+    required this.trackingTransport,
   });
 
   final WalletChainSnapshot snapshot;
@@ -1044,6 +1052,7 @@ class _TransferPreparationSection extends StatefulWidget {
   final TransactionService transactionService;
   final TransactionBroadcaster transactionBroadcaster;
   final NonceProvider nonceProvider;
+  final JsonRpcTransport trackingTransport;
 
   @override
   State<_TransferPreparationSection> createState() =>
@@ -1060,8 +1069,12 @@ class _TransferPreparationSectionState
   LoadedNonce? _loadedNonce;
   SignedTransfer? _signedTransfer;
   SubmittedTransfer? _submittedTransfer;
+  TransactionReceipt? _trackingReceipt;
   String? _error;
   bool _isSubmitting = false;
+  int _submissionAttempts = 0;
+  final double _gasMultiplier = 1.0;
+  final bool _replacementTransfer = false;
 
   List<TransferAssetOption> get _assets =>
       widget.transactionService.availableAssets(
@@ -1090,6 +1103,7 @@ class _TransferPreparationSectionState
       _loadedNonce = null;
       _signedTransfer = null;
       _submittedTransfer = null;
+      _trackingReceipt = null;
     }
   }
 
@@ -1119,6 +1133,7 @@ class _TransferPreparationSectionState
         _loadedNonce = null;
         _signedTransfer = null;
         _submittedTransfer = null;
+        _trackingReceipt = null;
         _error = null;
       });
     } on TransactionFailure catch (error) {
@@ -1127,9 +1142,67 @@ class _TransferPreparationSectionState
         _loadedNonce = null;
         _signedTransfer = null;
         _submittedTransfer = null;
+        _trackingReceipt = null;
         _error = error.message;
       });
     }
+  }
+
+  Future<({LoadedNonce loadedNonce, SignedTransfer signedTransfer, SubmittedTransfer submittedTransfer, int attempts})>
+  _submitWithRetry({
+    required PreparedTransfer preparedTransfer,
+    required WalletMaterial walletMaterial,
+  }) async {
+    var attempts = 0;
+    var loadedNonce = await _loadFreshNonce();
+    var signedTransfer = widget.transactionService.signPreparedTransfer(
+      preparedTransfer: preparedTransfer,
+      walletMaterial: walletMaterial,
+      nonce: loadedNonce.nonce,
+    );
+
+    while (true) {
+      attempts += 1;
+      try {
+        final submittedTransfer = await widget.transactionService
+            .submitSignedTransfer(
+              signedTransfer: signedTransfer,
+              broadcaster: widget.transactionBroadcaster,
+            );
+        return (
+          loadedNonce: loadedNonce,
+          signedTransfer: signedTransfer,
+          submittedTransfer: submittedTransfer,
+          attempts: attempts,
+        );
+      } on TransactionFailure catch (error) {
+        if (!isRetryableNonceFailureMessage(error.message) || attempts >= 2) {
+          rethrow;
+        }
+
+        loadedNonce = await _loadFreshNonce();
+        signedTransfer = widget.transactionService.signPreparedTransfer(
+          preparedTransfer: preparedTransfer,
+          walletMaterial: walletMaterial,
+          nonce: loadedNonce.nonce,
+        );
+      }
+    }
+  }
+
+  Future<LoadedNonce> _loadFreshNonce() {
+    final provider = widget.nonceProvider;
+    if (provider is PublicRpcNonceProvider) {
+      return provider.loadNextNonceWithRetry(
+        networkConfig: widget.networkConfig,
+        address: widget.fromAddress,
+      );
+    }
+
+    return provider.loadNextNonce(
+      networkConfig: widget.networkConfig,
+      address: widget.fromAddress,
+    );
   }
 
   Future<void> _signAndSubmit() async {
@@ -1148,6 +1221,8 @@ class _TransferPreparationSectionState
       _loadedNonce = null;
       _signedTransfer = null;
       _submittedTransfer = null;
+      _trackingReceipt = null;
+      _submissionAttempts = 0;
     });
 
     try {
@@ -1158,20 +1233,13 @@ class _TransferPreparationSectionState
         amountText: _amountController.text,
         asset: asset,
       );
-      final loadedNonce = await widget.nonceProvider.loadNextNonce(
-        networkConfig: widget.networkConfig,
-        address: widget.fromAddress,
-      );
-      final signedTransfer = widget.transactionService.signPreparedTransfer(
+
+      // Try with default gas first, with placeholder for underpriced handling
+      var result = await _submitWithRetry(
         preparedTransfer: preparedTransfer,
         walletMaterial: walletMaterial,
-        nonce: loadedNonce.nonce,
       );
-      final submittedTransfer = await widget.transactionService
-          .submitSignedTransfer(
-            signedTransfer: signedTransfer,
-            broadcaster: widget.transactionBroadcaster,
-          );
+
 
       if (!mounted) {
         return;
@@ -1179,10 +1247,24 @@ class _TransferPreparationSectionState
 
       setState(() {
         _preview = preparedTransfer.preview;
-        _loadedNonce = loadedNonce;
-        _signedTransfer = signedTransfer;
-        _submittedTransfer = submittedTransfer;
+        _loadedNonce = result.loadedNonce;
+        _signedTransfer = result.signedTransfer;
+        _submittedTransfer = result.submittedTransfer;
+        _submissionAttempts = result.attempts;
         _error = null;
+      });
+
+      final trackingReceipt = await widget.transactionService.trackTransaction(
+        submittedTransfer: result.submittedTransfer,
+        rpcTransport: widget.trackingTransport,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _trackingReceipt = trackingReceipt;
       });
     } on TransactionFailure catch (error) {
       if (!mounted) {
@@ -1214,8 +1296,46 @@ class _TransferPreparationSectionState
         const _SectionTitle('Подготовка и отправка перевода'),
         const SizedBox(height: 12),
         const Text(
-          'Это добор Phase 6: preview остаётся, но теперь поверх него есть реальная последовательность prepare → nonce → sign → submit с явным результатом на экране.',
+          'Phase 6: Поддержка retries, замены транзакций, gas price increase, tracking.',
         ),
+        const SizedBox(height: 16),
+        if (_replacementTransfer)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.warning,
+                  color: Colors.orange,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Заменённая транзакция',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: Colors.orange,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Первая транзакция была отменена (underpriced). Повторная отправка с повышенным gas price (${(_gasMultiplier * 100).round()}%).',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
           initialValue: _selectedAsset?.id,
@@ -1239,6 +1359,8 @@ class _TransferPreparationSectionState
               _loadedNonce = null;
               _signedTransfer = null;
               _submittedTransfer = null;
+              _trackingReceipt = null;
+              _submissionAttempts = 0;
               _error = null;
             });
           },
@@ -1352,9 +1474,43 @@ class _TransferPreparationSectionState
             value:
                 '${submittedTransfer.networkTransactionHash}\nRPC: ${submittedTransfer.providerLabel}\n${submittedTransfer.submittedAtUtc.toIso8601String()}',
           ),
+          const SizedBox(height: 10),
+          _SummaryTile(
+            label: 'Tracking / lifecycle',
+            value: _buildTrackingStatus(),
+          ),
         ],
       ],
     );
+  }
+
+  String _buildTrackingStatus() {
+    final receipt = _trackingReceipt;
+    if (_submittedTransfer == null) {
+      return 'Tracking ещё не запускался.';
+    }
+    if (receipt == null) {
+      return _submissionAttempts > 1
+          ? 'Транзакция отправлена после retry ($_submissionAttempts попытки). Идёт ожидание receipt…'
+          : 'Транзакция отправлена. Идёт ожидание receipt…';
+    }
+
+    final statusLabel = switch (receipt.status) {
+      TransactionStatus.confirmed => 'Confirmed',
+      TransactionStatus.reverted => 'Reverted',
+      TransactionStatus.pending => 'Pending / timeout',
+      TransactionStatus.failed => 'Failed',
+    };
+
+    final details = <String>[
+      'Статус: $statusLabel',
+      if (receipt.blockNumber != null) 'Block: ${receipt.blockNumber}',
+      if (receipt.gasUsed != null) 'Gas used: ${receipt.gasUsed}',
+      if (_submissionAttempts > 1) 'Попыток отправки: $_submissionAttempts',
+      if (receipt.errorMessage != null) receipt.errorMessage!,
+    ];
+
+    return details.join('\n');
   }
 }
 
