@@ -8,7 +8,7 @@ Current factual status of the project:
 - ✅ CI foundation is in place and stable on Android, iOS Simulator, and Windows x64
 - ✅ Phase 0 is effectively completed
 - ✅ Phase 1 is implemented as a user-facing flow
-- ◐ Phase 2 is partially implemented; PIN unlock flow is ready, real biometric integration is still pending
+- ✅ Phase 2 is implemented, including real biometric integration on Android/iOS and a Windows demo simulation path
 - ✅ Phase 3 is implemented
 - ✅ Phase 4 is implemented
 - ✅ Phase 5 is implemented
@@ -37,7 +37,7 @@ Completed deliverables so far:
 Not implemented yet from the near-term plan:
 - ✅ onboarding UI flow
 - ✅ one-time seed phrase display screen
-- ✅ biometric enable flow (shell state, platform integration later)
+- ✅ biometric enable flow (real platform integration on Android/iOS, simulated path on Windows)
 - ✅ locked / uninitialized app shell states
 
 ## Core architectural decision
@@ -164,7 +164,7 @@ Out of scope:
 ## Phase 2 — phone secure vault
 Goal: implement the first real wallet backend.
 
-Status: ◐ Partially completed (foundation, create/import UX and seed display are ready; full production biometrics/integration layers still pending)
+Status: ✅ Completed (foundation, create/import UX, seed display, PIN unlock, real mobile biometrics and Windows demo simulation path are implemented)
 
 Deliverables:
 - [x] BIP-39 seed generation
@@ -172,7 +172,7 @@ Deliverables:
 - [x] seed import flow
 - [x] encrypted storage of seed
 - [x] address derivation for EVM
-- [x] unlock flow protected by PIN / biometrics (PIN flow implemented; real biometric auth integration completed)
+- [x] unlock flow protected by PIN / biometrics (real biometric auth on Android/iOS, simulated biometric auth on Windows)
 
 ## Phase 3 — EVM network foundation
 Goal: connect to blockchain in read-only mode.
@@ -256,7 +256,8 @@ Deliverables:
 - `v0.7` — send form + gas estimation + preview
 - `v0.8` — signing foundation + raw transaction submission abstraction
 - `v0.9` — visible send flow states + nonce lookup + end-to-end submit wiring
-- `v1.0` — transaction tracking, advanced error hardening, complete biometric unlock
+- `v1.0` — complete biometric unlock
+- `v1.1` — transaction tracking and advanced error hardening
 
 ## Non-goals for now
 - no hardware-device SDK implementation yet

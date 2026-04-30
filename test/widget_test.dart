@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/app.dart';
+import 'package:mobile_wallet_demo/src/auth/biometric_auth.dart';
 import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
@@ -90,7 +91,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Mobile Wallet Demo'), findsOneWidget);
-    expect(find.text('v1.0'), findsOneWidget);
+    expect(find.text('v1.1'), findsOneWidget);
     expect(find.text('Создать новый кошелёк'), findsOneWidget);
     expect(find.text('Импортировать seed-фразу'), findsOneWidget);
   });
@@ -176,6 +177,42 @@ void main() {
       find.textContaining('Это только preparation/preview'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('allows biometric unlock when biometrics are enabled', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _FakeBlockchainProvider(),
+        biometricAuthGateway: const SimulatedBiometricAuthGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Создать новый кошелёк'));
+    await tester.pumpAndSettle();
+
+    final setupFields = find.byType(TextField);
+    await tester.enterText(setupFields.at(0), '1234');
+    await tester.enterText(setupFields.at(1), '1234');
+    await tester.tap(find.text('Создать кошелёк'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Я сохранил seed-фразу'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Включить биометрию'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Разблокировать биометрией'), findsOneWidget);
+    await tester.tap(find.text('Разблокировать биометрией'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Подготовка и отправка перевода'), findsOneWidget);
   });
 
   testWidgets('submits signed transfer and shows success state', (

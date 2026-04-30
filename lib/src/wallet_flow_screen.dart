@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
+import 'auth/biometric_auth.dart';
 import 'blockchain/blockchain_provider.dart';
 import 'blockchain/network_config.dart';
 import 'key_storage/key_storage_backend.dart';
@@ -25,6 +28,7 @@ class WalletFlowScreen extends StatefulWidget {
     required this.transactionService,
     required this.transactionBroadcaster,
     required this.nonceProvider,
+    required this.biometricAuthGateway,
     super.key,
   });
 
@@ -33,6 +37,7 @@ class WalletFlowScreen extends StatefulWidget {
   final TransactionService transactionService;
   final TransactionBroadcaster transactionBroadcaster;
   final NonceProvider nonceProvider;
+  final BiometricAuthGateway biometricAuthGateway;
 
   @override
   State<WalletFlowScreen> createState() => _WalletFlowScreenState();
@@ -46,23 +51,32 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
   WalletMaterial? _material;
   String? _seedPhraseToShow;
   String? _errorMessage;
+  String? _pendingBiometricPin;
   bool _biometricsEnabled = false;
+  bool _biometricsAvailable = false;
 
   @override
   void initState() {
     super.initState();
-    _vault = PhoneSecureVault(store: widget.store);
+    _vault = PhoneSecureVault(
+      store: widget.store,
+      biometricAuth: widget.biometricAuthGateway,
+    );
     _loadInitialState();
   }
 
   Future<void> _loadInitialState() async {
     final summary = await _vault.getWalletSummary();
+    final biometricsEnabled = await _vault.isBiometricUnlockEnabled();
+    final biometricsAvailable = await _vault.isBiometricUnlockAvailable();
     if (!mounted) {
       return;
     }
 
     setState(() {
       _summary = summary;
+      _biometricsEnabled = biometricsEnabled;
+      _biometricsAvailable = biometricsAvailable;
       _stage = summary == null
           ? WalletFlowStage.welcome
           : WalletFlowStage.locked;
@@ -78,6 +92,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
         createdAtUtc: DateTime.now().toUtc(),
       );
       _material = material;
+      _pendingBiometricPin = pin;
       _seedPhraseToShow = material.mnemonic;
       _stage = WalletFlowStage.showSeed;
     });
@@ -95,6 +110,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
         createdAtUtc: DateTime.now().toUtc(),
       );
       _material = material;
+      _pendingBiometricPin = pin;
       _seedPhraseToShow = null;
       _stage = WalletFlowStage.biometricPrompt;
     });
@@ -139,13 +155,33 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
     });
   }
 
-  void _completeBiometricChoice(bool enabled) {
-    _vault.lock();
-    setState(() {
+  Future<void> _completeBiometricChoice(bool enabled) async {
+    await _runGuarded(() async {
+      final pin = _pendingBiometricPin;
+      if (enabled) {
+        if (pin == null || pin.isEmpty) {
+          throw const VaultFailure(
+            'Не удалось включить биометрию: PIN текущей сессии недоступен.',
+          );
+        }
+        await _vault.setBiometricUnlockEnabled(enabled: true, pin: pin);
+      } else {
+        await _vault.setBiometricUnlockEnabled(enabled: false, pin: '');
+      }
+
       _biometricsEnabled = enabled;
       _material = null;
+      _pendingBiometricPin = null;
       _seedPhraseToShow = null;
       _stage = WalletFlowStage.locked;
+      _vault.lock();
+    });
+  }
+
+  Future<void> _unlockWithBiometrics() async {
+    await _runGuarded(() async {
+      _material = await _vault.unlockWithBiometrics();
+      _stage = WalletFlowStage.unlocked;
     });
   }
 
@@ -153,6 +189,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
     _vault.lock();
     setState(() {
       _material = null;
+      _pendingBiometricPin = null;
       _stage = WalletFlowStage.locked;
     });
   }
@@ -238,14 +275,22 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
         );
       case WalletFlowStage.biometricPrompt:
         return _BiometricPromptStage(
+          isAvailable: _biometricsAvailable,
+          isWindowsSimulation: Platform.isWindows,
           onSkip: () => _completeBiometricChoice(false),
-          onEnable: () => _completeBiometricChoice(true),
+          onEnable: _biometricsAvailable
+              ? () => _completeBiometricChoice(true)
+              : null,
         );
       case WalletFlowStage.locked:
         return _LockedStage(
           summary: _summary,
           biometricsEnabled: _biometricsEnabled,
           onUnlock: _unlockWallet,
+          onUnlockWithBiometrics:
+              _biometricsEnabled && _biometricsAvailable
+              ? _unlockWithBiometrics
+              : null,
         );
       case WalletFlowStage.unlocked:
         return _UnlockedStage(
@@ -319,9 +364,9 @@ class _Header extends StatelessWidget {
       case WalletFlowStage.showSeed:
         return 'Это одноразовый экран резервного сохранения seed-фразы. После закрытия приложения seed больше не должен показываться в открытом виде.';
       case WalletFlowStage.biometricPrompt:
-        return 'После PIN можно разрешить биометрию как удобный путь разблокировки. На этом этапе это пока продуктовый shell, без нативной платформенной интеграции.';
+        return 'После PIN можно включить биометрию как удобный путь разблокировки: реальную на мобильных платформах и имитацию на Windows для demo-сценария.';
       case WalletFlowStage.locked:
-        return 'Кошелёк инициализирован, но заблокирован. Дальше доступ в приложение идёт через PIN, а позже сюда же добавится реальная биометрия.';
+        return 'Кошелёк инициализирован, но заблокирован. Дальше доступ в приложение идёт через PIN, а при включённой биометрии — ещё и через быстрый biometric unlock.';
       case WalletFlowStage.unlocked:
         return 'Onboarding/auth shell готов. Теперь поверх него строим первый действительно полезный read-only wallet слой: баланс, токены, история и локальный кэш.';
     }
@@ -631,21 +676,32 @@ class _SeedPhraseStage extends StatelessWidget {
 }
 
 class _BiometricPromptStage extends StatelessWidget {
-  const _BiometricPromptStage({required this.onSkip, required this.onEnable});
+  const _BiometricPromptStage({
+    required this.isAvailable,
+    required this.isWindowsSimulation,
+    required this.onSkip,
+    required this.onEnable,
+  });
 
+  final bool isAvailable;
+  final bool isWindowsSimulation;
   final VoidCallback onSkip;
-  final VoidCallback onEnable;
+  final VoidCallback? onEnable;
 
   @override
   Widget build(BuildContext context) {
+    final description = isWindowsSimulation
+        ? 'На Windows здесь используется аккуратная имитация biometric unlock для demo-сценария. На мобильных платформах будет использоваться реальная системная биометрия.'
+        : isAvailable
+        ? 'По продуктовой модели биометрия включается только после задания PIN и остаётся удобным способом разблокировки. Здесь уже используется реальная системная биометрия, если устройство её поддерживает.'
+        : 'На этом устройстве биометрия недоступна, поэтому продолжаем без неё. PIN остаётся обязательным способом разблокировки.';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _SectionTitle('Биометрия после PIN'),
         const SizedBox(height: 12),
-        const Text(
-          'По продуктовой модели биометрия включается только после задания PIN и остаётся удобным способом разблокировки. Нативную платформенную интеграцию добавим позже, а сейчас фиксируем пользовательский выбор в shell flow.',
-        ),
+        Text(description),
         const SizedBox(height: 20),
         Wrap(
           spacing: 12,
@@ -654,7 +710,11 @@ class _BiometricPromptStage extends StatelessWidget {
             FilledButton.icon(
               onPressed: onEnable,
               icon: const Icon(Icons.fingerprint),
-              label: const Text('Включить биометрию'),
+              label: Text(
+                isWindowsSimulation
+                    ? 'Включить биометрию (имитация)'
+                    : 'Включить биометрию',
+              ),
             ),
             OutlinedButton(
               onPressed: onSkip,
@@ -672,11 +732,13 @@ class _LockedStage extends StatefulWidget {
     required this.summary,
     required this.biometricsEnabled,
     required this.onUnlock,
+    required this.onUnlockWithBiometrics,
   });
 
   final StoredWalletSummary? summary;
   final bool biometricsEnabled;
   final Future<void> Function(String pin) onUnlock;
+  final Future<void> Function()? onUnlockWithBiometrics;
 
   @override
   State<_LockedStage> createState() => _LockedStageState();
@@ -729,9 +791,21 @@ class _LockedStageState extends State<_LockedStage> {
           ),
         ),
         const SizedBox(height: 16),
-        FilledButton(
-          onPressed: () => widget.onUnlock(_pinController.text.trim()),
-          child: const Text('Разблокировать'),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            FilledButton(
+              onPressed: () => widget.onUnlock(_pinController.text.trim()),
+              child: const Text('Разблокировать'),
+            ),
+            if (widget.onUnlockWithBiometrics != null)
+              OutlinedButton.icon(
+                onPressed: widget.onUnlockWithBiometrics,
+                icon: const Icon(Icons.fingerprint),
+                label: const Text('Разблокировать биометрией'),
+              ),
+          ],
         ),
       ],
     );

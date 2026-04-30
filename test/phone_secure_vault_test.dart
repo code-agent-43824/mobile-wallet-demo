@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile_wallet_demo/src/auth/biometric_auth.dart';
 import 'package:mobile_wallet_demo/src/key_storage/key_storage_backend.dart';
 import 'package:mobile_wallet_demo/src/key_storage/phone_secure_vault.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
@@ -69,6 +70,22 @@ void main() {
       expect(summary, isNotNull);
       expect(summary!.address, material.address);
       expect(summary.backendId, 'phone_secure_vault');
+    });
+
+    test('enables biometric unlock and unlocks without PIN re-entry', () async {
+      vault = PhoneSecureVault(
+        store: store,
+        biometricAuth: const SimulatedBiometricAuthGateway(),
+      );
+
+      final material = await vault.createWallet(pin: '123456');
+      await vault.setBiometricUnlockEnabled(enabled: true, pin: '123456');
+      expect(await vault.isBiometricUnlockEnabled(), isTrue);
+
+      vault.lock();
+      final unlockedMaterial = await vault.unlockWithBiometrics();
+      expect(unlockedMaterial.address, material.address);
+      expect(unlockedMaterial.privateKeyHex, material.privateKeyHex);
     });
   });
 }

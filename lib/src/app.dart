@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_version.dart';
+import 'auth/biometric_auth.dart';
 import 'blockchain/blockchain_provider.dart';
 import 'key_storage/secure_key_value_store.dart';
 import 'transactions/transaction_service.dart';
@@ -15,17 +16,20 @@ class MobileWalletDemoApp extends StatelessWidget {
     TransactionService? transactionService,
     TransactionBroadcaster? transactionBroadcaster,
     NonceProvider? nonceProvider,
+    BiometricAuthGateway? biometricAuthGateway,
   }) : _store = store,
        _blockchainProvider = blockchainProvider,
        _transactionService = transactionService,
        _transactionBroadcaster = transactionBroadcaster,
-       _nonceProvider = nonceProvider;
+       _nonceProvider = nonceProvider,
+       _biometricAuthGateway = biometricAuthGateway;
 
   final SecureKeyValueStore? _store;
   final BlockchainProvider? _blockchainProvider;
   final TransactionService? _transactionService;
   final TransactionBroadcaster? _transactionBroadcaster;
   final NonceProvider? _nonceProvider;
+  final BiometricAuthGateway? _biometricAuthGateway;
 
   @override
   Widget build(BuildContext context) {
@@ -66,6 +70,8 @@ class MobileWalletDemoApp extends StatelessWidget {
         transactionBroadcaster:
             _transactionBroadcaster ?? PublicRpcTransactionBroadcaster(),
         nonceProvider: _nonceProvider ?? PublicRpcNonceProvider(),
+        biometricAuthGateway:
+            _biometricAuthGateway ?? defaultBiometricAuthGateway(),
       ),
     );
   }

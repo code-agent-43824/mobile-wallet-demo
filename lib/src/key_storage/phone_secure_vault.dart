@@ -8,7 +8,7 @@ import 'package:convert/convert.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:web3dart/web3dart.dart';
 
-import 'package:local_auth/local_auth.dart';
+import '../auth/biometric_auth.dart';
 import '../auth/pin_unlock_session.dart';
 import 'key_storage_backend.dart';
 import 'secure_key_value_store.dart';
@@ -16,10 +16,12 @@ import 'secure_key_value_store.dart';
 class PhoneSecureVault implements KeyStorageBackend {
   PhoneSecureVault({
     required SecureKeyValueStore store,
+    BiometricAuthGateway? biometricAuth,
     PinUnlockSession? session,
     Duration unlockTtl = const Duration(minutes: 5),
     Random? random,
   }) : _store = store,
+       _biometricAuth = biometricAuth ?? defaultBiometricAuthGateway(),
        _session = session ?? PinUnlockSession(ttl: unlockTtl),
        _random = random ?? Random.secure();
 
@@ -31,9 +33,9 @@ class PhoneSecureVault implements KeyStorageBackend {
   static const int _biometricWrapKeyLength = 32;
 
   final SecureKeyValueStore _store;
+  final BiometricAuthGateway _biometricAuth;
   final PinUnlockSession _session;
   final Random _random;
-  final LocalAuthentication _auth = LocalAuthentication();
   final Cipher _cipher = AesGcm.with256bits();
   WalletMaterial? _cachedMaterial;
 
@@ -111,13 +113,11 @@ class PhoneSecureVault implements KeyStorageBackend {
     }
   }
 
+  BiometricAuthMode get biometricAuthMode => _biometricAuth.mode;
+
   @override
-  Future<bool> isBiometricUnlockAvailable() async {
-    try {
-      return await _auth.isDeviceSupported() && await _auth.canCheckBiometrics;
-    } catch (_) {
-      return false;
-    }
+  Future<bool> isBiometricUnlockAvailable() {
+    return _biometricAuth.isAvailable();
   }
 
   @override
@@ -137,18 +137,9 @@ class PhoneSecureVault implements KeyStorageBackend {
         throw const BiometricUnavailableFailure();
       }
 
-      final authenticated = await _auth.authenticate(
-        localizedReason:
-            'Подтвердите биометрию для включения быстрого unlock.',
-        options: const AuthenticationOptions(
-          biometricOnly: true,
-          stickyAuth: true,
-          useErrorDialogs: true,
-        ),
+      await _biometricAuth.authenticate(
+        reason: 'Подтвердите биометрию для включения быстрого unlock.',
       );
-      if (!authenticated) {
-        throw const BiometricCancelledFailure();
-      }
 
       final wrapKey = _randomBytes(_biometricWrapKeyLength);
       final nonce = _randomBytes(_cipherNonceLength);
@@ -186,19 +177,15 @@ class PhoneSecureVault implements KeyStorageBackend {
     }
 
     final payload = await _requirePayload();
-    if (!await _auth.canCheckBiometrics) {
+    if (!await isBiometricUnlockAvailable()) {
       throw const BiometricUnavailableFailure();
     }
     if (!_hasBiometricPayload(payload)) {
       throw const BiometricNotEnabledFailure();
     }
 
-    await _auth.authenticate(
-      localizedReason: 'Подтвердите биометрию для разблокировки кошелька.',
-      options: const AuthenticationOptions(
-        biometricOnly: true,
-        stickyAuth: true,
-      ),
+    await _biometricAuth.authenticate(
+      reason: 'Подтвердите биометрию для разблокировки кошелька.',
     );
 
     final pin = await _decryptBiometricPin(payload);
@@ -216,34 +203,6 @@ class PhoneSecureVault implements KeyStorageBackend {
     _session.lock();
     _cachedMaterial = null;
   }
-
-  /// Enable biometric unlock
-  Future<void> enableBiometricUnlock() async {
-    final isAvailable = await _auth.canCheckBiometrics;
-    if (isAvailable) {
-      final isAuthenticated = await _auth.authenticate(
-        localizedReason: 'Use biometrics to unlock your wallet',
-        options: const AuthenticationOptions(
-          biometricOnly: true,
-          stickyAuth: true,
-        ),
-      );
-      if (isAuthenticated) {
-        _session.unlock();
-      }
-    }
-  }
-
-  /// Disable biometric unlock
-  void disableBiometricUnlock() {
-    _session.lock();
-  }
-
-  /// Check if biometrics are available
-  Future<bool> isBiometricAvailable() async {
-    return await _auth.canCheckBiometrics;
-  }
-
   Future<WalletMaterial> _persistMnemonic({
     required String mnemonic,
     required String pin,

@@ -11,7 +11,9 @@
   - выбор create / import
   - обязательный PIN setup
   - one-time seed display flow
-  - biometric choice shell
+  - biometric choice flow
+  - реальный biometric unlock на Android/iOS
+  - имитация biometric unlock на Windows
   - locked / unlocked app states
 - Read-only EVM foundation:
   - Ethereum Mainnet + Sepolia
@@ -34,8 +36,8 @@
 
 ## Версионирование
 
-- Текущая версия: `v0.9` (`0.9.0+10`)
-- По договорённости в этом проекте дальше повышаем минорную версию с каждым функциональным шагом
+- Текущая версия: `v1.1` (`1.1.0+12`)
+- По договорённости в этом проекте дальше повышаем minor-версию с каждым функциональным шагом
 
 ## Что покрывает текущий этап
 
@@ -48,6 +50,7 @@
 - хранение seed в зашифрованном виде
 - derivation первого EVM-адреса (`m/44'/60'/0'/0/0`)
 - locked / unlocked state для приложения
+- biometric unlock после PIN setup: реальный на Android/iOS, имитационный на Windows
 - выбор между Ethereum Mainnet и Sepolia
 - read-only чтение нативного баланса и base fee из публичных RPC
 - fallback между несколькими RPC endpoints
