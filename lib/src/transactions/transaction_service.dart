@@ -21,9 +21,18 @@ bool isRetryableNonceFailureMessage(String message) {
   final normalized = message.toLowerCase();
   return normalized.contains('nonce too low') ||
       normalized.contains('nonce too high') ||
-      normalized.contains('already known') ||
       normalized.contains('replacement transaction underpriced') ||
       normalized.contains('transaction underpriced');
+}
+
+bool isUnderpricedFailureMessage(String message) {
+  final normalized = message.toLowerCase();
+  return normalized.contains('replacement transaction underpriced') ||
+      normalized.contains('transaction underpriced');
+}
+
+bool isAlreadyKnownFailureMessage(String message) {
+  return message.toLowerCase().contains('already known');
 }
 
 enum TransferAssetKind { native, erc20 }
@@ -188,14 +197,18 @@ abstract interface class TransactionService {
     required SignedTransfer signedTransfer,
     required TransactionBroadcaster broadcaster,
   }) {
-    throw UnimplementedError('ReadOnlyTransactionService does not support submission');
+    throw UnimplementedError(
+      'ReadOnlyTransactionService does not support submission',
+    );
   }
 
   Future<TransactionReceipt> trackTransaction({
     required SubmittedTransfer submittedTransfer,
     required JsonRpcTransport rpcTransport,
   }) {
-    throw UnimplementedError('ReadOnlyTransactionService does not support tracking');
+    throw UnimplementedError(
+      'ReadOnlyTransactionService does not support tracking',
+    );
   }
 }
 
@@ -282,8 +295,9 @@ class ReadOnlyTransactionService implements TransactionService {
     final gasLimit = asset.kind == TransferAssetKind.native
         ? _nativeTransferGasLimit
         : _erc20TransferGasLimit;
-    final maxPriorityFeePerGasWei =
-        BigInt.from((1500000000 * gasMultiplier).round());
+    final maxPriorityFeePerGasWei = BigInt.from(
+      (1500000000 * gasMultiplier).round(),
+    );
     final maxFeePerGasGwei =
         ((snapshot.baseFeeGwei ?? _fallbackBaseFeeGwei) + _priorityFeeGwei) *
         gasMultiplier;
@@ -542,6 +556,14 @@ class PublicRpcTransactionBroadcaster implements TransactionBroadcaster {
         final error = response['error'];
         if (error != null) {
           final message = error.toString();
+          if (isAlreadyKnownFailureMessage(message)) {
+            return SubmittedTransfer(
+              signedTransfer: signedTransfer,
+              providerLabel: uri.host,
+              networkTransactionHash: signedTransfer.transactionHashHex,
+              submittedAtUtc: DateTime.now().toUtc(),
+            );
+          }
           if (isRetryableNonceFailureMessage(message)) {
             throw TransactionFailure(
               'RPC ${uri.host} rejected signed transaction with a retryable nonce/pricing issue: $message',
@@ -651,31 +673,5 @@ class PublicRpcNonceProvider implements NonceProvider {
         const TransactionFailure(
           'No RPC endpoints are configured for nonce lookup.',
         );
-  }
-
-  /// Enhanced nonce hardening with retry logic for 'nonce too low' errors.
-  Future<LoadedNonce> loadNextNonceWithRetry({
-    required EvmNetworkConfig networkConfig,
-    required String address,
-    int maxRetries = 3,
-  }) async {
-    int retryCount = 0;
-    while (retryCount < maxRetries) {
-      try {
-        return await loadNextNonce(
-          networkConfig: networkConfig,
-          address: address,
-        );
-      } on TransactionFailure catch (error) {
-        if (isRetryableNonceFailureMessage(error.message) &&
-            retryCount < maxRetries - 1) {
-          retryCount++;
-          await Future<void>.delayed(const Duration(milliseconds: 200));
-          continue;
-        }
-        rethrow;
-      }
-    }
-    throw const TransactionFailure('Max retries reached for nonce loading.');
   }
 }

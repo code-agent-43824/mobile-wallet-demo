@@ -28,6 +28,8 @@
   - загрузка nonce через публичный RPC
   - RPC broadcaster abstraction для raw transaction submission
   - UI-состояния отправки: pending / success / failure
+  - post-submit transaction tracking без блокировки UI
+  - retry/replacement flow с автоматическим gas bump для underpriced ошибок
   - ручное обновление данных
 - Контракты для `KeyStorageBackend` и задел под внешний hardware backend
 - Unit- и widget-тесты для ключевых flow
@@ -36,7 +38,7 @@
 
 ## Версионирование
 
-- Текущая версия: `v1.2.0+13`
+- Текущая версия: `v1.3.0+14`
 - По договорённости в этом проекте дальше повышаем minor-версию с каждым функциональным шагом
 
 ## Что покрывает текущий этап
@@ -62,6 +64,8 @@
 - загрузка nonce через public RPC перед подписанием
 - raw transaction submission abstraction с публичным RPC broadcaster
 - видимые UI-состояния отправки: pending / success / failure
+- post-submit transaction tracking без блокировки отправочного UI
+- retry/replacement flow с повышением gas price при underpriced reject
 
 ## Артефакты CI
 

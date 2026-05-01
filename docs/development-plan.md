@@ -217,7 +217,7 @@ Deliverables:
 ## Phase 6 — signing and sending
 Goal: enable real blockchain operations.
 
-Status: ✅ Completed (end-to-end send flow with advanced error hardening, post-submit transaction tracking, and gas price increase mechanism fully implemented)
+Status: ✅ Completed (end-to-end send flow with real retry/replacement handling, post-submit transaction tracking, and non-blocking lifecycle UX implemented)
 
 Deliverables:
 - [x] one auth prompt per operation (domain-layer signing flow contract)
@@ -260,7 +260,9 @@ Deliverables:
 - `v0.8` — signing foundation + raw transaction submission abstraction
 - `v0.9` — visible send flow states + nonce lookup + end-to-end submit wiring
 - `v1.0` — complete biometric unlock
-- `v1.1` — transaction tracking and advanced error hardening
+- `v1.1` — first transaction tracking and advanced error hardening pass
+- `v1.2` — initial Phase 6 completion attempt
+- `v1.3` — real replacement flow, gas bump, and non-blocking lifecycle UX
 
 ## Non-goals for now
 - no hardware-device SDK implementation yet

@@ -99,6 +99,27 @@ class _FakeTrackingTransport implements JsonRpcTransport {
   }
 }
 
+class _DelayedTrackingTransport implements JsonRpcTransport {
+  const _DelayedTrackingTransport();
+
+  @override
+  Future<Map<String, dynamic>> post({
+    required Uri uri,
+    required Map<String, dynamic> payload,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    return <String, dynamic>{
+      'jsonrpc': '2.0',
+      'id': 1,
+      'result': <String, dynamic>{
+        'status': '0x1',
+        'blockNumber': '0x10',
+        'gasUsed': '0x5208',
+      },
+    };
+  }
+}
+
 void main() {
   testWidgets('renders onboarding welcome shell for uninitialized wallet', (
     WidgetTester tester,
@@ -115,7 +136,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Mobile Wallet Demo'), findsOneWidget);
-    expect(find.text('v1.2.0+13'), findsOneWidget);
+    expect(find.text('v1.3.0+14'), findsOneWidget);
     expect(find.text('Создать новый кошелёк'), findsOneWidget);
     expect(find.text('Импортировать seed-фразу'), findsOneWidget);
   });
@@ -197,10 +218,7 @@ void main() {
 
     expect(find.text('Итоговый debit'), findsOneWidget);
     expect(find.text('Получатель'), findsOneWidget);
-    expect(
-      find.textContaining('Preview валиден'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Preview валиден'), findsOneWidget);
   });
 
   testWidgets('allows biometric unlock when biometrics are enabled', (
@@ -294,5 +312,66 @@ void main() {
     expect(find.textContaining('Loaded nonce'), findsOneWidget);
     expect(find.textContaining('Статус: Confirmed'), findsOneWidget);
     expect(find.textContaining('Block: 16'), findsOneWidget);
+  });
+
+  testWidgets('keeps tracking async after successful submission', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _FakeBlockchainProvider(),
+        nonceProvider: _FakeNonceProvider(),
+        transactionBroadcaster: _FakeBroadcaster(),
+        trackingTransport: const _DelayedTrackingTransport(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Создать новый кошелёк'));
+    await tester.pumpAndSettle();
+
+    final setupFields = find.byType(TextField);
+    await tester.enterText(setupFields.at(0), '1234');
+    await tester.enterText(setupFields.at(1), '1234');
+    await tester.tap(find.text('Создать кошелёк'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Я сохранил seed-фразу'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Пока без биометрии'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, '1234');
+    await tester.tap(find.text('Разблокировать'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    final sendFields = find.byType(TextField);
+    await tester.enterText(
+      sendFields.at(0),
+      '0x1111111111111111111111111111111111111111',
+    );
+    await tester.enterText(sendFields.at(1), '0.1');
+
+    final sendButton = find.text('Подписать и отправить');
+    await tester.ensureVisible(sendButton);
+    await tester.tap(sendButton);
+    await tester.pump();
+
+    expect(find.text('Успешная отправка'), findsOneWidget);
+    expect(
+      find.textContaining('Транзакция отправлена. Идёт ожидание receipt'),
+      findsOneWidget,
+    );
+    expect(find.text('Подписать и отправить'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 60));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Статус: Confirmed'), findsOneWidget);
   });
 }
