@@ -203,6 +203,7 @@ class PhoneSecureVault implements KeyStorageBackend {
     _session.lock();
     _cachedMaterial = null;
   }
+
   Future<WalletMaterial> _persistMnemonic({
     required String mnemonic,
     required String pin,

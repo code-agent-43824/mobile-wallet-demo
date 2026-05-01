@@ -234,18 +234,12 @@ void main() {
   });
 
   test('classifies nonce/pricing failures as retryable', () {
-    expect(
-      isRetryableNonceFailureMessage('nonce too low'),
-      isTrue,
-    );
+    expect(isRetryableNonceFailureMessage('nonce too low'), isTrue);
     expect(
       isRetryableNonceFailureMessage('replacement transaction underpriced'),
       isTrue,
     );
-    expect(
-      isRetryableNonceFailureMessage('execution reverted'),
-      isFalse,
-    );
+    expect(isRetryableNonceFailureMessage('execution reverted'), isFalse);
   });
 }
 

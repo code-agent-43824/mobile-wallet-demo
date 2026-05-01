@@ -70,7 +70,8 @@ class MobileWalletDemoApp extends StatelessWidget {
             _blockchainProvider ??
             PublicRpcBlockchainProvider(cacheStore: effectiveStore),
         transactionService:
-            _transactionService ?? const HardenedTransactionServiceImplementation(),
+            _transactionService ??
+            const HardenedTransactionServiceImplementation(),
         transactionBroadcaster:
             _transactionBroadcaster ?? PublicRpcTransactionBroadcaster(),
         nonceProvider: _nonceProvider ?? PublicRpcNonceProvider(),

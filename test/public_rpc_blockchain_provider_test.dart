@@ -116,7 +116,9 @@ void main() {
     final store = InMemorySecureKeyValueStore();
     final provider = PublicRpcBlockchainProvider(
       rpcTransport: _FakeJsonRpcTransport(<String, List<Object>>{
-        'ethereum-rpc.publicnode.com': <Object>[const BlockchainFailure('down')],
+        'ethereum-rpc.publicnode.com': <Object>[
+          const BlockchainFailure('down'),
+        ],
         'eth.llamarpc.com': <Object>[const BlockchainFailure('down')],
         '1rpc.io': <Object>[const BlockchainFailure('down')],
         'gateway.tenderly.co': <Object>[const BlockchainFailure('down')],
