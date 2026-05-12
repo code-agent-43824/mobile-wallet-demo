@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/auth/wallet_operation_auth.dart';
 import 'package:mobile_wallet_demo/src/key_storage/key_storage_backend.dart';
-import 'package:mobile_wallet_demo/src/transactions/transaction_service.dart';
 
 void main() {
   test(
@@ -25,6 +24,28 @@ void main() {
       expect(operation.address, walletMaterial.address);
       expect(operation.authMethod, WalletAuthMethod.biometric);
       expect(operation.signer, isA<LocalKeyMaterialTransactionSigner>());
+    },
+  );
+
+  test(
+    'authorizes unlocked external device signing through dedicated path',
+    () {
+      const authorizer = WalletOperationAuthorizer();
+      const walletMaterial = WalletMaterial(
+        address: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+        mnemonic: 'test test test test test test test test test test test junk',
+        privateKeyHex:
+            'ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+      );
+
+      final operation = authorizer.authorizeUnlockedExternalDeviceSigning(
+        backend: _FakeUnlockedExternalBackend(),
+        walletMaterial: walletMaterial,
+      );
+
+      expect(operation.backendId, 'external_nfc_demo_device');
+      expect(operation.authMethod, WalletAuthMethod.externalDevice);
+      expect(operation.signer, isA<ExternalDeviceTransactionSigner>());
     },
   );
 
@@ -95,6 +116,15 @@ class _FakeUnlockedBackend implements KeyStorageBackend {
   Future<WalletMaterial> unlockWithBiometrics() {
     throw UnimplementedError();
   }
+}
+
+class _FakeUnlockedExternalBackend extends _FakeUnlockedBackend
+    implements ExternalDeviceKeyStorageBackend {
+  @override
+  String get backendId => 'external_nfc_demo_device';
+
+  @override
+  Future<bool> isDeviceAvailable() async => true;
 }
 
 class _FakeLockedBackend extends _FakeUnlockedBackend {

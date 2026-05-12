@@ -32,13 +32,14 @@
   - retry/replacement flow с автоматическим gas bump для underpriced ошибок
   - ручное обновление данных
 - Контракты для `KeyStorageBackend`, модель выбора backend и совместимый signing/auth foundation под будущий внешний hardware backend
+- Demo runtime path для внешнего backend: simulated external device, отдельная UX-ветка и отдельный auth/signing путь без реального NFC SDK
 - Unit- и widget-тесты для ключевых flow
 - GitHub Actions для сборки и публикации артефактов
 - Артефакты iOS / Windows без двойной упаковки
 
 ## Версионирование
 
-- Текущая версия: `v1.4.0+15`
+- Текущая версия: `v1.5.0+16`
 - По договорённости в этом проекте дальше повышаем minor-версию с каждым функциональным шагом
 
 ## Что покрывает текущий этап
@@ -67,6 +68,7 @@
 - post-submit transaction tracking без блокировки отправочного UI
 - retry/replacement flow с повышением gas price при underpriced reject
 - foundation для multi-backend runtime: selection model + backend-compatible signing/auth contracts
+- simulated external-device flow: backend selection, device-style lock/unlock UX и отдельный signer runtime path
 
 ## Артефакты CI
 

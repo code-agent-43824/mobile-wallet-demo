@@ -8,6 +8,7 @@ import 'auth/wallet_operation_auth.dart';
 import 'blockchain/blockchain_provider.dart';
 import 'blockchain/network_config.dart';
 import 'key_storage/backend_registry.dart';
+import 'key_storage/external_device_demo_backend.dart';
 import 'key_storage/key_storage_backend.dart';
 import 'key_storage/phone_secure_vault.dart';
 import 'key_storage/secure_key_value_store.dart';
@@ -52,6 +53,7 @@ class WalletFlowScreen extends StatefulWidget {
 
 class _WalletFlowScreenState extends State<WalletFlowScreen> {
   late final PhoneSecureVault _vault;
+  late final ExternalDeviceDemoBackend _externalDeviceBackend;
   late final WalletBackendRegistry _backendRegistry;
   final WalletOperationAuthorizer _walletOperationAuthorizer =
       const WalletOperationAuthorizer();
@@ -74,6 +76,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       store: widget.store,
       biometricAuth: widget.biometricAuthGateway,
     );
+    _externalDeviceBackend = ExternalDeviceDemoBackend(store: widget.store);
     _backendRegistry = WalletBackendRegistry(
       store: widget.store,
       entries: <WalletBackendCatalogEntry>[
@@ -87,17 +90,17 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           ),
           backend: _vault,
         ),
-        const WalletBackendCatalogEntry(
-          descriptor: WalletBackendDescriptor(
-            id: 'external_nfc_device',
+        WalletBackendCatalogEntry(
+          descriptor: const WalletBackendDescriptor(
+            id: 'external_nfc_demo_device',
             kind: WalletBackendKind.externalDevice,
-            label: 'External NFC device',
+            label: 'External NFC demo device',
             description:
-                'Будущий backend для внешнего NFC-подписанта с собственным auth/signing flow.',
-            isAvailable: false,
+                'Симулированный внешний NFC-подписант для Phase 7: отдельная UX-ветка и отдельный signing/auth runtime без реального SDK.',
             availabilityNote:
-                'Пока только foundation-контракты: реальный NFC SDK ещё не подключён.',
+                'Demo-only путь: настоящий NFC SDK пока не подключён.',
           ),
+          backend: _externalDeviceBackend,
         ),
       ],
     );
@@ -114,6 +117,9 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
     }
     return _vault;
   }
+
+  bool get _isExternalBackendSelected =>
+      _activeBackend is ExternalDeviceKeyStorageBackend;
 
   Future<void> _selectBackend(String backendId) async {
     await _runGuarded(() async {
@@ -157,9 +163,20 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       );
       _material = material;
       _pendingBiometricPin = pin;
-      _seedPhraseToShow = material.mnemonic;
-      _lastUnlockAuthMethod = WalletAuthMethod.pin;
-      _stage = WalletFlowStage.showSeed;
+      _lastUnlockAuthMethod = _isExternalBackendSelected
+          ? WalletAuthMethod.externalDevice
+          : WalletAuthMethod.pin;
+      if (_isExternalBackendSelected) {
+        _seedPhraseToShow = null;
+        _biometricsEnabled = false;
+        _biometricsAvailable = false;
+        _material = null;
+        backend.lock();
+        _stage = WalletFlowStage.locked;
+      } else {
+        _seedPhraseToShow = material.mnemonic;
+        _stage = WalletFlowStage.showSeed;
+      }
     });
   }
 
@@ -178,15 +195,27 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       _material = material;
       _pendingBiometricPin = pin;
       _seedPhraseToShow = null;
-      _lastUnlockAuthMethod = WalletAuthMethod.pin;
-      _stage = WalletFlowStage.biometricPrompt;
+      _lastUnlockAuthMethod = _isExternalBackendSelected
+          ? WalletAuthMethod.externalDevice
+          : WalletAuthMethod.pin;
+      if (_isExternalBackendSelected) {
+        _biometricsEnabled = false;
+        _biometricsAvailable = false;
+        _material = null;
+        backend.lock();
+        _stage = WalletFlowStage.locked;
+      } else {
+        _stage = WalletFlowStage.biometricPrompt;
+      }
     });
   }
 
   Future<void> _unlockWallet(String pin) async {
     await _runGuarded(() async {
       _material = await _activeBackend.unlock(pin: pin);
-      _lastUnlockAuthMethod = WalletAuthMethod.pin;
+      _lastUnlockAuthMethod = _activeBackend is ExternalDeviceKeyStorageBackend
+          ? WalletAuthMethod.externalDevice
+          : WalletAuthMethod.pin;
       _stage = WalletFlowStage.unlocked;
     });
   }
@@ -313,6 +342,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           backendEntries: _backendRegistry.entries,
           selectedBackendId:
               _selectedBackendId ?? _backendRegistry.defaultBackendId,
+          isExternalBackendSelected: _isExternalBackendSelected,
           onBackendSelected: _selectBackend,
           onCreatePressed: () {
             setState(() {
@@ -329,15 +359,21 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
         );
       case WalletFlowStage.createWallet:
         return _PinSetupStage(
-          title: 'Создать новый кошелёк',
-          description:
-              'Сначала задаём обязательный PIN. После этого приложение создаст seed-фразу и покажет её один раз для резервного сохранения.',
-          actionLabel: 'Создать кошелёк',
+          title: _isExternalBackendSelected
+              ? 'Подключить demo NFC-устройство'
+              : 'Создать новый кошелёк',
+          description: _isExternalBackendSelected
+              ? 'Это отдельная UX-ветка для внешнего backend. Задаём PIN устройства для demo-подписанта и сохраняем linked-device runtime.'
+              : 'Сначала задаём обязательный PIN. После этого приложение создаст seed-фразу и покажет её один раз для резервного сохранения.',
+          actionLabel: _isExternalBackendSelected
+              ? 'Подключить устройство'
+              : 'Создать кошелёк',
           onSubmit: _createWallet,
           onBack: _goToWelcome,
         );
       case WalletFlowStage.importWallet:
         return _ImportWalletStage(
+          isExternalBackendSelected: _isExternalBackendSelected,
           onSubmit: _importWallet,
           onBack: _goToWelcome,
         );
@@ -365,6 +401,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
                   )
                   ?.label ??
               'Unknown backend',
+          isExternalBackend: _activeBackend is ExternalDeviceKeyStorageBackend,
           biometricsEnabled: _biometricsEnabled,
           onUnlock: _unlockWallet,
           onUnlockWithBiometrics: _biometricsEnabled && _biometricsAvailable
@@ -467,6 +504,7 @@ class _WelcomeStage extends StatelessWidget {
   const _WelcomeStage({
     required this.backendEntries,
     required this.selectedBackendId,
+    required this.isExternalBackendSelected,
     required this.onBackendSelected,
     required this.onCreatePressed,
     required this.onImportPressed,
@@ -474,6 +512,7 @@ class _WelcomeStage extends StatelessWidget {
 
   final List<WalletBackendCatalogEntry> backendEntries;
   final String selectedBackendId;
+  final bool isExternalBackendSelected;
   final Future<void> Function(String backendId) onBackendSelected;
   final VoidCallback onCreatePressed;
   final VoidCallback onImportPressed;
@@ -497,14 +536,30 @@ class _WelcomeStage extends StatelessWidget {
         const SizedBox(height: 24),
         FilledButton.icon(
           onPressed: onCreatePressed,
-          icon: const Icon(Icons.add_circle_outline),
-          label: const Text('Создать новый кошелёк'),
+          icon: Icon(
+            isExternalBackendSelected
+                ? Icons.nfc_outlined
+                : Icons.add_circle_outline,
+          ),
+          label: Text(
+            isExternalBackendSelected
+                ? 'Подключить demo NFC-устройство'
+                : 'Создать новый кошелёк',
+          ),
         ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
           onPressed: onImportPressed,
-          icon: const Icon(Icons.download_outlined),
-          label: const Text('Импортировать seed-фразу'),
+          icon: Icon(
+            isExternalBackendSelected
+                ? Icons.memory_outlined
+                : Icons.download_outlined,
+          ),
+          label: Text(
+            isExternalBackendSelected
+                ? 'Импортировать seed в demo device'
+                : 'Импортировать seed-фразу',
+          ),
         ),
       ],
     );
@@ -698,8 +753,13 @@ class _PinSetupStageState extends State<_PinSetupStage> {
 }
 
 class _ImportWalletStage extends StatefulWidget {
-  const _ImportWalletStage({required this.onSubmit, required this.onBack});
+  const _ImportWalletStage({
+    required this.isExternalBackendSelected,
+    required this.onSubmit,
+    required this.onBack,
+  });
 
+  final bool isExternalBackendSelected;
   final Future<void> Function({required String mnemonic, required String pin})
   onSubmit;
   final VoidCallback onBack;
@@ -761,10 +821,16 @@ class _ImportWalletStageState extends State<_ImportWalletStage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle('Импорт существующего кошелька'),
+        _SectionTitle(
+          widget.isExternalBackendSelected
+              ? 'Импорт seed в demo NFC-устройство'
+              : 'Импорт существующего кошелька',
+        ),
         const SizedBox(height: 12),
-        const Text(
-          'Вставь свою seed-фразу, затем задай локальный PIN для защиты secure vault на устройстве.',
+        Text(
+          widget.isExternalBackendSelected
+              ? 'Отдельная UX-ветка для внешнего backend: seed уходит в demo device runtime, а дальше операции идут как у внешнего подписанта.'
+              : 'Вставь свою seed-фразу, затем задай локальный PIN для защиты secure vault на устройстве.',
         ),
         const SizedBox(height: 20),
         TextField(
@@ -807,7 +873,11 @@ class _ImportWalletStageState extends State<_ImportWalletStage> {
           children: [
             FilledButton(
               onPressed: _handleSubmit,
-              child: const Text('Импортировать кошелёк'),
+              child: Text(
+                widget.isExternalBackendSelected
+                    ? 'Импортировать в устройство'
+                    : 'Импортировать кошелёк',
+              ),
             ),
             TextButton(onPressed: widget.onBack, child: const Text('Назад')),
           ],
@@ -914,6 +984,7 @@ class _LockedStage extends StatefulWidget {
   const _LockedStage({
     required this.summary,
     required this.backendLabel,
+    required this.isExternalBackend,
     required this.biometricsEnabled,
     required this.onUnlock,
     required this.onUnlockWithBiometrics,
@@ -921,6 +992,7 @@ class _LockedStage extends StatefulWidget {
 
   final StoredWalletSummary? summary;
   final String backendLabel;
+  final bool isExternalBackend;
   final bool biometricsEnabled;
   final Future<void> Function(String pin) onUnlock;
   final Future<void> Function()? onUnlockWithBiometrics;
@@ -945,10 +1017,16 @@ class _LockedStageState extends State<_LockedStage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle('Кошелёк заблокирован'),
+        _SectionTitle(
+          widget.isExternalBackend
+              ? 'Внешнее устройство заблокировано'
+              : 'Кошелёк заблокирован',
+        ),
         const SizedBox(height: 12),
-        const Text(
-          'Инициализация завершена. Дальше в кошелёк входим через PIN. Это и есть нужный locked-state shell для следующего продуктового слоя.',
+        Text(
+          widget.isExternalBackend
+              ? 'Demo device уже привязан. Дальше операции идут через PIN устройства и отдельный external-signer runtime path.'
+              : 'Инициализация завершена. Дальше в кошелёк входим через PIN. Это и есть нужный locked-state shell для следующего продуктового слоя.',
         ),
         if (summary != null) ...[
           const SizedBox(height: 20),
@@ -970,9 +1048,11 @@ class _LockedStageState extends State<_LockedStage> {
         TextField(
           controller: _pinController,
           obscureText: true,
-          decoration: const InputDecoration(
-            labelText: 'PIN для разблокировки',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: widget.isExternalBackend
+                ? 'PIN устройства'
+                : 'PIN для разблокировки',
+            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 16),
@@ -982,7 +1062,11 @@ class _LockedStageState extends State<_LockedStage> {
           children: [
             FilledButton(
               onPressed: () => widget.onUnlock(_pinController.text.trim()),
-              child: const Text('Разблокировать'),
+              child: Text(
+                widget.isExternalBackend
+                    ? 'Подключить устройство'
+                    : 'Разблокировать',
+              ),
             ),
             if (widget.onUnlockWithBiometrics != null)
               OutlinedButton.icon(
@@ -1368,12 +1452,20 @@ class _TransferPreparationSectionState
 
     AuthorizedWalletOperation authorizedOperation;
     try {
-      authorizedOperation = widget.walletOperationAuthorizer
-          .authorizeUnlockedLocalSigning(
-            backend: widget.activeBackend,
-            walletMaterial: widget.walletMaterial,
-            authMethod: widget.authMethod,
-          );
+      if (widget.activeBackend is ExternalDeviceKeyStorageBackend) {
+        authorizedOperation = widget.walletOperationAuthorizer
+            .authorizeUnlockedExternalDeviceSigning(
+              backend: widget.activeBackend as ExternalDeviceKeyStorageBackend,
+              walletMaterial: widget.walletMaterial,
+            );
+      } else {
+        authorizedOperation = widget.walletOperationAuthorizer
+            .authorizeUnlockedLocalSigning(
+              backend: widget.activeBackend,
+              walletMaterial: widget.walletMaterial,
+              authMethod: widget.authMethod,
+            );
+      }
     } on VaultFailure catch (error) {
       setState(() {
         _error = error.message;
