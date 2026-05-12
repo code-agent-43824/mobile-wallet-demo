@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/key_storage/external_device_demo_backend.dart';
-import 'package:mobile_wallet_demo/src/key_storage/external_device_protocol.dart';
+import 'package:mobile_wallet_demo/src/key_storage/external_device_pkcs11.dart';
 import 'package:mobile_wallet_demo/src/key_storage/key_storage_backend.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
 
@@ -26,17 +26,22 @@ void main() {
       state = await backend.loadRuntimeState();
       expect(state.hasActiveSession, isTrue);
       expect(state.connectedAtUtc, isNotNull);
-      expect(state.session?.commandCount, 0);
+      expect(state.session?.operationCount, 0);
 
-      final pingResponse = await backend.sendProtocolCommand(
-        const ExternalDeviceCommand(kind: ExternalDeviceCommandKind.ping),
+      final pingResponse = await backend.performPkcs11Operation(
+        const ExternalDevicePkcs11Operation(
+          kind: ExternalDevicePkcs11OperationKind.probeSession,
+        ),
       );
       expect(pingResponse.ok, isTrue);
-      expect(pingResponse.message, contains('PONG'));
+      expect(pingResponse.message, contains('PKCS#11 session'));
 
       state = await backend.loadRuntimeState();
-      expect(state.session?.commandCount, 1);
-      expect(state.session?.lastCommandKind, ExternalDeviceCommandKind.ping);
+      expect(state.session?.operationCount, 1);
+      expect(
+        state.session?.lastOperationKind,
+        ExternalDevicePkcs11OperationKind.probeSession,
+      );
 
       await backend.disconnectSession();
       state = await backend.loadRuntimeState();

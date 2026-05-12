@@ -9,7 +9,7 @@ import 'blockchain/blockchain_provider.dart';
 import 'blockchain/network_config.dart';
 import 'key_storage/backend_registry.dart';
 import 'key_storage/external_device_demo_backend.dart';
-import 'key_storage/external_device_protocol.dart';
+import 'key_storage/external_device_pkcs11.dart';
 import 'key_storage/key_storage_backend.dart';
 import 'key_storage/phone_secure_vault.dart';
 import 'key_storage/secure_key_value_store.dart';
@@ -341,11 +341,11 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
     });
   }
 
-  Future<void> _sendExternalProtocolCommand(
-    ExternalDeviceCommand command,
+  Future<void> _performExternalPkcs11Operation(
+    ExternalDevicePkcs11Operation operation,
   ) async {
     await _runGuarded(() async {
-      await _externalDeviceBackend.sendProtocolCommand(command);
+      await _externalDeviceBackend.performPkcs11Operation(operation);
       await _refreshExternalRuntimeState();
     });
   }
@@ -524,16 +524,16 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
               ? _simulateExternalDeviceOffline
               : null,
           onPingExternalDevice: _isExternalBackendSelected
-              ? () => _sendExternalProtocolCommand(
-                  const ExternalDeviceCommand(
-                    kind: ExternalDeviceCommandKind.ping,
+              ? () => _performExternalPkcs11Operation(
+                  const ExternalDevicePkcs11Operation(
+                    kind: ExternalDevicePkcs11OperationKind.probeSession,
                   ),
                 )
               : null,
           onReadExternalAddress: _isExternalBackendSelected
-              ? () => _sendExternalProtocolCommand(
-                  const ExternalDeviceCommand(
-                    kind: ExternalDeviceCommandKind.readPublicAddress,
+              ? () => _performExternalPkcs11Operation(
+                  const ExternalDevicePkcs11Operation(
+                    kind: ExternalDevicePkcs11OperationKind.readPublicAddress,
                   ),
                 )
               : null,
@@ -1399,27 +1399,24 @@ class _UnlockedStageState extends State<_UnlockedStage> {
             _ErrorBanner(message: error),
           ],
           if (externalRuntimeState.session
-              case final ExternalDeviceSessionSnapshot session) ...[
+              case final ExternalDevicePkcs11SessionSnapshot session) ...[
+            const SizedBox(height: 10),
+            _SummaryTile(label: 'PKCS#11 session id', value: session.sessionId),
             const SizedBox(height: 10),
             _SummaryTile(
-              label: 'Protocol session id',
-              value: session.sessionId,
+              label: 'PKCS#11 operations',
+              value: session.operationCount.toString(),
             ),
-            const SizedBox(height: 10),
-            _SummaryTile(
-              label: 'Protocol commands',
-              value: session.commandCount.toString(),
-            ),
-            if (session.lastCommandKind != null) ...[
+            if (session.lastOperationKind != null) ...[
               const SizedBox(height: 10),
               _SummaryTile(
-                label: 'Last protocol command',
-                value: session.lastCommandKind!.name,
+                label: 'Last PKCS#11 operation',
+                value: session.lastOperationKind!.name,
               ),
             ],
             if (session.lastMessage case final String message) ...[
               const SizedBox(height: 10),
-              _SummaryTile(label: 'Last protocol message', value: message),
+              _SummaryTile(label: 'Last PKCS#11 result', value: message),
             ],
           ],
         ],
@@ -1506,7 +1503,7 @@ class _UnlockedStageState extends State<_UnlockedStage> {
             transactionBroadcaster: widget.transactionBroadcaster,
             nonceProvider: widget.nonceProvider,
             trackingTransport: widget.trackingTransport,
-            onExternalProtocolCommandRecorded:
+            onExternalPkcs11OperationRecorded:
                 widget.onRefreshExternalRuntimeState,
           ),
         ],
@@ -1560,13 +1557,13 @@ class _UnlockedStageState extends State<_UnlockedStage> {
               OutlinedButton.icon(
                 onPressed: widget.onPingExternalDevice,
                 icon: const Icon(Icons.wifi_tethering),
-                label: const Text('Ping device protocol'),
+                label: const Text('Проверить PKCS#11 session'),
               ),
             if (widget.onReadExternalAddress != null)
               OutlinedButton.icon(
                 onPressed: widget.onReadExternalAddress,
                 icon: const Icon(Icons.badge_outlined),
-                label: const Text('Прочитать адрес с device'),
+                label: const Text('Прочитать адрес через PKCS#11'),
               ),
             if (widget.onSimulateExternalOffline != null)
               TextButton(
@@ -1593,7 +1590,7 @@ class _TransferPreparationSection extends StatefulWidget {
     required this.transactionBroadcaster,
     required this.nonceProvider,
     required this.trackingTransport,
-    required this.onExternalProtocolCommandRecorded,
+    required this.onExternalPkcs11OperationRecorded,
   });
 
   final WalletChainSnapshot snapshot;
@@ -1607,7 +1604,7 @@ class _TransferPreparationSection extends StatefulWidget {
   final TransactionBroadcaster transactionBroadcaster;
   final NonceProvider nonceProvider;
   final JsonRpcTransport trackingTransport;
-  final Future<void> Function()? onExternalProtocolCommandRecorded;
+  final Future<void> Function()? onExternalPkcs11OperationRecorded;
 
   @override
   State<_TransferPreparationSection> createState() =>
@@ -1725,14 +1722,15 @@ class _TransferPreparationSectionState
       if (widget.activeBackend is ExternalDeviceKeyStorageBackend) {
         if (widget.activeBackend is ExternalDeviceDemoBackend) {
           await (widget.activeBackend as ExternalDeviceDemoBackend)
-              .sendProtocolCommand(
-                ExternalDeviceCommand(
-                  kind: ExternalDeviceCommandKind.signTransactionPreview,
+              .performPkcs11Operation(
+                ExternalDevicePkcs11Operation(
+                  kind:
+                      ExternalDevicePkcs11OperationKind.signTransactionPreview,
                   payload:
                       '${_amountController.text} ${asset.symbol} -> ${_addressController.text}',
                 ),
               );
-          await widget.onExternalProtocolCommandRecorded?.call();
+          await widget.onExternalPkcs11OperationRecorded?.call();
         }
         authorizedOperation = widget.walletOperationAuthorizer
             .authorizeUnlockedExternalDeviceSigning(

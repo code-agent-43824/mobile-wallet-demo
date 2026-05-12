@@ -217,18 +217,18 @@ void main() {
     expect(find.text('Device online'), findsWidgets);
     expect(find.text('Разорвать device session'), findsOneWidget);
 
-    final pingButton = find.text('Ping device protocol');
+    final pingButton = find.text('Проверить PKCS#11 session');
     await tester.ensureVisible(pingButton);
     await tester.tap(pingButton);
     await tester.pumpAndSettle();
-    expect(find.text('Protocol commands'), findsOneWidget);
-    expect(find.text('ping'), findsOneWidget);
+    expect(find.text('PKCS#11 operations'), findsOneWidget);
+    expect(find.text('probeSession'), findsOneWidget);
 
-    final readAddressButton = find.text('Прочитать адрес с device');
+    final readAddressButton = find.text('Прочитать адрес через PKCS#11');
     await tester.ensureVisible(readAddressButton);
     await tester.tap(readAddressButton);
     await tester.pumpAndSettle();
-    expect(find.text('Last protocol command'), findsOneWidget);
+    expect(find.text('Last PKCS#11 operation'), findsOneWidget);
     expect(find.text('readPublicAddress'), findsOneWidget);
   });
 

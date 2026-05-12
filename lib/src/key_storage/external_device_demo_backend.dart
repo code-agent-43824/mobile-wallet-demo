@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import '../auth/biometric_auth.dart';
-import 'external_device_protocol.dart';
+import 'external_device_pkcs11.dart';
 import 'key_storage_backend.dart';
 import 'phone_secure_vault.dart';
 import 'secure_key_value_store.dart';
@@ -45,19 +45,19 @@ class ExternalDeviceDemoRuntimeState {
   final bool hasActiveSession;
   final DateTime? connectedAtUtc;
   final String? lastError;
-  final ExternalDeviceSessionSnapshot? session;
+  final ExternalDevicePkcs11SessionSnapshot? session;
 }
 
 class ExternalDeviceDemoBackend implements ExternalDeviceKeyStorageBackend {
   ExternalDeviceDemoBackend({
     required SecureKeyValueStore store,
-    ExternalDeviceProtocolAdapter? protocolAdapter,
+    ExternalDevicePkcs11Adapter? pkcs11Adapter,
   }) : _store = PrefixedSecureKeyValueStore(
          store: store,
          prefix: 'external_device_demo.',
        ),
-       _protocolAdapter =
-           protocolAdapter ?? const DemoExternalDeviceProtocolAdapter(),
+       _pkcs11Adapter =
+           pkcs11Adapter ?? const DemoExternalDevicePkcs11Adapter(),
        _delegate = PhoneSecureVault(
          store: PrefixedSecureKeyValueStore(
            store: store,
@@ -70,13 +70,15 @@ class ExternalDeviceDemoBackend implements ExternalDeviceKeyStorageBackend {
   static const String _connectedAtKey = 'runtime.connected_at_utc';
   static const String _lastErrorKey = 'runtime.last_error';
   static const String _sessionIdKey = 'runtime.session_id';
-  static const String _sessionCommandCountKey = 'runtime.session_command_count';
-  static const String _lastCommandKindKey = 'runtime.last_command_kind';
-  static const String _lastCommandMessageKey = 'runtime.last_command_message';
-  static const String _lastCommandAtKey = 'runtime.last_command_at_utc';
+  static const String _sessionOperationCountKey =
+      'runtime.session_operation_count';
+  static const String _lastOperationKindKey = 'runtime.last_operation_kind';
+  static const String _lastOperationMessageKey =
+      'runtime.last_operation_message';
+  static const String _lastOperationAtKey = 'runtime.last_operation_at_utc';
 
   final SecureKeyValueStore _store;
-  final ExternalDeviceProtocolAdapter _protocolAdapter;
+  final ExternalDevicePkcs11Adapter _pkcs11Adapter;
   final PhoneSecureVault _delegate;
 
   @override
@@ -91,7 +93,7 @@ class ExternalDeviceDemoBackend implements ExternalDeviceKeyStorageBackend {
     await _store.delete(_availabilityKey);
     await _store.delete(_connectedAtKey);
     await _store.delete(_lastErrorKey);
-    await _clearProtocolSessionMetadata();
+    await _clearPkcs11SessionMetadata();
   }
 
   @override
@@ -163,7 +165,7 @@ class ExternalDeviceDemoBackend implements ExternalDeviceKeyStorageBackend {
     );
   }
 
-  Future<ExternalDeviceSessionSnapshot?> loadSessionSnapshot() async {
+  Future<ExternalDevicePkcs11SessionSnapshot?> loadSessionSnapshot() async {
     final sessionId = await _store.read(_sessionIdKey);
     final connectedAtRaw = await _store.read(_connectedAtKey);
     if (sessionId == null || connectedAtRaw == null) {
@@ -175,27 +177,27 @@ class ExternalDeviceDemoBackend implements ExternalDeviceKeyStorageBackend {
       return null;
     }
 
-    final commandCountRaw = await _store.read(_sessionCommandCountKey);
-    final commandCount = int.tryParse(commandCountRaw ?? '') ?? 0;
-    final lastCommandKindRaw = await _store.read(_lastCommandKindKey);
-    final lastCommandKind = _parseCommandKind(lastCommandKindRaw);
-    final lastMessage = await _store.read(_lastCommandMessageKey);
-    final lastCommandAtRaw = await _store.read(_lastCommandAtKey);
+    final operationCountRaw = await _store.read(_sessionOperationCountKey);
+    final operationCount = int.tryParse(operationCountRaw ?? '') ?? 0;
+    final lastOperationKindRaw = await _store.read(_lastOperationKindKey);
+    final lastOperationKind = _parseCommandKind(lastOperationKindRaw);
+    final lastMessage = await _store.read(_lastOperationMessageKey);
+    final lastOperationAtRaw = await _store.read(_lastOperationAtKey);
 
-    return ExternalDeviceSessionSnapshot(
+    return ExternalDevicePkcs11SessionSnapshot(
       sessionId: sessionId,
       connectedAtUtc: connectedAtUtc,
-      commandCount: commandCount,
-      lastCommandKind: lastCommandKind,
+      operationCount: operationCount,
+      lastOperationKind: lastOperationKind,
       lastMessage: lastMessage,
-      lastCommandAtUtc: lastCommandAtRaw == null
+      lastOperationAtUtc: lastOperationAtRaw == null
           ? null
-          : DateTime.tryParse(lastCommandAtRaw),
+          : DateTime.tryParse(lastOperationAtRaw),
     );
   }
 
-  Future<ExternalDeviceResponse> sendProtocolCommand(
-    ExternalDeviceCommand command,
+  Future<ExternalDevicePkcs11Result> performPkcs11Operation(
+    ExternalDevicePkcs11Operation operation,
   ) async {
     await _requireDeviceAvailable();
     if (!isUnlocked) {
@@ -212,20 +214,20 @@ class ExternalDeviceDemoBackend implements ExternalDeviceKeyStorageBackend {
       );
     }
 
-    final response = await _protocolAdapter.sendCommand(
+    final response = await _pkcs11Adapter.performOperation(
       session: session,
-      command: command,
+      operation: operation,
       publicAddress: summary.address,
     );
 
     await _store.write(
-      _sessionCommandCountKey,
-      (session.commandCount + 1).toString(),
+      _sessionOperationCountKey,
+      (session.operationCount + 1).toString(),
     );
-    await _store.write(_lastCommandKindKey, command.kind.name);
-    await _store.write(_lastCommandMessageKey, response.message);
+    await _store.write(_lastOperationKindKey, operation.kind.name);
+    await _store.write(_lastOperationMessageKey, response.message);
     await _store.write(
-      _lastCommandAtKey,
+      _lastOperationAtKey,
       response.respondedAtUtc.toIso8601String(),
     );
     await _store.delete(_lastErrorKey);
@@ -237,7 +239,7 @@ class ExternalDeviceDemoBackend implements ExternalDeviceKeyStorageBackend {
     _delegate.lock();
     await _store.write(_availabilityKey, 'false');
     await _store.delete(_connectedAtKey);
-    await _clearProtocolSessionMetadata();
+    await _clearPkcs11SessionMetadata();
     await _store.write(
       _lastErrorKey,
       'Demo device is offline. Reconnect it before signing.',
@@ -252,7 +254,7 @@ class ExternalDeviceDemoBackend implements ExternalDeviceKeyStorageBackend {
   Future<void> disconnectSession() async {
     _delegate.lock();
     await _store.delete(_connectedAtKey);
-    await _clearProtocolSessionMetadata();
+    await _clearPkcs11SessionMetadata();
     await _store.write(
       _lastErrorKey,
       'Device session ended. Re-enter the device PIN to continue.',
@@ -263,7 +265,7 @@ class ExternalDeviceDemoBackend implements ExternalDeviceKeyStorageBackend {
   void lock() {
     _delegate.lock();
     unawaited(_store.delete(_connectedAtKey));
-    unawaited(_clearProtocolSessionMetadata());
+    unawaited(_clearPkcs11SessionMetadata());
   }
 
   @override
@@ -281,7 +283,7 @@ class ExternalDeviceDemoBackend implements ExternalDeviceKeyStorageBackend {
     await _requireDeviceAvailable();
     try {
       final material = await _delegate.unlock(pin: pin);
-      await _beginProtocolSession();
+      await _beginPkcs11Session();
       await _store.delete(_lastErrorKey);
       return material;
     } on VaultFailure {
@@ -309,37 +311,37 @@ class ExternalDeviceDemoBackend implements ExternalDeviceKeyStorageBackend {
   Future<void> _clearSessionState() async {
     _delegate.lock();
     await _store.delete(_connectedAtKey);
-    await _clearProtocolSessionMetadata();
+    await _clearPkcs11SessionMetadata();
     await _store.delete(_lastErrorKey);
   }
 
-  Future<void> _beginProtocolSession() async {
+  Future<void> _beginPkcs11Session() async {
     final connectedAt = DateTime.now().toUtc();
     await _store.write(_connectedAtKey, connectedAt.toIso8601String());
     await _store.write(
       _sessionIdKey,
       'demo-session-${connectedAt.microsecondsSinceEpoch}',
     );
-    await _store.write(_sessionCommandCountKey, '0');
-    await _store.delete(_lastCommandKindKey);
-    await _store.delete(_lastCommandMessageKey);
-    await _store.delete(_lastCommandAtKey);
+    await _store.write(_sessionOperationCountKey, '0');
+    await _store.delete(_lastOperationKindKey);
+    await _store.delete(_lastOperationMessageKey);
+    await _store.delete(_lastOperationAtKey);
   }
 
-  Future<void> _clearProtocolSessionMetadata() async {
+  Future<void> _clearPkcs11SessionMetadata() async {
     await _store.delete(_sessionIdKey);
-    await _store.delete(_sessionCommandCountKey);
-    await _store.delete(_lastCommandKindKey);
-    await _store.delete(_lastCommandMessageKey);
-    await _store.delete(_lastCommandAtKey);
+    await _store.delete(_sessionOperationCountKey);
+    await _store.delete(_lastOperationKindKey);
+    await _store.delete(_lastOperationMessageKey);
+    await _store.delete(_lastOperationAtKey);
   }
 
-  ExternalDeviceCommandKind? _parseCommandKind(String? rawValue) {
+  ExternalDevicePkcs11OperationKind? _parseCommandKind(String? rawValue) {
     if (rawValue == null) {
       return null;
     }
 
-    for (final kind in ExternalDeviceCommandKind.values) {
+    for (final kind in ExternalDevicePkcs11OperationKind.values) {
       if (kind.name == rawValue) {
         return kind;
       }
