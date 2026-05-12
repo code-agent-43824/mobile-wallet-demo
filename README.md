@@ -31,14 +31,14 @@
   - post-submit transaction tracking без блокировки UI
   - retry/replacement flow с автоматическим gas bump для underpriced ошибок
   - ручное обновление данных
-- Контракты для `KeyStorageBackend` и задел под внешний hardware backend
+- Контракты для `KeyStorageBackend`, модель выбора backend и совместимый signing/auth foundation под будущий внешний hardware backend
 - Unit- и widget-тесты для ключевых flow
 - GitHub Actions для сборки и публикации артефактов
 - Артефакты iOS / Windows без двойной упаковки
 
 ## Версионирование
 
-- Текущая версия: `v1.3.0+14`
+- Текущая версия: `v1.4.0+15`
 - По договорённости в этом проекте дальше повышаем minor-версию с каждым функциональным шагом
 
 ## Что покрывает текущий этап
@@ -66,6 +66,7 @@
 - видимые UI-состояния отправки: pending / success / failure
 - post-submit transaction tracking без блокировки отправочного UI
 - retry/replacement flow с повышением gas price при underpriced reject
+- foundation для multi-backend runtime: selection model + backend-compatible signing/auth contracts
 
 ## Артефакты CI
 

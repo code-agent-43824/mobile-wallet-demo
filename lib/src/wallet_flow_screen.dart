@@ -4,8 +4,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'auth/biometric_auth.dart';
+import 'auth/wallet_operation_auth.dart';
 import 'blockchain/blockchain_provider.dart';
 import 'blockchain/network_config.dart';
+import 'key_storage/backend_registry.dart';
 import 'key_storage/key_storage_backend.dart';
 import 'key_storage/phone_secure_vault.dart';
 import 'key_storage/secure_key_value_store.dart';
@@ -50,6 +52,9 @@ class WalletFlowScreen extends StatefulWidget {
 
 class _WalletFlowScreenState extends State<WalletFlowScreen> {
   late final PhoneSecureVault _vault;
+  late final WalletBackendRegistry _backendRegistry;
+  final WalletOperationAuthorizer _walletOperationAuthorizer =
+      const WalletOperationAuthorizer();
 
   WalletFlowStage _stage = WalletFlowStage.loading;
   StoredWalletSummary? _summary;
@@ -57,6 +62,8 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
   String? _seedPhraseToShow;
   String? _errorMessage;
   String? _pendingBiometricPin;
+  String? _selectedBackendId;
+  WalletAuthMethod _lastUnlockAuthMethod = WalletAuthMethod.pin;
   bool _biometricsEnabled = false;
   bool _biometricsAvailable = false;
 
@@ -67,18 +74,69 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       store: widget.store,
       biometricAuth: widget.biometricAuthGateway,
     );
+    _backendRegistry = WalletBackendRegistry(
+      store: widget.store,
+      entries: <WalletBackendCatalogEntry>[
+        WalletBackendCatalogEntry(
+          descriptor: const WalletBackendDescriptor(
+            id: 'phone_secure_vault',
+            kind: WalletBackendKind.phoneSecureVault,
+            label: 'Phone Secure Vault',
+            description:
+                'Seed хранится локально в защищённом phone vault под PIN и опциональной биометрией.',
+          ),
+          backend: _vault,
+        ),
+        const WalletBackendCatalogEntry(
+          descriptor: WalletBackendDescriptor(
+            id: 'external_nfc_device',
+            kind: WalletBackendKind.externalDevice,
+            label: 'External NFC device',
+            description:
+                'Будущий backend для внешнего NFC-подписанта с собственным auth/signing flow.',
+            isAvailable: false,
+            availabilityNote:
+                'Пока только foundation-контракты: реальный NFC SDK ещё не подключён.',
+          ),
+        ),
+      ],
+    );
     _loadInitialState();
   }
 
+  KeyStorageBackend get _activeBackend {
+    final selectedBackendId = _selectedBackendId;
+    if (selectedBackendId != null) {
+      final backend = _backendRegistry.backendById(selectedBackendId);
+      if (backend != null) {
+        return backend;
+      }
+    }
+    return _vault;
+  }
+
+  Future<void> _selectBackend(String backendId) async {
+    await _runGuarded(() async {
+      await _backendRegistry.selectBackend(backendId);
+      _selectedBackendId = backendId;
+      _errorMessage = null;
+    });
+  }
+
   Future<void> _loadInitialState() async {
-    final summary = await _vault.getWalletSummary();
-    final biometricsEnabled = await _vault.isBiometricUnlockEnabled();
-    final biometricsAvailable = await _vault.isBiometricUnlockAvailable();
+    final selectedBackendId = await _backendRegistry.loadSelectedBackendId();
+    final activeBackend =
+        _backendRegistry.backendById(selectedBackendId) ?? _vault;
+    final summary = await activeBackend.getWalletSummary();
+    final biometricsEnabled = await activeBackend.isBiometricUnlockEnabled();
+    final biometricsAvailable = await activeBackend
+        .isBiometricUnlockAvailable();
     if (!mounted) {
       return;
     }
 
     setState(() {
+      _selectedBackendId = selectedBackendId;
       _summary = summary;
       _biometricsEnabled = biometricsEnabled;
       _biometricsAvailable = biometricsAvailable;
@@ -90,15 +148,17 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
 
   Future<void> _createWallet({required String pin}) async {
     await _runGuarded(() async {
-      final material = await _vault.createWallet(pin: pin);
+      final backend = _activeBackend;
+      final material = await backend.createWallet(pin: pin);
       _summary = StoredWalletSummary(
         address: material.address,
-        backendId: _vault.backendId,
+        backendId: backend.backendId,
         createdAtUtc: DateTime.now().toUtc(),
       );
       _material = material;
       _pendingBiometricPin = pin;
       _seedPhraseToShow = material.mnemonic;
+      _lastUnlockAuthMethod = WalletAuthMethod.pin;
       _stage = WalletFlowStage.showSeed;
     });
   }
@@ -108,22 +168,25 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
     required String pin,
   }) async {
     await _runGuarded(() async {
-      final material = await _vault.importWallet(mnemonic: mnemonic, pin: pin);
+      final backend = _activeBackend;
+      final material = await backend.importWallet(mnemonic: mnemonic, pin: pin);
       _summary = StoredWalletSummary(
         address: material.address,
-        backendId: _vault.backendId,
+        backendId: backend.backendId,
         createdAtUtc: DateTime.now().toUtc(),
       );
       _material = material;
       _pendingBiometricPin = pin;
       _seedPhraseToShow = null;
+      _lastUnlockAuthMethod = WalletAuthMethod.pin;
       _stage = WalletFlowStage.biometricPrompt;
     });
   }
 
   Future<void> _unlockWallet(String pin) async {
     await _runGuarded(() async {
-      _material = await _vault.unlock(pin: pin);
+      _material = await _activeBackend.unlock(pin: pin);
+      _lastUnlockAuthMethod = WalletAuthMethod.pin;
       _stage = WalletFlowStage.unlocked;
     });
   }
@@ -169,9 +232,9 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
             'Не удалось включить биометрию: PIN текущей сессии недоступен.',
           );
         }
-        await _vault.setBiometricUnlockEnabled(enabled: true, pin: pin);
+        await _activeBackend.setBiometricUnlockEnabled(enabled: true, pin: pin);
       } else {
-        await _vault.setBiometricUnlockEnabled(enabled: false, pin: '');
+        await _activeBackend.setBiometricUnlockEnabled(enabled: false, pin: '');
       }
 
       _biometricsEnabled = enabled;
@@ -179,19 +242,20 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       _pendingBiometricPin = null;
       _seedPhraseToShow = null;
       _stage = WalletFlowStage.locked;
-      _vault.lock();
+      _activeBackend.lock();
     });
   }
 
   Future<void> _unlockWithBiometrics() async {
     await _runGuarded(() async {
-      _material = await _vault.unlockWithBiometrics();
+      _material = await _activeBackend.unlockWithBiometrics();
+      _lastUnlockAuthMethod = WalletAuthMethod.biometric;
       _stage = WalletFlowStage.unlocked;
     });
   }
 
   void _lockWallet() {
-    _vault.lock();
+    _activeBackend.lock();
     setState(() {
       _material = null;
       _pendingBiometricPin = null;
@@ -246,6 +310,10 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
         return const Center(child: CircularProgressIndicator());
       case WalletFlowStage.welcome:
         return _WelcomeStage(
+          backendEntries: _backendRegistry.entries,
+          selectedBackendId:
+              _selectedBackendId ?? _backendRegistry.defaultBackendId,
+          onBackendSelected: _selectBackend,
           onCreatePressed: () {
             setState(() {
               _errorMessage = null;
@@ -290,6 +358,13 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       case WalletFlowStage.locked:
         return _LockedStage(
           summary: _summary,
+          backendLabel:
+              _backendRegistry
+                  .descriptorById(
+                    _summary?.backendId ?? _selectedBackendId ?? '',
+                  )
+                  ?.label ??
+              'Unknown backend',
           biometricsEnabled: _biometricsEnabled,
           onUnlock: _unlockWallet,
           onUnlockWithBiometrics: _biometricsEnabled && _biometricsAvailable
@@ -303,8 +378,18 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           transactionBroadcaster: widget.transactionBroadcaster,
           nonceProvider: widget.nonceProvider,
           trackingTransport: widget.trackingTransport,
+          walletOperationAuthorizer: _walletOperationAuthorizer,
+          activeBackend: _activeBackend,
+          authMethod: _lastUnlockAuthMethod,
           material: _material,
           summary: _summary,
+          backendLabel:
+              _backendRegistry
+                  .descriptorById(
+                    _summary?.backendId ?? _selectedBackendId ?? '',
+                  )
+                  ?.label ??
+              'Unknown backend',
           biometricsEnabled: _biometricsEnabled,
           onLock: _lockWallet,
         );
@@ -380,10 +465,16 @@ class _Header extends StatelessWidget {
 
 class _WelcomeStage extends StatelessWidget {
   const _WelcomeStage({
+    required this.backendEntries,
+    required this.selectedBackendId,
+    required this.onBackendSelected,
     required this.onCreatePressed,
     required this.onImportPressed,
   });
 
+  final List<WalletBackendCatalogEntry> backendEntries;
+  final String selectedBackendId;
+  final Future<void> Function(String backendId) onBackendSelected;
   final VoidCallback onCreatePressed;
   final VoidCallback onImportPressed;
 
@@ -395,7 +486,13 @@ class _WelcomeStage extends StatelessWidget {
         const _SectionTitle('Выбери стартовый сценарий'),
         const SizedBox(height: 12),
         const Text(
-          'Сейчас приложение уже умеет держать secure vault foundation. Теперь добавляем человеческий входной сценарий: создать новый кошелёк или импортировать существующий.',
+          'Phase 7 foundation: закладываем явную модель выбора key storage backend, чтобы потом без архитектурной каши добавить внешний NFC-подписант.',
+        ),
+        const SizedBox(height: 20),
+        _BackendSelectionCard(
+          entries: backendEntries,
+          selectedBackendId: selectedBackendId,
+          onSelected: onBackendSelected,
         ),
         const SizedBox(height: 24),
         FilledButton.icon(
@@ -409,6 +506,87 @@ class _WelcomeStage extends StatelessWidget {
           icon: const Icon(Icons.download_outlined),
           label: const Text('Импортировать seed-фразу'),
         ),
+      ],
+    );
+  }
+}
+
+class _BackendSelectionCard extends StatelessWidget {
+  const _BackendSelectionCard({
+    required this.entries,
+    required this.selectedBackendId,
+    required this.onSelected,
+  });
+
+  final List<WalletBackendCatalogEntry> entries;
+  final String selectedBackendId;
+  final Future<void> Function(String backendId) onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle('Активное хранилище ключей'),
+        const SizedBox(height: 12),
+        for (final entry in entries) ...[
+          Card(
+            elevation: 0,
+            margin: const EdgeInsets.only(bottom: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: BorderSide(
+                color: entry.descriptor.id == selectedBackendId
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.outlineVariant,
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          entry.descriptor.label,
+                          style: theme.textTheme.titleMedium,
+                        ),
+                      ),
+                      if (entry.descriptor.isAvailable)
+                        ChoiceChip(
+                          selected: entry.descriptor.id == selectedBackendId,
+                          label: Text(
+                            entry.descriptor.id == selectedBackendId
+                                ? 'Выбрано'
+                                : 'Выбрать',
+                          ),
+                          onSelected: (_) => onSelected(entry.descriptor.id),
+                        )
+                      else
+                        const Chip(label: Text('Скоро')),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(entry.descriptor.description),
+                  if (entry.descriptor.availabilityNote
+                      case final String note) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      note,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -735,12 +913,14 @@ class _BiometricPromptStage extends StatelessWidget {
 class _LockedStage extends StatefulWidget {
   const _LockedStage({
     required this.summary,
+    required this.backendLabel,
     required this.biometricsEnabled,
     required this.onUnlock,
     required this.onUnlockWithBiometrics,
   });
 
   final StoredWalletSummary? summary;
+  final String backendLabel;
   final bool biometricsEnabled;
   final Future<void> Function(String pin) onUnlock;
   final Future<void> Function()? onUnlockWithBiometrics;
@@ -774,7 +954,7 @@ class _LockedStageState extends State<_LockedStage> {
           const SizedBox(height: 20),
           _SummaryTile(label: 'Адрес', value: summary.address),
           const SizedBox(height: 10),
-          _SummaryTile(label: 'Backend', value: summary.backendId),
+          _SummaryTile(label: 'Backend', value: widget.backendLabel),
         ],
         const SizedBox(height: 20),
         Wrap(
@@ -824,8 +1004,12 @@ class _UnlockedStage extends StatefulWidget {
     required this.transactionBroadcaster,
     required this.nonceProvider,
     required this.trackingTransport,
+    required this.walletOperationAuthorizer,
+    required this.activeBackend,
+    required this.authMethod,
     required this.material,
     required this.summary,
+    required this.backendLabel,
     required this.biometricsEnabled,
     required this.onLock,
   });
@@ -835,8 +1019,12 @@ class _UnlockedStage extends StatefulWidget {
   final TransactionBroadcaster transactionBroadcaster;
   final NonceProvider nonceProvider;
   final JsonRpcTransport trackingTransport;
+  final WalletOperationAuthorizer walletOperationAuthorizer;
+  final KeyStorageBackend activeBackend;
+  final WalletAuthMethod authMethod;
   final WalletMaterial? material;
   final StoredWalletSummary? summary;
+  final String backendLabel;
   final bool biometricsEnabled;
   final VoidCallback onLock;
 
@@ -903,13 +1091,24 @@ class _UnlockedStageState extends State<_UnlockedStage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle('Read-only wallet foundation'),
+        const _SectionTitle('Wallet runtime + Phase 7 foundation'),
         const SizedBox(height: 12),
         const Text(
-          'Сейчас кошелёк уже умеет читать сеть и готовить перевод. Следующий шаг — нормальный signing/send flow с понятными состояниями отправки, а не немая магия в фоне.',
+          'Phase 6 уже закрыт. Теперь строим основу для нескольких storage backends: текущее выполнение идёт через выбранный backend и совместимый signing/auth контракт.',
         ),
         const SizedBox(height: 20),
         _SummaryTile(label: 'Активный адрес', value: address),
+        const SizedBox(height: 10),
+        _SummaryTile(label: 'Backend', value: widget.backendLabel),
+        const SizedBox(height: 10),
+        _SummaryTile(
+          label: 'Последний auth-метод',
+          value: switch (widget.authMethod) {
+            WalletAuthMethod.pin => 'PIN',
+            WalletAuthMethod.biometric => 'Biometric unlock',
+            WalletAuthMethod.externalDevice => 'External device',
+          },
+        ),
         const SizedBox(height: 10),
         _SummaryTile(
           label: 'Биометрия',
@@ -992,7 +1191,10 @@ class _UnlockedStageState extends State<_UnlockedStage> {
             snapshot: snapshot,
             fromAddress: address,
             networkConfig: config,
+            activeBackend: widget.activeBackend,
             walletMaterial: widget.material,
+            authMethod: widget.authMethod,
+            walletOperationAuthorizer: widget.walletOperationAuthorizer,
             transactionService: widget.transactionService,
             transactionBroadcaster: widget.transactionBroadcaster,
             nonceProvider: widget.nonceProvider,
@@ -1039,7 +1241,10 @@ class _TransferPreparationSection extends StatefulWidget {
     required this.snapshot,
     required this.fromAddress,
     required this.networkConfig,
+    required this.activeBackend,
     required this.walletMaterial,
+    required this.authMethod,
+    required this.walletOperationAuthorizer,
     required this.transactionService,
     required this.transactionBroadcaster,
     required this.nonceProvider,
@@ -1049,7 +1254,10 @@ class _TransferPreparationSection extends StatefulWidget {
   final WalletChainSnapshot snapshot;
   final String fromAddress;
   final EvmNetworkConfig networkConfig;
+  final KeyStorageBackend activeBackend;
   final WalletMaterial? walletMaterial;
+  final WalletAuthMethod authMethod;
+  final WalletOperationAuthorizer walletOperationAuthorizer;
   final TransactionService transactionService;
   final TransactionBroadcaster transactionBroadcaster;
   final NonceProvider nonceProvider;
@@ -1151,10 +1359,24 @@ class _TransferPreparationSectionState
 
   Future<void> _signAndSubmit() async {
     final asset = _selectedAsset;
-    final walletMaterial = widget.walletMaterial;
-    if (asset == null || walletMaterial == null) {
+    if (asset == null) {
       setState(() {
-        _error = 'Кошелёк не разблокирован для подписания.';
+        _error = 'Сначала выбери актив для отправки.';
+      });
+      return;
+    }
+
+    AuthorizedWalletOperation authorizedOperation;
+    try {
+      authorizedOperation = widget.walletOperationAuthorizer
+          .authorizeUnlockedLocalSigning(
+            backend: widget.activeBackend,
+            walletMaterial: widget.walletMaterial,
+            authMethod: widget.authMethod,
+          );
+    } on VaultFailure catch (error) {
+      setState(() {
+        _error = error.message;
       });
       return;
     }
@@ -1190,13 +1412,13 @@ class _TransferPreparationSectionState
         );
       }
 
-      final result = await hardenedService.submitTransferFlow(
+      final result = await hardenedService.submitAuthorizedTransferFlow(
         snapshot: widget.snapshot,
         fromAddress: widget.fromAddress,
         toAddress: _addressController.text,
         amountText: _amountController.text,
         asset: asset,
-        walletMaterial: walletMaterial,
+        signer: authorizedOperation.signer,
         broadcaster: widget.transactionBroadcaster,
         nonceProvider: widget.nonceProvider,
         tracker: tracker,

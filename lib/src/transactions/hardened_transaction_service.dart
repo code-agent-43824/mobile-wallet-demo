@@ -1,3 +1,4 @@
+import '../auth/wallet_operation_auth.dart';
 import '../blockchain/blockchain_provider.dart';
 import '../blockchain/network_config.dart';
 import '../key_storage/key_storage_backend.dart';
@@ -13,6 +14,20 @@ abstract interface class HardenedTransactionService
     required String amountText,
     required TransferAssetOption asset,
     required WalletMaterial walletMaterial,
+    required TransactionBroadcaster broadcaster,
+    required NonceProvider nonceProvider,
+    required TransactionTracker tracker,
+    int maxAttempts = 3,
+    double gasBumpMultiplier = 1.15,
+  });
+
+  Future<HardenedSubmitResult> submitAuthorizedTransferFlow({
+    required WalletChainSnapshot snapshot,
+    required String fromAddress,
+    required String toAddress,
+    required String amountText,
+    required TransferAssetOption asset,
+    required WalletTransactionSigner signer,
     required TransactionBroadcaster broadcaster,
     required NonceProvider nonceProvider,
     required TransactionTracker tracker,
@@ -121,6 +136,38 @@ class HardenedTransactionServiceImplementation
     required TransactionTracker tracker,
     int maxAttempts = 3,
     double gasBumpMultiplier = 1.15,
+  }) {
+    return submitAuthorizedTransferFlow(
+      snapshot: snapshot,
+      fromAddress: fromAddress,
+      toAddress: toAddress,
+      amountText: amountText,
+      asset: asset,
+      signer: LocalKeyMaterialTransactionSigner(
+        backendId: 'phone_secure_vault',
+        walletMaterial: walletMaterial,
+      ),
+      broadcaster: broadcaster,
+      nonceProvider: nonceProvider,
+      tracker: tracker,
+      maxAttempts: maxAttempts,
+      gasBumpMultiplier: gasBumpMultiplier,
+    );
+  }
+
+  @override
+  Future<HardenedSubmitResult> submitAuthorizedTransferFlow({
+    required WalletChainSnapshot snapshot,
+    required String fromAddress,
+    required String toAddress,
+    required String amountText,
+    required TransferAssetOption asset,
+    required WalletTransactionSigner signer,
+    required TransactionBroadcaster broadcaster,
+    required NonceProvider nonceProvider,
+    required TransactionTracker tracker,
+    int maxAttempts = 3,
+    double gasBumpMultiplier = 1.15,
   }) async {
     var attempts = 0;
     var gasMultiplier = 1.0;
@@ -140,9 +187,9 @@ class HardenedTransactionServiceImplementation
         networkConfig: preparedTransfer.networkConfig,
         address: fromAddress,
       );
-      final signedTransfer = signPreparedTransfer(
+      final signedTransfer = signer.signPreparedTransfer(
+        transactionService: this,
         preparedTransfer: preparedTransfer,
-        walletMaterial: walletMaterial,
         nonce: loadedNonce.nonce,
       );
 

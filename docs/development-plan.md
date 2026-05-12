@@ -13,7 +13,8 @@ Current factual status of the project:
 - ✅ Phase 4 is implemented
 - ✅ Phase 5 is implemented
 - ✅ Phase 6 is implemented end-to-end, including retry/replacement handling and post-submit transaction lifecycle tracking
-- ⏳ Phases 7-8 are not started yet
+- ◐ Phase 7 is started: backend selection model and backend-compatible signing/auth contracts are in place; real NFC SDK integration is still pending
+- ⏳ Phase 8 is not started yet
 
 Completed deliverables so far:
 - ✅ project module structure started (`auth`, `key_storage`)
@@ -233,13 +234,13 @@ Deliverables:
 ## Phase 7 — external NFC device foundation
 Goal: keep a clean future path without implementing device SDK now.
 
-Status: ⏳ Not started beyond interface placeholder already created
+Status: ◐ In progress (selection/runtime contracts are implemented; NFC device backend itself is still a placeholder)
 
 Deliverables:
 - [x] abstract backend contract for external hardware
-- [ ] storage-backend selection model
-- [ ] compatible signing/auth flow contracts
-- [ ] no real NFC implementation yet
+- [x] storage-backend selection model
+- [x] compatible signing/auth flow contracts
+- [x] no real NFC implementation yet
 
 ## Phase 8 — future extension points
 Goal: reserve clean extension paths.
@@ -263,6 +264,7 @@ Deliverables:
 - `v1.1` — first transaction tracking and advanced error hardening pass
 - `v1.2` — initial Phase 6 completion attempt
 - `v1.3` — real replacement flow, gas bump, and non-blocking lifecycle UX
+- `v1.4` — backend selection model + backend-compatible signing/auth contracts for future external signer flow
 
 ## Non-goals for now
 - no hardware-device SDK implementation yet
