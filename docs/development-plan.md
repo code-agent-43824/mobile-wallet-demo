@@ -12,7 +12,7 @@ Current factual status of the project:
 - ✅ Phase 3 is implemented
 - ✅ Phase 4 is implemented
 - ✅ Phase 5 is implemented
-- ◐ Phase 6 is largely implemented end-to-end (prepare → nonce → sign → submit + UI submission states); deeper nonce/error hardening and tx lifecycle polling are still pending
+- ✅ Phase 6 is implemented end-to-end, including retry/replacement handling and post-submit transaction lifecycle tracking
 - ⏳ Phases 7-8 are not started yet
 
 Completed deliverables so far:
@@ -34,7 +34,7 @@ Completed deliverables so far:
 - ✅ raw transaction submission abstraction with public RPC broadcaster
 - ✅ send flow UI states: pending / success / failure
 
-Not implemented yet from the near-term plan:
+Implemented near-term UX/security items:
 - ✅ onboarding UI flow
 - ✅ one-time seed phrase display screen
 - ✅ biometric enable flow (real platform integration on Android/iOS, simulated path on Windows)
