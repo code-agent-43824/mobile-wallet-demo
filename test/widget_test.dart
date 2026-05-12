@@ -136,7 +136,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Mobile Wallet Demo'), findsOneWidget);
-    expect(find.text('v1.6.0+17'), findsOneWidget);
+    expect(find.text('v1.7.0+18'), findsOneWidget);
     expect(find.text('Phone Secure Vault'), findsOneWidget);
     expect(find.text('External NFC demo device'), findsOneWidget);
     expect(find.text('Создать новый кошелёк'), findsOneWidget);
@@ -216,6 +216,20 @@ void main() {
 
     expect(find.text('Device online'), findsWidgets);
     expect(find.text('Разорвать device session'), findsOneWidget);
+
+    final pingButton = find.text('Ping device protocol');
+    await tester.ensureVisible(pingButton);
+    await tester.tap(pingButton);
+    await tester.pumpAndSettle();
+    expect(find.text('Protocol commands'), findsOneWidget);
+    expect(find.text('ping'), findsOneWidget);
+
+    final readAddressButton = find.text('Прочитать адрес с device');
+    await tester.ensureVisible(readAddressButton);
+    await tester.tap(readAddressButton);
+    await tester.pumpAndSettle();
+    expect(find.text('Last protocol command'), findsOneWidget);
+    expect(find.text('readPublicAddress'), findsOneWidget);
   });
 
   testWidgets('shows seed backup step after create wallet flow', (

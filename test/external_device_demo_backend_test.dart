@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/key_storage/external_device_demo_backend.dart';
+import 'package:mobile_wallet_demo/src/key_storage/external_device_protocol.dart';
 import 'package:mobile_wallet_demo/src/key_storage/key_storage_backend.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
 
@@ -25,6 +26,17 @@ void main() {
       state = await backend.loadRuntimeState();
       expect(state.hasActiveSession, isTrue);
       expect(state.connectedAtUtc, isNotNull);
+      expect(state.session?.commandCount, 0);
+
+      final pingResponse = await backend.sendProtocolCommand(
+        const ExternalDeviceCommand(kind: ExternalDeviceCommandKind.ping),
+      );
+      expect(pingResponse.ok, isTrue);
+      expect(pingResponse.message, contains('PONG'));
+
+      state = await backend.loadRuntimeState();
+      expect(state.session?.commandCount, 1);
+      expect(state.session?.lastCommandKind, ExternalDeviceCommandKind.ping);
 
       await backend.disconnectSession();
       state = await backend.loadRuntimeState();
@@ -35,6 +47,7 @@ void main() {
       state = await backend.loadRuntimeState();
       expect(state.isAvailable, isFalse);
       expect(state.lastError, contains('offline'));
+      expect(state.session, isNull);
 
       expect(() => backend.unlock(pin: '1234'), throwsA(isA<VaultFailure>()));
 
