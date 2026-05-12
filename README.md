@@ -39,7 +39,7 @@
 
 ## Версионирование
 
-- Текущая версия: `v1.5.0+16`
+- Текущая версия: `v1.6.0+17`
 - По договорённости в этом проекте дальше повышаем minor-версию с каждым функциональным шагом
 
 ## Что покрывает текущий этап
@@ -69,6 +69,7 @@
 - retry/replacement flow с повышением gas price при underpriced reject
 - foundation для multi-backend runtime: selection model + backend-compatible signing/auth contracts
 - simulated external-device flow: backend selection, device-style lock/unlock UX и отдельный signer runtime path
+- mock device lifecycle: online/offline availability, reconnect, session disconnect и error-state handling для external backend
 
 ## Артефакты CI
 

@@ -65,6 +65,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
   String? _errorMessage;
   String? _pendingBiometricPin;
   String? _selectedBackendId;
+  ExternalDeviceDemoRuntimeState? _externalRuntimeState;
   WalletAuthMethod _lastUnlockAuthMethod = WalletAuthMethod.pin;
   bool _biometricsEnabled = false;
   bool _biometricsAvailable = false;
@@ -125,6 +126,11 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
     await _runGuarded(() async {
       await _backendRegistry.selectBackend(backendId);
       _selectedBackendId = backendId;
+      if (backendId == _externalDeviceBackend.backendId) {
+        _externalRuntimeState = await _externalDeviceBackend.loadRuntimeState();
+      } else {
+        _externalRuntimeState = null;
+      }
       _errorMessage = null;
     });
   }
@@ -137,6 +143,9 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
     final biometricsEnabled = await activeBackend.isBiometricUnlockEnabled();
     final biometricsAvailable = await activeBackend
         .isBiometricUnlockAvailable();
+    final externalRuntimeState = activeBackend is ExternalDeviceDemoBackend
+        ? await activeBackend.loadRuntimeState()
+        : null;
     if (!mounted) {
       return;
     }
@@ -144,6 +153,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
     setState(() {
       _selectedBackendId = selectedBackendId;
       _summary = summary;
+      _externalRuntimeState = externalRuntimeState;
       _biometricsEnabled = biometricsEnabled;
       _biometricsAvailable = biometricsAvailable;
       _stage = summary == null
@@ -172,6 +182,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
         _biometricsAvailable = false;
         _material = null;
         backend.lock();
+        _externalRuntimeState = await _externalDeviceBackend.loadRuntimeState();
         _stage = WalletFlowStage.locked;
       } else {
         _seedPhraseToShow = material.mnemonic;
@@ -203,6 +214,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
         _biometricsAvailable = false;
         _material = null;
         backend.lock();
+        _externalRuntimeState = await _externalDeviceBackend.loadRuntimeState();
         _stage = WalletFlowStage.locked;
       } else {
         _stage = WalletFlowStage.biometricPrompt;
@@ -216,6 +228,9 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       _lastUnlockAuthMethod = _activeBackend is ExternalDeviceKeyStorageBackend
           ? WalletAuthMethod.externalDevice
           : WalletAuthMethod.pin;
+      if (_activeBackend is ExternalDeviceDemoBackend) {
+        _externalRuntimeState = await _externalDeviceBackend.loadRuntimeState();
+      }
       _stage = WalletFlowStage.unlocked;
     });
   }
@@ -272,6 +287,9 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       _seedPhraseToShow = null;
       _stage = WalletFlowStage.locked;
       _activeBackend.lock();
+      if (_activeBackend is ExternalDeviceDemoBackend) {
+        _externalRuntimeState = await _externalDeviceBackend.loadRuntimeState();
+      }
     });
   }
 
@@ -283,8 +301,57 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
     });
   }
 
+  Future<void> _refreshExternalRuntimeState() async {
+    if (_activeBackend is! ExternalDeviceDemoBackend) {
+      return;
+    }
+    final runtimeState = await (_activeBackend as ExternalDeviceDemoBackend)
+        .loadRuntimeState();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _externalRuntimeState = runtimeState;
+    });
+  }
+
+  Future<void> _simulateExternalDeviceOffline() async {
+    await _runGuarded(() async {
+      await _externalDeviceBackend.simulateDeviceUnavailable();
+      _material = null;
+      _stage = WalletFlowStage.locked;
+      await _refreshExternalRuntimeState();
+    });
+  }
+
+  Future<void> _reconnectExternalDevice() async {
+    await _runGuarded(() async {
+      await _externalDeviceBackend.reconnectDevice();
+      await _refreshExternalRuntimeState();
+    });
+  }
+
+  Future<void> _disconnectExternalSession() async {
+    await _runGuarded(() async {
+      await _externalDeviceBackend.disconnectSession();
+      _material = null;
+      _stage = WalletFlowStage.locked;
+      await _refreshExternalRuntimeState();
+    });
+  }
+
   void _lockWallet() {
     _activeBackend.lock();
+    if (_activeBackend is ExternalDeviceDemoBackend) {
+      _externalDeviceBackend.loadRuntimeState().then((runtimeState) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _externalRuntimeState = runtimeState;
+        });
+      });
+    }
     setState(() {
       _material = null;
       _pendingBiometricPin = null;
@@ -402,10 +469,17 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
                   ?.label ??
               'Unknown backend',
           isExternalBackend: _activeBackend is ExternalDeviceKeyStorageBackend,
+          externalRuntimeState: _externalRuntimeState,
           biometricsEnabled: _biometricsEnabled,
           onUnlock: _unlockWallet,
           onUnlockWithBiometrics: _biometricsEnabled && _biometricsAvailable
               ? _unlockWithBiometrics
+              : null,
+          onReconnectExternalDevice: _isExternalBackendSelected
+              ? _reconnectExternalDevice
+              : null,
+          onSimulateExternalOffline: _isExternalBackendSelected
+              ? _simulateExternalDeviceOffline
               : null,
         );
       case WalletFlowStage.unlocked:
@@ -427,8 +501,18 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
                   )
                   ?.label ??
               'Unknown backend',
+          externalRuntimeState: _externalRuntimeState,
           biometricsEnabled: _biometricsEnabled,
           onLock: _lockWallet,
+          onReconnectExternalDevice: _isExternalBackendSelected
+              ? _reconnectExternalDevice
+              : null,
+          onDisconnectExternalSession: _isExternalBackendSelected
+              ? _disconnectExternalSession
+              : null,
+          onSimulateExternalOffline: _isExternalBackendSelected
+              ? _simulateExternalDeviceOffline
+              : null,
         );
     }
   }
@@ -985,17 +1069,23 @@ class _LockedStage extends StatefulWidget {
     required this.summary,
     required this.backendLabel,
     required this.isExternalBackend,
+    required this.externalRuntimeState,
     required this.biometricsEnabled,
     required this.onUnlock,
     required this.onUnlockWithBiometrics,
+    required this.onReconnectExternalDevice,
+    required this.onSimulateExternalOffline,
   });
 
   final StoredWalletSummary? summary;
   final String backendLabel;
   final bool isExternalBackend;
+  final ExternalDeviceDemoRuntimeState? externalRuntimeState;
   final bool biometricsEnabled;
   final Future<void> Function(String pin) onUnlock;
   final Future<void> Function()? onUnlockWithBiometrics;
+  final Future<void> Function()? onReconnectExternalDevice;
+  final Future<void> Function()? onSimulateExternalOffline;
 
   @override
   State<_LockedStage> createState() => _LockedStageState();
@@ -1013,6 +1103,7 @@ class _LockedStageState extends State<_LockedStage> {
   @override
   Widget build(BuildContext context) {
     final summary = widget.summary;
+    final externalRuntimeState = widget.externalRuntimeState;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1042,6 +1133,15 @@ class _LockedStageState extends State<_LockedStage> {
             const _StatusChip(label: 'Locked'),
             if (widget.biometricsEnabled)
               const _StatusChip(label: 'Biometrics enabled'),
+            if (widget.isExternalBackend && externalRuntimeState != null)
+              _StatusChip(
+                label: externalRuntimeState.isAvailable
+                    ? 'Device online'
+                    : 'Device offline',
+              ),
+            if (widget.isExternalBackend &&
+                externalRuntimeState?.lastError != null)
+              const _StatusChip(label: 'Last error recorded'),
           ],
         ),
         const SizedBox(height: 20),
@@ -1055,6 +1155,25 @@ class _LockedStageState extends State<_LockedStage> {
             border: const OutlineInputBorder(),
           ),
         ),
+        if (widget.isExternalBackend && externalRuntimeState != null) ...[
+          const SizedBox(height: 16),
+          _SummaryTile(
+            label: 'Состояние demo device',
+            value: externalRuntimeState.isAvailable ? 'Доступно' : 'Недоступно',
+          ),
+          if (externalRuntimeState.connectedAtUtc
+              case final DateTime connectedAt) ...[
+            const SizedBox(height: 10),
+            _SummaryTile(
+              label: 'Последняя device session',
+              value: connectedAt.toIso8601String(),
+            ),
+          ],
+          if (externalRuntimeState.lastError case final String error) ...[
+            const SizedBox(height: 10),
+            _ErrorBanner(message: error),
+          ],
+        ],
         const SizedBox(height: 16),
         Wrap(
           spacing: 12,
@@ -1073,6 +1192,17 @@ class _LockedStageState extends State<_LockedStage> {
                 onPressed: widget.onUnlockWithBiometrics,
                 icon: const Icon(Icons.fingerprint),
                 label: const Text('Разблокировать биометрией'),
+              ),
+            if (widget.onReconnectExternalDevice != null)
+              OutlinedButton.icon(
+                onPressed: widget.onReconnectExternalDevice,
+                icon: const Icon(Icons.usb),
+                label: const Text('Переподключить demo device'),
+              ),
+            if (widget.onSimulateExternalOffline != null)
+              TextButton(
+                onPressed: widget.onSimulateExternalOffline,
+                child: const Text('Симулировать offline'),
               ),
           ],
         ),
@@ -1094,8 +1224,12 @@ class _UnlockedStage extends StatefulWidget {
     required this.material,
     required this.summary,
     required this.backendLabel,
+    required this.externalRuntimeState,
     required this.biometricsEnabled,
     required this.onLock,
+    required this.onReconnectExternalDevice,
+    required this.onDisconnectExternalSession,
+    required this.onSimulateExternalOffline,
   });
 
   final BlockchainProvider blockchainProvider;
@@ -1109,8 +1243,12 @@ class _UnlockedStage extends StatefulWidget {
   final WalletMaterial? material;
   final StoredWalletSummary? summary;
   final String backendLabel;
+  final ExternalDeviceDemoRuntimeState? externalRuntimeState;
   final bool biometricsEnabled;
   final VoidCallback onLock;
+  final Future<void> Function()? onReconnectExternalDevice;
+  final Future<void> Function()? onDisconnectExternalSession;
+  final Future<void> Function()? onSimulateExternalOffline;
 
   @override
   State<_UnlockedStage> createState() => _UnlockedStageState();
@@ -1171,6 +1309,7 @@ class _UnlockedStageState extends State<_UnlockedStage> {
     final address = widget.material?.address ?? widget.summary?.address ?? '—';
     final config = evmNetworkConfigs[_selectedNetwork]!;
     final snapshot = _snapshot;
+    final externalRuntimeState = widget.externalRuntimeState;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1200,6 +1339,33 @@ class _UnlockedStageState extends State<_UnlockedStage> {
               ? 'Включена в shell-flow'
               : 'Пока выключена',
         ),
+        if (widget.activeBackend is ExternalDeviceKeyStorageBackend &&
+            externalRuntimeState != null) ...[
+          const SizedBox(height: 10),
+          _SummaryTile(
+            label: 'Demo device availability',
+            value: externalRuntimeState.isAvailable ? 'Online' : 'Offline',
+          ),
+          const SizedBox(height: 10),
+          _SummaryTile(
+            label: 'Device session',
+            value: externalRuntimeState.hasActiveSession
+                ? 'Active'
+                : 'Needs reconnect/auth',
+          ),
+          if (externalRuntimeState.connectedAtUtc
+              case final DateTime connectedAt) ...[
+            const SizedBox(height: 10),
+            _SummaryTile(
+              label: 'Session connected at',
+              value: connectedAt.toIso8601String(),
+            ),
+          ],
+          if (externalRuntimeState.lastError case final String error) ...[
+            const SizedBox(height: 10),
+            _ErrorBanner(message: error),
+          ],
+        ],
         const SizedBox(height: 20),
         DropdownButtonFormField<EvmNetwork>(
           initialValue: _selectedNetwork,
@@ -1294,6 +1460,12 @@ class _UnlockedStageState extends State<_UnlockedStage> {
             const _StatusChip(label: 'Read-only RPC'),
             const _StatusChip(label: 'Signing + send flow'),
             _StatusChip(label: 'Chain ${config.chainId}'),
+            if (widget.activeBackend is ExternalDeviceKeyStorageBackend)
+              _StatusChip(
+                label: externalRuntimeState?.isAvailable ?? false
+                    ? 'Device online'
+                    : 'Device offline',
+              ),
             if (snapshot?.loadedFromCache ?? false)
               const _StatusChip(label: 'Cached fallback'),
           ],
@@ -1313,6 +1485,23 @@ class _UnlockedStageState extends State<_UnlockedStage> {
               icon: const Icon(Icons.lock_outline),
               label: const Text('Заблокировать снова'),
             ),
+            if (widget.onDisconnectExternalSession != null)
+              OutlinedButton.icon(
+                onPressed: widget.onDisconnectExternalSession,
+                icon: const Icon(Icons.link_off),
+                label: const Text('Разорвать device session'),
+              ),
+            if (widget.onReconnectExternalDevice != null)
+              OutlinedButton.icon(
+                onPressed: widget.onReconnectExternalDevice,
+                icon: const Icon(Icons.usb),
+                label: const Text('Переподключить demo device'),
+              ),
+            if (widget.onSimulateExternalOffline != null)
+              TextButton(
+                onPressed: widget.onSimulateExternalOffline,
+                child: const Text('Симулировать offline'),
+              ),
           ],
         ),
       ],

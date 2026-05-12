@@ -13,7 +13,7 @@ Current factual status of the project:
 - ✅ Phase 4 is implemented
 - ✅ Phase 5 is implemented
 - ✅ Phase 6 is implemented end-to-end, including retry/replacement handling and post-submit transaction lifecycle tracking
-- ◐ Phase 7 is in active implementation: backend selection model, backend-compatible signing/auth contracts, and a demo external-device runtime path are in place; real NFC SDK integration is still pending
+- ◐ Phase 7 is in active implementation: backend selection model, backend-compatible signing/auth contracts, demo external-device runtime path, and mock device lifecycle/error states are in place; real NFC SDK integration is still pending
 - ⏳ Phase 8 is not started yet
 
 Completed deliverables so far:
@@ -241,6 +241,7 @@ Deliverables:
 - [x] storage-backend selection model
 - [x] compatible signing/auth flow contracts
 - [x] simulated external-device UX/runtime path without real SDK
+- [x] mock device lifecycle: availability, reconnect, session disconnect, error states
 - [x] no real NFC implementation yet
 
 ## Phase 8 — future extension points
@@ -267,6 +268,7 @@ Deliverables:
 - `v1.3` — real replacement flow, gas bump, and non-blocking lifecycle UX
 - `v1.4` — backend selection model + backend-compatible signing/auth contracts for future external signer flow
 - `v1.5` — simulated external-device runtime path and separate UX branch for Phase 7
+- `v1.6` — mock device lifecycle: online/offline, reconnect, session disconnect, and error-state handling
 
 ## Non-goals for now
 - no hardware-device SDK implementation yet

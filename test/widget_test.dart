@@ -136,7 +136,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Mobile Wallet Demo'), findsOneWidget);
-    expect(find.text('v1.5.0+16'), findsOneWidget);
+    expect(find.text('v1.6.0+17'), findsOneWidget);
     expect(find.text('Phone Secure Vault'), findsOneWidget);
     expect(find.text('External NFC demo device'), findsOneWidget);
     expect(find.text('Создать новый кошелёк'), findsOneWidget);
@@ -175,6 +175,47 @@ void main() {
     expect(find.text('Внешнее устройство заблокировано'), findsOneWidget);
     expect(find.text('PIN устройства'), findsOneWidget);
     expect(find.text('External NFC demo device'), findsAtLeastNWidgets(1));
+  });
+
+  testWidgets('supports external device offline and reconnect states', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _FakeBlockchainProvider(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Выбрать'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Подключить demo NFC-устройство').first);
+    await tester.pumpAndSettle();
+
+    final setupFields = find.byType(TextField);
+    await tester.enterText(setupFields.at(0), '5678');
+    await tester.enterText(setupFields.at(1), '5678');
+    await tester.tap(find.text('Подключить устройство'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Симулировать offline'));
+    await tester.pumpAndSettle();
+    expect(find.text('Device offline'), findsOneWidget);
+
+    await tester.tap(find.text('Переподключить demo device'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, '5678');
+    await tester.tap(find.text('Подключить устройство'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Device online'), findsWidgets);
+    expect(find.text('Разорвать device session'), findsOneWidget);
   });
 
   testWidgets('shows seed backup step after create wallet flow', (
