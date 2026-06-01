@@ -87,5 +87,26 @@ void main() {
       expect(unlockedMaterial.address, material.address);
       expect(unlockedMaterial.privateKeyHex, material.privateKeyHex);
     });
+
+    test(
+      'enabling biometrics does not persist the PIN or a key in the vault record',
+      () async {
+        vault = PhoneSecureVault(
+          store: store,
+          biometricAuth: const SimulatedBiometricAuthGateway(),
+        );
+
+        await vault.createWallet(pin: '123456');
+        await vault.setBiometricUnlockEnabled(enabled: true, pin: '123456');
+
+        final payload = await store.read(PhoneSecureVault.storageKey);
+        expect(payload, isNotNull);
+        // The seed-vault record must not carry the PIN or any biometric key
+        // material; the biometric secret lives in a separate gated store.
+        expect(payload, isNot(contains('123456')));
+        expect(payload!.toLowerCase(), isNot(contains('wrapkey')));
+        expect(payload.toLowerCase(), isNot(contains('biometriccipher')));
+      },
+    );
   });
 }

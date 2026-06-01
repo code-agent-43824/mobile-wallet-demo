@@ -10,6 +10,7 @@ import 'package:web3dart/web3dart.dart';
 
 import '../auth/biometric_auth.dart';
 import '../auth/pin_unlock_session.dart';
+import 'biometric_secret_store.dart';
 import 'key_storage_backend.dart';
 import 'secure_key_value_store.dart';
 
@@ -17,26 +18,40 @@ class PhoneSecureVault implements KeyStorageBackend {
   PhoneSecureVault({
     required SecureKeyValueStore store,
     BiometricAuthGateway? biometricAuth,
+    BiometricSecretStore? biometricSecretStore,
     PinUnlockSession? session,
     Duration unlockTtl = const Duration(minutes: 5),
     Random? random,
   }) : _store = store,
        _biometricAuth = biometricAuth ?? defaultBiometricAuthGateway(),
        _session = session ?? PinUnlockSession(ttl: unlockTtl),
-       _random = random ?? Random.secure();
+       _random = random ?? Random.secure() {
+    _biometricSecretStore =
+        biometricSecretStore ??
+        GatedBiometricSecretStore(store: store, biometricAuth: _biometricAuth);
+  }
 
   static const String storageKey = 'wallet.phone_secure_vault.v1';
   static const String derivationPath = "m/44'/60'/0'/0/0";
+  static const String _biometricSecretId = 'primary';
   static const int _pinSaltLength = 16;
   static const int _cipherNonceLength = 12;
+  static const int _dekLength = 32;
+
+  // The at-rest seed is encrypted under a random data-encryption key (DEK); the
+  // DEK is wrapped by a PIN-derived key. The PIN itself is never persisted.
+  //
+  // NOTE: OWASP recommends >=600k PBKDF2-HMAC-SHA256 iterations. Raising this
+  // and adding offline-attempt throttling is tracked separately (S2); the
+  // at-rest strength is still ultimately bounded by PIN entropy.
   static const int _pinIterations = 120000;
-  static const int _biometricWrapKeyLength = 32;
 
   final SecureKeyValueStore _store;
   final BiometricAuthGateway _biometricAuth;
   final PinUnlockSession _session;
   final Random _random;
   final Cipher _cipher = AesGcm.with256bits();
+  late final BiometricSecretStore _biometricSecretStore;
   WalletMaterial? _cachedMaterial;
 
   @override
@@ -93,12 +108,13 @@ class PhoneSecureVault implements KeyStorageBackend {
     final payload = await _requirePayload();
 
     try {
-      final decryptedMnemonic = await _decryptMnemonic(
+      final dek = await _unwrapDek(payload: payload, pin: pin);
+      final mnemonic = await _decryptMnemonicWithDek(
         payload: payload,
-        pin: pin,
+        dek: dek,
       );
       final material = _deriveWalletMaterial(
-        mnemonic: decryptedMnemonic,
+        mnemonic: mnemonic,
         derivationPath: payload.derivationPath,
       );
 
@@ -123,7 +139,7 @@ class PhoneSecureVault implements KeyStorageBackend {
   @override
   Future<bool> isBiometricUnlockEnabled() async {
     final payload = await _readPayload();
-    return payload?.biometricCipherTextHex != null;
+    return payload?.biometricEnabled ?? false;
   }
 
   @override
@@ -141,33 +157,22 @@ class PhoneSecureVault implements KeyStorageBackend {
         reason: 'Подтвердите биометрию для включения быстрого unlock.',
       );
 
-      final wrapKey = _randomBytes(_biometricWrapKeyLength);
-      final nonce = _randomBytes(_cipherNonceLength);
-      final encryptedBox = await _cipher.encrypt(
-        utf8.encode(pin),
-        secretKey: SecretKey(wrapKey),
-        nonce: nonce,
-      );
+      // Unwrap the DEK with the PIN, then hand it to the gated biometric store.
+      // The PIN is used only transiently here and is never persisted.
+      List<int> dek;
+      try {
+        dek = await _unwrapDek(payload: payload, pin: pin);
+      } catch (_) {
+        throw const InvalidPinFailure();
+      }
 
-      await _writePayload(
-        payload.copyWith(
-          biometricCipherNonceHex: hex.encode(encryptedBox.nonce),
-          biometricCipherTextHex: hex.encode(encryptedBox.cipherText),
-          biometricMacHex: hex.encode(encryptedBox.mac.bytes),
-          biometricWrapKeyHex: hex.encode(wrapKey),
-        ),
-      );
+      await _biometricSecretStore.store(id: _biometricSecretId, secret: dek);
+      await _writePayload(payload.copyWith(biometricEnabled: true));
       return;
     }
 
-    await _writePayload(
-      payload.copyWith(
-        biometricCipherNonceHex: _VaultPayload.clearField,
-        biometricCipherTextHex: _VaultPayload.clearField,
-        biometricMacHex: _VaultPayload.clearField,
-        biometricWrapKeyHex: _VaultPayload.clearField,
-      ),
-    );
+    await _biometricSecretStore.delete(_biometricSecretId);
+    await _writePayload(payload.copyWith(biometricEnabled: false));
   }
 
   @override
@@ -180,21 +185,31 @@ class PhoneSecureVault implements KeyStorageBackend {
     if (!await isBiometricUnlockAvailable()) {
       throw const BiometricUnavailableFailure();
     }
-    if (!_hasBiometricPayload(payload)) {
+    if (!payload.biometricEnabled) {
       throw const BiometricNotEnabledFailure();
     }
 
-    await _biometricAuth.authenticate(
+    // Releasing the DEK prompts for biometric authentication inside the store.
+    final dek = await _biometricSecretStore.retrieve(
+      id: _biometricSecretId,
       reason: 'Подтвердите биометрию для разблокировки кошелька.',
     );
+    if (dek == null) {
+      throw const BiometricNotEnabledFailure();
+    }
 
-    final pin = await _decryptBiometricPin(payload);
-    return unlock(pin: pin);
+    final mnemonic = await _decryptMnemonicWithDek(payload: payload, dek: dek);
+    final material = _deriveWalletMaterial(
+      mnemonic: mnemonic,
+      derivationPath: payload.derivationPath,
+    );
+    return _cacheUnlockedMaterial(material);
   }
 
   @override
   Future<void> clear() async {
     await _store.delete(storageKey);
+    await _biometricSecretStore.delete(_biometricSecretId);
     lock();
   }
 
@@ -212,29 +227,44 @@ class PhoneSecureVault implements KeyStorageBackend {
       mnemonic: mnemonic,
       derivationPath: derivationPath,
     );
-    final salt = _randomBytes(_pinSaltLength);
-    final nonce = _randomBytes(_cipherNonceLength);
-    final encryptedBox = await _cipher.encrypt(
+
+    // 1. Encrypt the mnemonic under a fresh random DEK.
+    final dek = _randomBytes(_dekLength);
+    final mnemonicNonce = _randomBytes(_cipherNonceLength);
+    final mnemonicBox = await _cipher.encrypt(
       utf8.encode(material.mnemonic),
+      secretKey: SecretKey(dek),
+      nonce: mnemonicNonce,
+    );
+
+    // 2. Wrap the DEK with a PIN-derived key (the PIN is never stored).
+    final salt = _randomBytes(_pinSaltLength);
+    final dekNonce = _randomBytes(_cipherNonceLength);
+    final dekBox = await _cipher.encrypt(
+      dek,
       secretKey: await _deriveEncryptionKey(
         pin: pin,
         salt: salt,
         iterations: _pinIterations,
       ),
-      nonce: nonce,
+      nonce: dekNonce,
     );
 
     final payload = _VaultPayload(
-      schemaVersion: 2,
+      schemaVersion: 3,
       backendId: backendId,
       address: material.address,
       createdAtUtc: DateTime.now().toUtc().toIso8601String(),
       derivationPath: derivationPath,
       pinSaltHex: hex.encode(salt),
       pinIterations: _pinIterations,
-      cipherNonceHex: hex.encode(encryptedBox.nonce),
-      cipherTextHex: hex.encode(encryptedBox.cipherText),
-      macHex: hex.encode(encryptedBox.mac.bytes),
+      mnemonicNonceHex: hex.encode(mnemonicBox.nonce),
+      mnemonicCipherTextHex: hex.encode(mnemonicBox.cipherText),
+      mnemonicMacHex: hex.encode(mnemonicBox.mac.bytes),
+      dekNonceHex: hex.encode(dekBox.nonce),
+      dekCipherTextHex: hex.encode(dekBox.cipherText),
+      dekMacHex: hex.encode(dekBox.mac.bytes),
+      biometricEnabled: false,
     );
 
     await _writePayload(payload);
@@ -262,7 +292,7 @@ class PhoneSecureVault implements KeyStorageBackend {
     await _store.write(storageKey, jsonEncode(payload.toJson()));
   }
 
-  Future<String> _decryptMnemonic({
+  Future<List<int>> _unwrapDek({
     required _VaultPayload payload,
     required String pin,
   }) async {
@@ -272,13 +302,27 @@ class PhoneSecureVault implements KeyStorageBackend {
       iterations: payload.pinIterations,
     );
 
-    final decryptedBytes = await _cipher.decrypt(
+    return _cipher.decrypt(
       SecretBox(
-        hex.decode(payload.cipherTextHex),
-        nonce: hex.decode(payload.cipherNonceHex),
-        mac: Mac(hex.decode(payload.macHex)),
+        hex.decode(payload.dekCipherTextHex),
+        nonce: hex.decode(payload.dekNonceHex),
+        mac: Mac(hex.decode(payload.dekMacHex)),
       ),
       secretKey: secretKey,
+    );
+  }
+
+  Future<String> _decryptMnemonicWithDek({
+    required _VaultPayload payload,
+    required List<int> dek,
+  }) async {
+    final decryptedBytes = await _cipher.decrypt(
+      SecretBox(
+        hex.decode(payload.mnemonicCipherTextHex),
+        nonce: hex.decode(payload.mnemonicNonceHex),
+        mac: Mac(hex.decode(payload.mnemonicMacHex)),
+      ),
+      secretKey: SecretKey(dek),
     );
 
     final mnemonic = utf8.decode(decryptedBytes);
@@ -287,22 +331,6 @@ class PhoneSecureVault implements KeyStorageBackend {
     }
 
     return mnemonic;
-  }
-
-  Future<String> _decryptBiometricPin(_VaultPayload payload) async {
-    try {
-      final decryptedBytes = await _cipher.decrypt(
-        SecretBox(
-          hex.decode(payload.biometricCipherTextHex!),
-          nonce: hex.decode(payload.biometricCipherNonceHex!),
-          mac: Mac(hex.decode(payload.biometricMacHex!)),
-        ),
-        secretKey: SecretKey(hex.decode(payload.biometricWrapKeyHex!)),
-      );
-      return utf8.decode(decryptedBytes);
-    } catch (_) {
-      throw const BiometricNotEnabledFailure();
-    }
   }
 
   Future<SecretKey> _deriveEncryptionKey({
@@ -349,13 +377,6 @@ class PhoneSecureVault implements KeyStorageBackend {
     return material;
   }
 
-  bool _hasBiometricPayload(_VaultPayload payload) {
-    return payload.biometricCipherNonceHex != null &&
-        payload.biometricCipherTextHex != null &&
-        payload.biometricMacHex != null &&
-        payload.biometricWrapKeyHex != null;
-  }
-
   String _normalizeMnemonic(String mnemonic) {
     return mnemonic
         .trim()
@@ -380,16 +401,14 @@ class _VaultPayload {
     required this.derivationPath,
     required this.pinSaltHex,
     required this.pinIterations,
-    required this.cipherNonceHex,
-    required this.cipherTextHex,
-    required this.macHex,
-    this.biometricCipherNonceHex,
-    this.biometricCipherTextHex,
-    this.biometricMacHex,
-    this.biometricWrapKeyHex,
+    required this.mnemonicNonceHex,
+    required this.mnemonicCipherTextHex,
+    required this.mnemonicMacHex,
+    required this.dekNonceHex,
+    required this.dekCipherTextHex,
+    required this.dekMacHex,
+    required this.biometricEnabled,
   });
-
-  static const String clearField = '__clear__';
 
   factory _VaultPayload.fromJson(Map<String, dynamic> json) {
     return _VaultPayload(
@@ -400,13 +419,13 @@ class _VaultPayload {
       derivationPath: json['derivationPath'] as String,
       pinSaltHex: json['pinSaltHex'] as String,
       pinIterations: json['pinIterations'] as int,
-      cipherNonceHex: json['cipherNonceHex'] as String,
-      cipherTextHex: json['cipherTextHex'] as String,
-      macHex: json['macHex'] as String,
-      biometricCipherNonceHex: json['biometricCipherNonceHex'] as String?,
-      biometricCipherTextHex: json['biometricCipherTextHex'] as String?,
-      biometricMacHex: json['biometricMacHex'] as String?,
-      biometricWrapKeyHex: json['biometricWrapKeyHex'] as String?,
+      mnemonicNonceHex: json['mnemonicNonceHex'] as String,
+      mnemonicCipherTextHex: json['mnemonicCipherTextHex'] as String,
+      mnemonicMacHex: json['mnemonicMacHex'] as String,
+      dekNonceHex: json['dekNonceHex'] as String,
+      dekCipherTextHex: json['dekCipherTextHex'] as String,
+      dekMacHex: json['dekMacHex'] as String,
+      biometricEnabled: json['biometricEnabled'] as bool? ?? false,
     );
   }
 
@@ -417,20 +436,15 @@ class _VaultPayload {
   final String derivationPath;
   final String pinSaltHex;
   final int pinIterations;
-  final String cipherNonceHex;
-  final String cipherTextHex;
-  final String macHex;
-  final String? biometricCipherNonceHex;
-  final String? biometricCipherTextHex;
-  final String? biometricMacHex;
-  final String? biometricWrapKeyHex;
+  final String mnemonicNonceHex;
+  final String mnemonicCipherTextHex;
+  final String mnemonicMacHex;
+  final String dekNonceHex;
+  final String dekCipherTextHex;
+  final String dekMacHex;
+  final bool biometricEnabled;
 
-  _VaultPayload copyWith({
-    String? biometricCipherNonceHex,
-    String? biometricCipherTextHex,
-    String? biometricMacHex,
-    String? biometricWrapKeyHex,
-  }) {
+  _VaultPayload copyWith({bool? biometricEnabled}) {
     return _VaultPayload(
       schemaVersion: schemaVersion,
       backendId: backendId,
@@ -439,21 +453,13 @@ class _VaultPayload {
       derivationPath: derivationPath,
       pinSaltHex: pinSaltHex,
       pinIterations: pinIterations,
-      cipherNonceHex: cipherNonceHex,
-      cipherTextHex: cipherTextHex,
-      macHex: macHex,
-      biometricCipherNonceHex: biometricCipherNonceHex == clearField
-          ? null
-          : biometricCipherNonceHex ?? this.biometricCipherNonceHex,
-      biometricCipherTextHex: biometricCipherTextHex == clearField
-          ? null
-          : biometricCipherTextHex ?? this.biometricCipherTextHex,
-      biometricMacHex: biometricMacHex == clearField
-          ? null
-          : biometricMacHex ?? this.biometricMacHex,
-      biometricWrapKeyHex: biometricWrapKeyHex == clearField
-          ? null
-          : biometricWrapKeyHex ?? this.biometricWrapKeyHex,
+      mnemonicNonceHex: mnemonicNonceHex,
+      mnemonicCipherTextHex: mnemonicCipherTextHex,
+      mnemonicMacHex: mnemonicMacHex,
+      dekNonceHex: dekNonceHex,
+      dekCipherTextHex: dekCipherTextHex,
+      dekMacHex: dekMacHex,
+      biometricEnabled: biometricEnabled ?? this.biometricEnabled,
     );
   }
 
@@ -466,13 +472,13 @@ class _VaultPayload {
       'derivationPath': derivationPath,
       'pinSaltHex': pinSaltHex,
       'pinIterations': pinIterations,
-      'cipherNonceHex': cipherNonceHex,
-      'cipherTextHex': cipherTextHex,
-      'macHex': macHex,
-      'biometricCipherNonceHex': biometricCipherNonceHex,
-      'biometricCipherTextHex': biometricCipherTextHex,
-      'biometricMacHex': biometricMacHex,
-      'biometricWrapKeyHex': biometricWrapKeyHex,
+      'mnemonicNonceHex': mnemonicNonceHex,
+      'mnemonicCipherTextHex': mnemonicCipherTextHex,
+      'mnemonicMacHex': mnemonicMacHex,
+      'dekNonceHex': dekNonceHex,
+      'dekCipherTextHex': dekCipherTextHex,
+      'dekMacHex': dekMacHex,
+      'biometricEnabled': biometricEnabled,
     };
   }
 }
