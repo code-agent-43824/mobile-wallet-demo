@@ -43,7 +43,7 @@ Code lives under `lib/src/`, split into layers: `auth/`, `blockchain/`, `key_sto
 
 `KeyStorageBackend` (`key_storage/key_storage_backend.dart`) is the core contract (create/import/unlock/biometrics/lock). Two implementations, selected at runtime via `WalletBackendRegistry` (persists the choice in the secure store):
 
-- **`PhoneSecureVault`** — the real backend. Implements the **"Phone Secure Vault" model** (see development-plan.md "Core architectural decision"): it deliberately does *not* use a non-exportable secure-enclave key, because the product must show/import a seed phrase. Instead the BIP-39 seed is encrypted at rest with AES-GCM-256, the key derived from the PIN via PBKDF2 (120k iterations). A single EVM address is derived at `m/44'/60'/0'/0/0`. Biometric unlock stores the PIN encrypted under a random wrap key, gated by `local_auth`. `PinUnlockSession` provides a 5-minute unlock TTL so each high-level operation prompts for auth at most once.
+- **`PhoneSecureVault`** — the real backend. Implements the **"Phone Secure Vault" model** (see development-plan.md "Core architectural decision"): it deliberately does *not* use a non-exportable secure-enclave key, because the product must show/import a seed phrase. Instead the BIP-39 seed is encrypted at rest with AES-GCM-256 under a random data-encryption key (DEK); the DEK is wrapped by a PIN-derived key (PBKDF2, 120k iterations) and the PIN itself is never persisted. A single EVM address is derived at `m/44'/60'/0'/0/0`. Biometric unlock keeps the DEK in a dedicated `BiometricSecretStore` (`key_storage/biometric_secret_store.dart`) gated by `local_auth`, rather than co-locating a key with the seed ciphertext. `PinUnlockSession` provides a 5-minute unlock TTL so each high-level operation prompts for auth at most once.
 - **`ExternalDeviceDemoBackend`** — implements `ExternalDeviceKeyStorageBackend` (adds `isDeviceAvailable()`). It is a *simulation*: it wraps a `PhoneSecureVault` delegate backed by a `PrefixedSecureKeyValueStore`, and layers on mock device lifecycle (online/offline, reconnect, session disconnect) and mock PKCS#11 session/operation contracts (`external_device_pkcs11.dart`). No real NFC.
 
 ### Blockchain: read-only with fallback + cache
@@ -60,7 +60,7 @@ Code lives under `lib/src/`, split into layers: `auth/`, `blockchain/`, `key_sto
 
 ## Conventions & gotchas
 
-- **Version is duplicated in two files and asserted by a test.** `pubspec.yaml` (`version:`) and `lib/src/app_version.dart` (`appVersion`/`appVersionLabel`) must stay in sync, and `test/widget_test.dart` asserts the on-screen label (e.g. `find.text('v1.7.0+18')`). When bumping the version, update all three. Project convention (per README) is to **bump the minor version with each functional step**.
+- **Version is duplicated in two files and asserted by a test.** `pubspec.yaml` (`version:`) and `lib/src/app_version.dart` (`appVersion`/`appVersionLabel`) must stay in sync, and `test/widget_test.dart` asserts the on-screen label (e.g. `find.text('v1.8.0+19')`). When bumping the version, update all three. Project convention (per README) is to **bump the minor version with each functional step**.
 - **Commit messages** follow Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `style:`.
 - **UI text and many error messages are Russian.** Widget tests locate elements by Russian strings — keep them consistent when editing UI.
 - Keep `docs/development-plan.md` phase status in sync when completing roadmap items (existing `docs:` commits do this).
