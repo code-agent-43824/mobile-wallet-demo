@@ -104,6 +104,42 @@ void main() {
       expect(submitted.networkTransactionHash, signed.transactionHashHex);
     },
   );
+
+  test('reconciles nonce too low by re-fetching the nonce on retry', () async {
+    final attempts = <SignedTransfer>[];
+    final tracker = TransactionTracker(
+      rpcTransport: _FakeTrackingTransport(),
+      pollInterval: Duration.zero,
+      maxAttempts: 1,
+    );
+
+    final result = await service.submitTransferFlow(
+      snapshot: buildSnapshot(),
+      fromAddress: sender,
+      toAddress: recipient,
+      amountText: '0.1',
+      asset: service
+          .availableAssets(
+            snapshot: buildSnapshot(),
+            networkConfig: evmNetworkConfigs[network]!,
+          )
+          .first,
+      walletMaterial: walletMaterial,
+      broadcaster: _NonceTooLowThenOkBroadcaster(attempts),
+      nonceProvider: _IncrementingNonceProvider(),
+      tracker: tracker,
+    );
+
+    // Non-underpriced retry: re-fetch the (advanced) nonce, no gas bump.
+    expect(result.attempts, 2);
+    expect(result.replacementUsed, isFalse);
+    expect(result.gasMultiplierUsed, 1.0);
+    expect(attempts, hasLength(2));
+    expect(
+      attempts.first.rawTransactionHex,
+      isNot(equals(attempts.last.rawTransactionHex)),
+    );
+  });
 }
 
 class _StaticNonceProvider implements NonceProvider {
@@ -178,5 +214,51 @@ class _AlreadyKnownTransport implements JsonRpcTransport {
       'id': 1,
       'error': 'already known',
     };
+  }
+}
+
+class _IncrementingNonceProvider implements NonceProvider {
+  int _next = 7;
+
+  @override
+  Future<LoadedNonce> loadNextNonce({
+    required EvmNetworkConfig networkConfig,
+    required String address,
+  }) async {
+    final nonce = _next++;
+    return LoadedNonce(
+      network: networkConfig.network,
+      address: address,
+      nonce: nonce,
+      providerLabel: 'nonce.fake',
+      loadedAtUtc: DateTime.utc(2026, 5, 1, 6, 43),
+    );
+  }
+}
+
+class _NonceTooLowThenOkBroadcaster implements TransactionBroadcaster {
+  _NonceTooLowThenOkBroadcaster(this.attempts);
+
+  final List<SignedTransfer> attempts;
+  var _callCount = 0;
+
+  @override
+  Future<SubmittedTransfer> submit({
+    required SignedTransfer signedTransfer,
+  }) async {
+    attempts.add(signedTransfer);
+    _callCount += 1;
+    if (_callCount == 1) {
+      throw const TransactionFailure(
+        'RPC fake rejected signed transaction with a retryable nonce/pricing issue: nonce too low',
+      );
+    }
+
+    return SubmittedTransfer(
+      signedTransfer: signedTransfer,
+      providerLabel: 'broadcast.fake',
+      networkTransactionHash: signedTransfer.transactionHashHex,
+      submittedAtUtc: DateTime.utc(2026, 5, 1, 6, 44),
+    );
   }
 }

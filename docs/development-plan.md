@@ -73,7 +73,7 @@ This keeps the UX compatible with future support for an external NFC hardware si
 - Biometrics can be enabled only after PIN setup
 - PIN is required for operations with the private key
 - Within one operation, ask for PIN only once
-- Biometric unlock is routed through a dedicated biometric secret store (`key_storage/biometric_secret_store.dart`): the seed is encrypted under a random DEK, the PIN is never persisted, and no usable key is co-located with the seed ciphertext. Full hardware-bound biometric key release (native keystore) and stronger PBKDF2 iterations remain follow-up hardening.
+- Biometric unlock is routed through a dedicated biometric secret store (`key_storage/biometric_secret_store.dart`): the seed is encrypted under a random DEK, the PIN is never persisted, no usable key is co-located with the seed ciphertext, PBKDF2 runs at 600k iterations, and repeated wrong PINs trigger a temporary lockout. Full hardware-bound biometric key release (native keystore) remains follow-up hardening.
 
 ### Future hardware path (not implemented now)
 - Leave an abstraction for a future NFC hardware device SDK

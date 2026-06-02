@@ -75,6 +75,17 @@ class _FakeBroadcaster implements TransactionBroadcaster {
   }
 }
 
+class _FailingBroadcaster implements TransactionBroadcaster {
+  @override
+  Future<SubmittedTransfer> submit({
+    required SignedTransfer signedTransfer,
+  }) async {
+    throw const TransactionFailure(
+      'RPC отклонил транзакцию: execution reverted',
+    );
+  }
+}
+
 class _FakeTrackingTransport implements JsonRpcTransport {
   const _FakeTrackingTransport();
 
@@ -136,7 +147,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Mobile Wallet Demo'), findsOneWidget);
-    expect(find.text('v1.8.0+19'), findsOneWidget);
+    expect(find.text('v1.9.0+20'), findsOneWidget);
     expect(find.text('Phone Secure Vault'), findsOneWidget);
     expect(find.text('External NFC demo device'), findsOneWidget);
     expect(find.text('Создать новый кошелёк'), findsOneWidget);
@@ -464,5 +475,58 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Статус: Confirmed'), findsOneWidget);
+  });
+
+  testWidgets('shows failure state when broadcast is rejected', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _FakeBlockchainProvider(),
+        nonceProvider: _FakeNonceProvider(),
+        transactionBroadcaster: _FailingBroadcaster(),
+        trackingTransport: const _FakeTrackingTransport(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Создать новый кошелёк'));
+    await tester.pumpAndSettle();
+
+    final setupFields = find.byType(TextField);
+    await tester.enterText(setupFields.at(0), '1234');
+    await tester.enterText(setupFields.at(1), '1234');
+    await tester.tap(find.text('Создать кошелёк'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Я сохранил seed-фразу'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Пока без биометрии'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, '1234');
+    await tester.tap(find.text('Разблокировать'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    final sendFields = find.byType(TextField);
+    await tester.enterText(
+      sendFields.at(0),
+      '0x1111111111111111111111111111111111111111',
+    );
+    await tester.enterText(sendFields.at(1), '0.1');
+
+    final sendButton = find.text('Подписать и отправить');
+    await tester.ensureVisible(sendButton);
+    await tester.tap(sendButton);
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('execution reverted'), findsOneWidget);
+    expect(find.text('Успешная отправка'), findsNothing);
   });
 }
