@@ -11,7 +11,7 @@ void main() {
 
     setUp(() {
       store = InMemorySecureKeyValueStore();
-      vault = PhoneSecureVault(store: store);
+      vault = PhoneSecureVault(store: store, pbkdf2Iterations: 1000);
     });
 
     test(
@@ -76,6 +76,7 @@ void main() {
       vault = PhoneSecureVault(
         store: store,
         biometricAuth: const SimulatedBiometricAuthGateway(),
+        pbkdf2Iterations: 1000,
       );
 
       final material = await vault.createWallet(pin: '123456');
@@ -108,5 +109,36 @@ void main() {
         expect(payload.toLowerCase(), isNot(contains('biometriccipher')));
       },
     );
+
+    test('locks out after too many failed unlock attempts', () async {
+      var fakeNow = DateTime.utc(2026, 1, 1, 12, 0, 0);
+      vault = PhoneSecureVault(
+        store: store,
+        maxUnlockAttempts: 3,
+        unlockLockout: const Duration(minutes: 5),
+        now: () => fakeNow,
+        pbkdf2Iterations: 1000,
+      );
+
+      await vault.createWallet(pin: '123456');
+      vault.lock();
+
+      for (var i = 0; i < 3; i++) {
+        await expectLater(
+          vault.unlock(pin: '000000'),
+          throwsA(isA<InvalidPinFailure>()),
+        );
+      }
+
+      // Locked out now: even the correct PIN is rejected until the window ends.
+      await expectLater(
+        vault.unlock(pin: '123456'),
+        throwsA(isA<VaultLockedOutFailure>()),
+      );
+
+      fakeNow = fakeNow.add(const Duration(minutes: 6));
+      final material = await vault.unlock(pin: '123456');
+      expect(material.address, startsWith('0x'));
+    });
   });
 }

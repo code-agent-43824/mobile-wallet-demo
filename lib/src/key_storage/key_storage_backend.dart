@@ -60,6 +60,10 @@ class BiometricCancelledFailure extends VaultFailure {
     : super('Biometric authentication was cancelled.');
 }
 
+class VaultLockedOutFailure extends VaultFailure {
+  const VaultLockedOutFailure(super.message);
+}
+
 abstract interface class KeyStorageBackend {
   String get backendId;
   bool get isUnlocked;

@@ -21,15 +21,25 @@ class PhoneSecureVault implements KeyStorageBackend {
     BiometricSecretStore? biometricSecretStore,
     PinUnlockSession? session,
     Duration unlockTtl = const Duration(minutes: 5),
+    int maxUnlockAttempts = 5,
+    Duration unlockLockout = const Duration(minutes: 1),
+    DateTime Function()? now,
+    int pbkdf2Iterations = _defaultPinIterations,
     Random? random,
   }) : _store = store,
        _biometricAuth = biometricAuth ?? defaultBiometricAuthGateway(),
        _session = session ?? PinUnlockSession(ttl: unlockTtl),
+       _maxUnlockAttempts = maxUnlockAttempts,
+       _unlockLockout = unlockLockout,
+       _pinIterations = pbkdf2Iterations,
+       _now = now ?? _defaultNow,
        _random = random ?? Random.secure() {
     _biometricSecretStore =
         biometricSecretStore ??
         GatedBiometricSecretStore(store: store, biometricAuth: _biometricAuth);
   }
+
+  static DateTime _defaultNow() => DateTime.now().toUtc();
 
   static const String storageKey = 'wallet.phone_secure_vault.v1';
   static const String derivationPath = "m/44'/60'/0'/0/0";
@@ -41,14 +51,18 @@ class PhoneSecureVault implements KeyStorageBackend {
   // The at-rest seed is encrypted under a random data-encryption key (DEK); the
   // DEK is wrapped by a PIN-derived key. The PIN itself is never persisted.
   //
-  // NOTE: OWASP recommends >=600k PBKDF2-HMAC-SHA256 iterations. Raising this
-  // and adding offline-attempt throttling is tracked separately (S2); the
-  // at-rest strength is still ultimately bounded by PIN entropy.
-  static const int _pinIterations = 120000;
+  // PBKDF2-HMAC-SHA256 at the OWASP-recommended 600k iterations, paired with
+  // the failed-attempt lockout below. The at-rest strength is still ultimately
+  // bounded by PIN entropy. Injectable so tests can use a cheaper value.
+  static const int _defaultPinIterations = 600000;
 
   final SecureKeyValueStore _store;
   final BiometricAuthGateway _biometricAuth;
   final PinUnlockSession _session;
+  final int _maxUnlockAttempts;
+  final Duration _unlockLockout;
+  final int _pinIterations;
+  final DateTime Function() _now;
   final Random _random;
   final Cipher _cipher = AesGcm.with256bits();
   late final BiometricSecretStore _biometricSecretStore;
@@ -106,6 +120,7 @@ class PhoneSecureVault implements KeyStorageBackend {
     }
 
     final payload = await _requirePayload();
+    _assertNotLockedOut(payload);
 
     try {
       final dek = await _unwrapDek(payload: payload, pin: pin);
@@ -122,9 +137,11 @@ class PhoneSecureVault implements KeyStorageBackend {
         throw const InvalidPinFailure();
       }
 
+      await _resetUnlockThrottle(payload);
       return _cacheUnlockedMaterial(material);
     } catch (_) {
       lock();
+      await _registerFailedUnlock(payload);
       throw const InvalidPinFailure();
     }
   }
@@ -292,6 +309,48 @@ class PhoneSecureVault implements KeyStorageBackend {
     await _store.write(storageKey, jsonEncode(payload.toJson()));
   }
 
+  void _assertNotLockedOut(_VaultPayload payload) {
+    final lockedUntilIso = payload.lockoutUntilUtcIso;
+    if (lockedUntilIso == null) {
+      return;
+    }
+    final lockedUntil = DateTime.tryParse(lockedUntilIso)?.toUtc();
+    if (lockedUntil == null) {
+      return;
+    }
+    final nowUtc = _now();
+    if (nowUtc.isBefore(lockedUntil)) {
+      final remainingSeconds = lockedUntil.difference(nowUtc).inSeconds + 1;
+      throw VaultLockedOutFailure(
+        'Слишком много неверных попыток. Повторите через $remainingSeconds с.',
+      );
+    }
+  }
+
+  Future<void> _registerFailedUnlock(_VaultPayload payload) async {
+    final attempts = payload.failedUnlockAttempts + 1;
+    if (attempts >= _maxUnlockAttempts) {
+      await _writePayload(
+        payload.copyWith(
+          failedUnlockAttempts: 0,
+          lockoutUntilUtcIso: _now().add(_unlockLockout).toIso8601String(),
+        ),
+      );
+    } else {
+      await _writePayload(payload.copyWith(failedUnlockAttempts: attempts));
+    }
+  }
+
+  Future<void> _resetUnlockThrottle(_VaultPayload payload) async {
+    if (payload.failedUnlockAttempts == 0 &&
+        payload.lockoutUntilUtcIso == null) {
+      return;
+    }
+    await _writePayload(
+      payload.copyWith(failedUnlockAttempts: 0, clearLockout: true),
+    );
+  }
+
   Future<List<int>> _unwrapDek({
     required _VaultPayload payload,
     required String pin,
@@ -408,6 +467,8 @@ class _VaultPayload {
     required this.dekCipherTextHex,
     required this.dekMacHex,
     required this.biometricEnabled,
+    this.failedUnlockAttempts = 0,
+    this.lockoutUntilUtcIso,
   });
 
   factory _VaultPayload.fromJson(Map<String, dynamic> json) {
@@ -426,6 +487,8 @@ class _VaultPayload {
       dekCipherTextHex: json['dekCipherTextHex'] as String,
       dekMacHex: json['dekMacHex'] as String,
       biometricEnabled: json['biometricEnabled'] as bool? ?? false,
+      failedUnlockAttempts: json['failedUnlockAttempts'] as int? ?? 0,
+      lockoutUntilUtcIso: json['lockoutUntilUtcIso'] as String?,
     );
   }
 
@@ -443,8 +506,15 @@ class _VaultPayload {
   final String dekCipherTextHex;
   final String dekMacHex;
   final bool biometricEnabled;
+  final int failedUnlockAttempts;
+  final String? lockoutUntilUtcIso;
 
-  _VaultPayload copyWith({bool? biometricEnabled}) {
+  _VaultPayload copyWith({
+    bool? biometricEnabled,
+    int? failedUnlockAttempts,
+    String? lockoutUntilUtcIso,
+    bool clearLockout = false,
+  }) {
     return _VaultPayload(
       schemaVersion: schemaVersion,
       backendId: backendId,
@@ -460,6 +530,10 @@ class _VaultPayload {
       dekCipherTextHex: dekCipherTextHex,
       dekMacHex: dekMacHex,
       biometricEnabled: biometricEnabled ?? this.biometricEnabled,
+      failedUnlockAttempts: failedUnlockAttempts ?? this.failedUnlockAttempts,
+      lockoutUntilUtcIso: clearLockout
+          ? null
+          : (lockoutUntilUtcIso ?? this.lockoutUntilUtcIso),
     );
   }
 
@@ -479,6 +553,8 @@ class _VaultPayload {
       'dekCipherTextHex': dekCipherTextHex,
       'dekMacHex': dekMacHex,
       'biometricEnabled': biometricEnabled,
+      'failedUnlockAttempts': failedUnlockAttempts,
+      'lockoutUntilUtcIso': lockoutUntilUtcIso,
     };
   }
 }
