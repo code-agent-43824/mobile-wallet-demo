@@ -196,27 +196,24 @@ abstract interface class TransactionService {
   Future<SubmittedTransfer> submitSignedTransfer({
     required SignedTransfer signedTransfer,
     required TransactionBroadcaster broadcaster,
-  }) {
-    throw UnimplementedError(
-      'ReadOnlyTransactionService does not support submission',
-    );
-  }
+  });
 
   Future<TransactionReceipt> trackTransaction({
     required SubmittedTransfer submittedTransfer,
     required JsonRpcTransport rpcTransport,
-  }) {
-    throw UnimplementedError(
-      'ReadOnlyTransactionService does not support tracking',
-    );
-  }
+  });
 }
 
-class ReadOnlyTransactionService implements TransactionService {
-  const ReadOnlyTransactionService();
+class LocalTransactionService implements TransactionService {
+  const LocalTransactionService();
 
   static const double _fallbackBaseFeeGwei = 1.0;
   static const double _priorityFeeGwei = 1.5;
+  // Headroom over the current base fee so the tx stays includable across a few
+  // blocks of EIP-1559 base-fee growth (a rising base fee does not surface as
+  // an "underpriced" RPC error, so the retry/replacement path would not catch
+  // it). maxFeePerGas = baseFee * headroom + priorityFee.
+  static const double _baseFeeHeadroomMultiplier = 2.0;
   static const int _nativeTransferGasLimit = 21000;
   static const int _erc20TransferGasLimit = 65000;
 
@@ -296,10 +293,11 @@ class ReadOnlyTransactionService implements TransactionService {
         ? _nativeTransferGasLimit
         : _erc20TransferGasLimit;
     final maxPriorityFeePerGasWei = BigInt.from(
-      (1500000000 * gasMultiplier).round(),
+      (_priorityFeeGwei * 1000000000 * gasMultiplier).round(),
     );
+    final baseFeeGwei = snapshot.baseFeeGwei ?? _fallbackBaseFeeGwei;
     final maxFeePerGasGwei =
-        ((snapshot.baseFeeGwei ?? _fallbackBaseFeeGwei) + _priorityFeeGwei) *
+        (baseFeeGwei * _baseFeeHeadroomMultiplier + _priorityFeeGwei) *
         gasMultiplier;
     final maxFeePerGasWei = BigInt.from(
       (maxFeePerGasGwei * 1000000000).round(),

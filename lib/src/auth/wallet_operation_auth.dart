@@ -28,8 +28,14 @@ class AuthorizedWalletOperation {
   final WalletTransactionSigner signer;
 }
 
-class LocalKeyMaterialTransactionSigner implements WalletTransactionSigner {
-  const LocalKeyMaterialTransactionSigner({
+/// Base for signers that hold local [WalletMaterial] and produce the signature
+/// in-process. Both the phone-vault path and the (simulated) external-device
+/// path use this in the demo. A real hardware integration would add a signer
+/// that routes the prepared transaction to the device and returns the device's
+/// signature instead of signing locally.
+abstract class WalletMaterialTransactionSigner
+    implements WalletTransactionSigner {
+  const WalletMaterialTransactionSigner({
     required this.backendId,
     required this.walletMaterial,
   });
@@ -55,31 +61,23 @@ class LocalKeyMaterialTransactionSigner implements WalletTransactionSigner {
   }
 }
 
-class ExternalDeviceTransactionSigner implements WalletTransactionSigner {
-  const ExternalDeviceTransactionSigner({
-    required this.backendId,
-    required this.walletMaterial,
+class LocalKeyMaterialTransactionSigner
+    extends WalletMaterialTransactionSigner {
+  const LocalKeyMaterialTransactionSigner({
+    required super.backendId,
+    required super.walletMaterial,
   });
+}
 
-  @override
-  final String backendId;
-  final WalletMaterial walletMaterial;
-
-  @override
-  String get address => walletMaterial.address;
-
-  @override
-  SignedTransfer signPreparedTransfer({
-    required TransactionService transactionService,
-    required PreparedTransfer preparedTransfer,
-    required int nonce,
-  }) {
-    return transactionService.signPreparedTransfer(
-      preparedTransfer: preparedTransfer,
-      walletMaterial: walletMaterial,
-      nonce: nonce,
-    );
-  }
+/// Used when the active backend is the (simulated) external device. In this
+/// demo it still signs from locally held key material; the device session is
+/// exercised separately through the PKCS#11 sign operation before signing, and
+/// a real SDK would move signing onto the device entirely.
+class ExternalDeviceTransactionSigner extends WalletMaterialTransactionSigner {
+  const ExternalDeviceTransactionSigner({
+    required super.backendId,
+    required super.walletMaterial,
+  });
 }
 
 class WalletOperationAuthorizer {

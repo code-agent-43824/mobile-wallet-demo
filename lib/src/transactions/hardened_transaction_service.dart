@@ -45,7 +45,7 @@ class HardenedTransactionServiceImplementation
     required WalletChainSnapshot snapshot,
     required EvmNetworkConfig networkConfig,
   }) {
-    return const ReadOnlyTransactionService().availableAssets(
+    return const LocalTransactionService().availableAssets(
       snapshot: snapshot,
       networkConfig: networkConfig,
     );
@@ -59,7 +59,7 @@ class HardenedTransactionServiceImplementation
     required String amountText,
     required TransferAssetOption asset,
   }) {
-    return const ReadOnlyTransactionService().preparePreview(
+    return const LocalTransactionService().preparePreview(
       snapshot: snapshot,
       fromAddress: fromAddress,
       toAddress: toAddress,
@@ -77,7 +77,7 @@ class HardenedTransactionServiceImplementation
     required TransferAssetOption asset,
     double gasMultiplier = 1.0,
   }) {
-    return const ReadOnlyTransactionService().prepareTransfer(
+    return const LocalTransactionService().prepareTransfer(
       snapshot: snapshot,
       fromAddress: fromAddress,
       toAddress: toAddress,
@@ -93,7 +93,7 @@ class HardenedTransactionServiceImplementation
     required WalletMaterial walletMaterial,
     required int nonce,
   }) {
-    return const ReadOnlyTransactionService().signPreparedTransfer(
+    return const LocalTransactionService().signPreparedTransfer(
       preparedTransfer: preparedTransfer,
       walletMaterial: walletMaterial,
       nonce: nonce,
@@ -105,7 +105,7 @@ class HardenedTransactionServiceImplementation
     required SignedTransfer signedTransfer,
     required TransactionBroadcaster broadcaster,
   }) {
-    return const ReadOnlyTransactionService().submitSignedTransfer(
+    return const LocalTransactionService().submitSignedTransfer(
       signedTransfer: signedTransfer,
       broadcaster: broadcaster,
     );

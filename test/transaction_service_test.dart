@@ -5,7 +5,7 @@ import 'package:mobile_wallet_demo/src/key_storage/key_storage_backend.dart';
 import 'package:mobile_wallet_demo/src/transactions/transaction_service.dart';
 
 void main() {
-  const service = ReadOnlyTransactionService();
+  const service = LocalTransactionService();
   const network = EvmNetwork.ethereumMainnet;
 
   WalletChainSnapshot buildSnapshot() {
