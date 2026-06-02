@@ -39,7 +39,7 @@
 
 ## Версионирование
 
-- Текущая версия: `v1.6.0+17`
+- Текущая версия: `v1.9.0+20`
 - По договорённости в этом проекте дальше повышаем minor-версию с каждым функциональным шагом
 
 ## Что покрывает текущий этап
@@ -70,6 +70,8 @@
 - foundation для multi-backend runtime: selection model + backend-compatible signing/auth contracts
 - simulated external-device flow: backend selection, device-style lock/unlock UX и отдельный signer runtime path
 - mock device lifecycle: online/offline availability, reconnect, session disconnect и error-state handling для external backend
+- security hardening: DEK-схема хранения seed (PIN не персистится), биометрия через отдельный gated secret store, PBKDF2 600k + lockout после серии неверных PIN
+- transaction-layer cleanup: общий базовый signer, запас по base fee, тесты на failure-отправку и реконсиляцию nonce
 
 ## Артефакты CI
 

@@ -16,6 +16,8 @@ Current factual status of the project:
 - ✅ Phase 7 is completed as a foundation layer: backend selection model, backend-compatible signing/auth contracts, demo external-device runtime path, mock device lifecycle, and mock PKCS#11 session/operation contracts are in place; real NFC SDK integration is intentionally still out of scope for this phase
 - ⏳ Phase 8 is not started yet
 
+> **Current stopping point — v1.9.0+20.** Phases 0–7 are complete. On top of the already-complete phases, two hardening passes shipped: **v1.8** (phone-vault security rework — DEK-based at-rest encryption, the PIN is no longer persisted, biometric unlock moved to a dedicated gated secret store) and **v1.9** (PBKDF2 raised to 600k + failed-unlock lockout, transaction-layer cleanup, base-fee headroom, extra send-failure / nonce-reconciliation tests). The next net-new work is **Phase 8** (WalletConnect v2 + AirGap contracts, external signing/session state model).
+
 Completed deliverables so far:
 - ✅ project module structure started (`auth`, `key_storage`)
 - ✅ interfaces for key storage backends
@@ -132,6 +134,12 @@ This keeps the UX compatible with future support for an external NFC hardware si
 - `TokenBalanceService`
 - `HistoryService`
 - `TransactionService`
+
+### As built (reality vs. the recommendation above)
+The shipped code deliberately consolidated the recommendation, so a new agent should not expect to find all of the modules/interfaces above:
+- Modules under `lib/src/`: `auth/`, `blockchain/`, `key_storage/`, `transactions/` plus a single UI orchestrator `wallet_flow_screen.dart`. There is **no** separate `wallet_core/` or `ui/` module — domain orchestration currently lives inside the UI widget.
+- `KeyStorageBackend`, `BlockchainProvider`, and `TransactionService` exist as designed. `AuthGate` / `WalletRepository` / `TokenBalanceService` / `HistoryService` were **not** created as separate interfaces: auth is split across `BiometricAuthGateway` + `WalletOperationAuthorizer`, and token/history reads are folded into `BlockchainProvider.loadSnapshot` (`WalletChainSnapshot`).
+- Treat `CLAUDE.md` as the accurate map of the current code; this section is the original aspiration, not the present layout.
 
 ## Development roadmap
 
@@ -256,6 +264,10 @@ Deliverables:
 - [ ] protocol integration contracts for AirGap
 - [ ] state model prepared for external signing/session flows
 
+Starting points for the next agent:
+- The signing seam already exists: a WalletConnect/AirGap session-driven signer plugs in via `WalletTransactionSigner` / `WalletOperationAuthorizer` (`auth/wallet_operation_auth.dart`), alongside the local and external-device signers.
+- The external-device demo (`key_storage/external_device_demo_backend.dart` + `external_device_pkcs11.dart`) is the closest precedent for a session/lifecycle state model to mirror for remote-signing flows.
+
 ## Suggested release sequence
 - `v0.3` — architecture skeleton + secure vault foundation
 - `v0.4` — onboarding/auth shell + create/import UI + one-time seed display flow
@@ -272,6 +284,8 @@ Deliverables:
 - `v1.5` — simulated external-device runtime path and separate UX branch for Phase 7
 - `v1.6` — mock device lifecycle: online/offline, reconnect, session disconnect, and error-state handling
 - `v1.7` — mock PKCS#11 session/operation contracts and logical completion of Phase 7 foundation
+- `v1.8` — phone-vault security hardening: DEK-based at-rest scheme, PIN never persisted, biometric secret moved to a dedicated gated store
+- `v1.9` — PBKDF2 raised to 600k with failed-unlock lockout; transaction-layer cleanup (shared signer base, removed misleading defaults, `LocalTransactionService` rename), base-fee headroom; added send-failure and nonce-reconciliation tests
 
 ## Non-goals for now
 - no hardware-device SDK implementation yet
