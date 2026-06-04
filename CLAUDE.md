@@ -8,6 +8,16 @@ Flutter demo of a mobile EVM crypto wallet targeting Android, iOS, and Windows x
 
 `docs/development-plan.md` is the canonical roadmap and source of truth for scope and phase status. Phase 7 (external-device foundation) is complete; Phase 8 (WalletConnect v2, AirGap) is not started.
 
+## Multi-agent working agreement
+
+This repo is worked on by multiple coding agents (Claude Code and others), sometimes in parallel — so **document first, then code, then record**:
+
+1. Before a chunk of work (even a small one), write the plan in `docs/worklog.md` (and update `docs/development-plan.md` if it's roadmap-level).
+2. Do the work.
+3. Record results **in the same change**: the worklog entry's *Done* + *Next / open*, the plan's status, and any docs that drifted.
+
+The next agent should be able to tell what was planned, what was done, and what's next **from the docs alone** — not the diff. `AGENTS.md` is the full agreement and cross-tool entry point; `docs/development-plan.md` is the source of truth for phase status; `docs/worklog.md` is the granular running log.
+
 ## Commands
 
 Toolchain is pinned in `.github/workflows/ci.yml`: **Flutter 3.41.7**, Dart SDK `^3.11.0`, Java 17.
@@ -60,7 +70,7 @@ Code lives under `lib/src/`, split into layers: `auth/`, `blockchain/`, `key_sto
 
 ## Conventions & gotchas
 
-- **Version is duplicated in two files and asserted by a test.** `pubspec.yaml` (`version:`) and `lib/src/app_version.dart` (`appVersion`/`appVersionLabel`) must stay in sync, and `test/widget_test.dart` asserts the on-screen label (e.g. `find.text('v1.8.0+19')`). When bumping the version, update all three. Project convention (per README) is to **bump the minor version with each functional step**.
+- **The app version is duplicated across several files — keep them in sync.** `pubspec.yaml` (`version:`) is the source; `lib/src/app_version.dart` (`appVersion`/`appVersionLabel`) must match, `test/widget_test.dart` asserts the on-screen `appVersionLabel`, and both `README.md` and the `docs/development-plan.md` "Current stopping point" also state it. When bumping, update all of them. Project convention (per README) is to **bump the minor version with each functional step**.
 - **Commit messages** follow Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `style:`.
 - **UI text and many error messages are Russian.** Widget tests locate elements by Russian strings — keep them consistent when editing UI.
 - Keep `docs/development-plan.md` phase status in sync when completing roadmap items (existing `docs:` commits do this).

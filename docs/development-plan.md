@@ -16,7 +16,7 @@ Current factual status of the project:
 - ✅ Phase 7 is completed as a foundation layer: backend selection model, backend-compatible signing/auth contracts, demo external-device runtime path, mock device lifecycle, and mock PKCS#11 session/operation contracts are in place; real NFC SDK integration is intentionally still out of scope for this phase
 - ⏳ Phase 8 is not started yet
 
-> **Current stopping point — v1.9.0+20.** Phases 0–7 are complete. On top of the already-complete phases, two hardening passes shipped: **v1.8** (phone-vault security rework — DEK-based at-rest encryption, the PIN is no longer persisted, biometric unlock moved to a dedicated gated secret store) and **v1.9** (PBKDF2 raised to 600k + failed-unlock lockout, transaction-layer cleanup, base-fee headroom, extra send-failure / nonce-reconciliation tests). The next net-new work is **Phase 8** (WalletConnect v2 + AirGap contracts, external signing/session state model).
+> **Current stopping point — v1.10.0+21.** Phases 0–7 are complete. On top of the already-complete phases, three hardening/maintenance passes shipped: **v1.8** (phone-vault security rework — DEK-based at-rest encryption, the PIN is no longer persisted, biometric unlock moved to a dedicated gated secret store), **v1.9** (PBKDF2 raised to 600k + failed-unlock lockout, transaction-layer cleanup, base-fee headroom, extra send-failure / nonce-reconciliation tests), and **v1.10** (at-rest payload schema validation + defensive parsing with resilient startup; `wallet_flow_screen.dart` split into `part` files; cross-agent docs + working agreement). The next net-new work is **Phase 8** (WalletConnect v2 + AirGap contracts, external signing/session state model).
 
 Completed deliverables so far:
 - ✅ project module structure started (`auth`, `key_storage`)
@@ -286,6 +286,7 @@ Starting points for the next agent:
 - `v1.7` — mock PKCS#11 session/operation contracts and logical completion of Phase 7 foundation
 - `v1.8` — phone-vault security hardening: DEK-based at-rest scheme, PIN never persisted, biometric secret moved to a dedicated gated store
 - `v1.9` — PBKDF2 raised to 600k with failed-unlock lockout; transaction-layer cleanup (shared signer base, removed misleading defaults, `LocalTransactionService` rename), base-fee headroom; added send-failure and nonce-reconciliation tests
+- `v1.10` — at-rest vault payload schema validation + defensive parsing (resilient startup); `wallet_flow_screen.dart` split into part files; cross-agent docs (`AGENTS.md`, `docs/worklog.md`) and the document-first working agreement
 
 ## Non-goals for now
 - no hardware-device SDK implementation yet
