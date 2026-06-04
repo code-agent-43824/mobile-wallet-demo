@@ -33,7 +33,7 @@ CI (`ci.yml`) runs `validate` (format check → analyze → test) and only then 
 
 ## Architecture
 
-Code lives under `lib/src/`, split into layers: `auth/`, `blockchain/`, `key_storage/`, `transactions/`, plus the single UI orchestrator `wallet_flow_screen.dart`. `main.dart` → `app.dart` (`MobileWalletDemoApp`) → `WalletFlowScreen`.
+Code lives under `lib/src/`, split into layers: `auth/`, `blockchain/`, `key_storage/`, `transactions/`, plus the UI orchestrator `wallet_flow_screen.dart` (its presentational widgets live in `wallet_flow_screen_*.dart` `part` files). `main.dart` → `app.dart` (`MobileWalletDemoApp`) → `WalletFlowScreen`.
 
 ### Dependency injection is the testing seam
 
@@ -54,9 +54,9 @@ Code lives under `lib/src/`, split into layers: `auth/`, `blockchain/`, `key_sto
 
 `TransactionService` (`transactions/transaction_service.dart`) defines prepare-preview / prepare / sign (local EIP-1559) / submit / track. `LocalTransactionService` implements preparation + signing. `HardenedTransactionServiceImplementation` (the wired-in production service) delegates those to `LocalTransactionService` and adds `submitAuthorizedTransferFlow`: **load nonce → sign → broadcast → track**, retrying on retryable nonce/underpriced RPC errors with a gas bump (×1.15) for replacement. `TransactionTracker` polls `eth_getTransactionReceipt` across RPCs; the UI runs tracking asynchronously so the send screen is not blocked while awaiting a receipt. Signing goes through a `WalletTransactionSigner` (`auth/wallet_operation_auth.dart`) produced by `WalletOperationAuthorizer` — an indirection that keeps signing backend-agnostic for the future external signer.
 
-### UI: one stateful state-machine screen
+### UI: one stateful state-machine screen, split across part files
 
-`WalletFlowScreen` is a large (~2200-line) `StatefulWidget` driven by the `WalletFlowStage` enum (`loading → welcome → createWallet/importWallet → showSeed → biometricPrompt → locked → unlocked`). It owns the `PhoneSecureVault`, `ExternalDeviceDemoBackend`, and `WalletBackendRegistry` instances and branches its UX when the active backend is the external device.
+`WalletFlowScreen` (`wallet_flow_screen.dart`, ~560 lines) is the `StatefulWidget` orchestrator driven by the `WalletFlowStage` enum (`loading → welcome → createWallet/importWallet → showSeed → biometricPrompt → locked → unlocked`). It owns the `PhoneSecureVault`, `ExternalDeviceDemoBackend`, and `WalletBackendRegistry` instances and branches its UX when the active backend is the external device. The presentational stage widgets stay library-private but live in `part` files of the same library: `wallet_flow_screen_widgets.dart` (shared leaf widgets + header), `wallet_flow_screen_onboarding.dart` (welcome/pin/import/seed/biometric/locked stages), and `wallet_flow_screen_unlocked.dart` (the unlocked dashboard + send/sign/track section). The `part` files share the orchestrator's imports — add new imports to `wallet_flow_screen.dart`.
 
 ## Conventions & gotchas
 
