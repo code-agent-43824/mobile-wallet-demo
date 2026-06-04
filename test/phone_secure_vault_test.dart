@@ -140,5 +140,21 @@ void main() {
       final material = await vault.unlock(pin: '123456');
       expect(material.address, startsWith('0x'));
     });
+
+    test('surfaces a typed failure for an unsupported schema version', () async {
+      await store.write(PhoneSecureVault.storageKey, '{"schemaVersion": 2}');
+      await expectLater(
+        vault.getWalletSummary(),
+        throwsA(isA<UnsupportedVaultSchemaFailure>()),
+      );
+    });
+
+    test('surfaces a typed failure for a corrupt payload', () async {
+      await store.write(PhoneSecureVault.storageKey, 'definitely not json');
+      await expectLater(
+        vault.getWalletSummary(),
+        throwsA(isA<CorruptVaultPayloadFailure>()),
+      );
+    });
   });
 }

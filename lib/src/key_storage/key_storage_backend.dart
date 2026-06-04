@@ -64,6 +64,18 @@ class VaultLockedOutFailure extends VaultFailure {
   const VaultLockedOutFailure(super.message);
 }
 
+class CorruptVaultPayloadFailure extends VaultFailure {
+  const CorruptVaultPayloadFailure()
+    : super('Stored wallet payload is corrupt or unreadable.');
+}
+
+class UnsupportedVaultSchemaFailure extends VaultFailure {
+  const UnsupportedVaultSchemaFailure(this.schemaVersion)
+    : super('Stored wallet uses an unsupported schema version.');
+
+  final int schemaVersion;
+}
+
 abstract interface class KeyStorageBackend {
   String get backendId;
   bool get isUnlocked;

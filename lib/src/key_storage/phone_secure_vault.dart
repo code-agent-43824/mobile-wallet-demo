@@ -47,6 +47,7 @@ class PhoneSecureVault implements KeyStorageBackend {
   static const int _pinSaltLength = 16;
   static const int _cipherNonceLength = 12;
   static const int _dekLength = 32;
+  static const int _currentSchemaVersion = 3;
 
   // The at-rest seed is encrypted under a random data-encryption key (DEK); the
   // DEK is wrapped by a PIN-derived key. The PIN itself is never persisted.
@@ -268,7 +269,7 @@ class PhoneSecureVault implements KeyStorageBackend {
     );
 
     final payload = _VaultPayload(
-      schemaVersion: 3,
+      schemaVersion: _currentSchemaVersion,
       backendId: backendId,
       address: material.address,
       createdAtUtc: DateTime.now().toUtc().toIso8601String(),
@@ -294,7 +295,32 @@ class PhoneSecureVault implements KeyStorageBackend {
       return null;
     }
 
-    return _VaultPayload.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    final Map<String, dynamic> decoded;
+    try {
+      final parsed = jsonDecode(raw);
+      if (parsed is! Map<String, dynamic>) {
+        throw const CorruptVaultPayloadFailure();
+      }
+      decoded = parsed;
+    } on VaultFailure {
+      rethrow;
+    } catch (_) {
+      throw const CorruptVaultPayloadFailure();
+    }
+
+    final schemaVersion = decoded['schemaVersion'];
+    if (schemaVersion is! int) {
+      throw const CorruptVaultPayloadFailure();
+    }
+    if (schemaVersion != _currentSchemaVersion) {
+      throw UnsupportedVaultSchemaFailure(schemaVersion);
+    }
+
+    try {
+      return _VaultPayload.fromJson(decoded);
+    } catch (_) {
+      throw const CorruptVaultPayloadFailure();
+    }
   }
 
   Future<_VaultPayload> _requirePayload() async {
