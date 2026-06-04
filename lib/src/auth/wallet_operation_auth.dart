@@ -1,13 +1,15 @@
+import 'dart:typed_data';
+
 import '../key_storage/key_storage_backend.dart';
 import '../transactions/transaction_service.dart';
 
-enum WalletAuthMethod { pin, biometric, externalDevice }
+enum WalletAuthMethod { pin, biometric, externalDevice, remoteSession }
 
 abstract interface class WalletTransactionSigner {
   String get backendId;
   String get address;
 
-  SignedTransfer signPreparedTransfer({
+  Future<SignedTransfer> signPreparedTransfer({
     required TransactionService transactionService,
     required PreparedTransfer preparedTransfer,
     required int nonce,
@@ -48,11 +50,13 @@ abstract class WalletMaterialTransactionSigner
   String get address => walletMaterial.address;
 
   @override
-  SignedTransfer signPreparedTransfer({
+  Future<SignedTransfer> signPreparedTransfer({
     required TransactionService transactionService,
     required PreparedTransfer preparedTransfer,
     required int nonce,
-  }) {
+  }) async {
+    // Local signing is synchronous; the async contract lets remote/external
+    // signers (WalletConnect, AirGap) implement the same seam.
     return transactionService.signPreparedTransfer(
       preparedTransfer: preparedTransfer,
       walletMaterial: walletMaterial,
@@ -78,6 +82,60 @@ class ExternalDeviceTransactionSigner extends WalletMaterialTransactionSigner {
     required super.backendId,
     required super.walletMaterial,
   });
+}
+
+/// Obtains a signed transaction from an external party (a connected
+/// WalletConnect wallet, an offline AirGap device, ...). It never holds the
+/// private key: it hands the prepared transaction to the external signer and
+/// returns the raw signed transaction bytes. WalletConnect (chunk C) and AirGap
+/// (chunk D) will provide concrete implementations.
+abstract interface class RemoteSigningTransport {
+  /// Short label of the transport, e.g. `walletconnect` or `airgap`.
+  String get label;
+
+  Future<Uint8List> requestSignedTransaction({
+    required PreparedTransfer preparedTransfer,
+    required int nonce,
+    required String fromAddress,
+  });
+}
+
+/// Async signer backed by a [RemoteSigningTransport]. Holds no key material; it
+/// asks the transport to sign and assembles the resulting [SignedTransfer] via
+/// [TransactionService.assembleSignedTransfer].
+class RemoteWalletTransactionSigner implements WalletTransactionSigner {
+  const RemoteWalletTransactionSigner({
+    required this.backendId,
+    required this.address,
+    required this.transport,
+  });
+
+  @override
+  final String backendId;
+
+  @override
+  final String address;
+
+  final RemoteSigningTransport transport;
+
+  @override
+  Future<SignedTransfer> signPreparedTransfer({
+    required TransactionService transactionService,
+    required PreparedTransfer preparedTransfer,
+    required int nonce,
+  }) async {
+    final rawSigned = await transport.requestSignedTransaction(
+      preparedTransfer: preparedTransfer,
+      nonce: nonce,
+      fromAddress: address,
+    );
+    return transactionService.assembleSignedTransfer(
+      preparedTransfer: preparedTransfer,
+      rawSignedTransaction: rawSigned,
+      signingNote:
+          'Транзакция подписана внешним signer через ${transport.label}.',
+    );
+  }
 }
 
 class WalletOperationAuthorizer {
@@ -114,6 +172,27 @@ class WalletOperationAuthorizer {
       signer: ExternalDeviceTransactionSigner(
         backendId: backend.backendId,
         walletMaterial: walletMaterial,
+      ),
+    );
+  }
+
+  /// Authorizes signing through an external session-driven signer (WalletConnect
+  /// / AirGap). Unlike the local/external-device paths this does not unlock a
+  /// local vault — the key lives with the remote party, and connection-state
+  /// checks belong to the transport's own session model.
+  AuthorizedWalletOperation authorizeRemoteSigning({
+    required String backendId,
+    required String address,
+    required RemoteSigningTransport transport,
+  }) {
+    return AuthorizedWalletOperation(
+      backendId: backendId,
+      address: address,
+      authMethod: WalletAuthMethod.remoteSession,
+      signer: RemoteWalletTransactionSigner(
+        backendId: backendId,
+        address: address,
+        transport: transport,
       ),
     );
   }

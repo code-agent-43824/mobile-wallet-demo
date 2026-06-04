@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile_wallet_demo/src/auth/wallet_operation_auth.dart';
 import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
 import 'package:mobile_wallet_demo/src/key_storage/key_storage_backend.dart';
@@ -140,6 +143,41 @@ void main() {
       isNot(equals(attempts.last.rawTransactionHex)),
     );
   });
+
+  test('submits via an async remote signer through the same flow', () async {
+    final attempts = <SignedTransfer>[];
+    final tracker = TransactionTracker(
+      rpcTransport: _FakeTrackingTransport(),
+      pollInterval: Duration.zero,
+      maxAttempts: 1,
+    );
+
+    final result = await service.submitAuthorizedTransferFlow(
+      snapshot: buildSnapshot(),
+      fromAddress: sender,
+      toAddress: recipient,
+      amountText: '0.1',
+      asset: service
+          .availableAssets(
+            snapshot: buildSnapshot(),
+            networkConfig: evmNetworkConfigs[network]!,
+          )
+          .first,
+      signer: RemoteWalletTransactionSigner(
+        backendId: 'demo-remote',
+        address: sender,
+        transport: _LocalDelegatingTransport(walletMaterial),
+      ),
+      broadcaster: _OkBroadcaster(attempts),
+      nonceProvider: _StaticNonceProvider(),
+      tracker: tracker,
+    );
+
+    expect(result.attempts, 1);
+    expect(attempts, hasLength(1));
+    expect(result.submittedTransfer.networkTransactionHash, isNotEmpty);
+    expect(result.signedTransfer.signingNote, contains('demo-remote'));
+  });
 }
 
 class _StaticNonceProvider implements NonceProvider {
@@ -260,5 +298,47 @@ class _NonceTooLowThenOkBroadcaster implements TransactionBroadcaster {
       networkTransactionHash: signedTransfer.transactionHashHex,
       submittedAtUtc: DateTime.utc(2026, 5, 1, 6, 44),
     );
+  }
+}
+
+class _OkBroadcaster implements TransactionBroadcaster {
+  _OkBroadcaster(this.attempts);
+
+  final List<SignedTransfer> attempts;
+
+  @override
+  Future<SubmittedTransfer> submit({
+    required SignedTransfer signedTransfer,
+  }) async {
+    attempts.add(signedTransfer);
+    return SubmittedTransfer(
+      signedTransfer: signedTransfer,
+      providerLabel: 'broadcast.fake',
+      networkTransactionHash: signedTransfer.transactionHashHex,
+      submittedAtUtc: DateTime.utc(2026, 5, 1, 6, 44),
+    );
+  }
+}
+
+class _LocalDelegatingTransport implements RemoteSigningTransport {
+  _LocalDelegatingTransport(this.material);
+
+  final WalletMaterial material;
+
+  @override
+  String get label => 'demo-remote';
+
+  @override
+  Future<Uint8List> requestSignedTransaction({
+    required PreparedTransfer preparedTransfer,
+    required int nonce,
+    required String fromAddress,
+  }) async {
+    final signed = const LocalTransactionService().signPreparedTransfer(
+      preparedTransfer: preparedTransfer,
+      walletMaterial: material,
+      nonce: nonce,
+    );
+    return signed.rawTransactionBytes;
   }
 }

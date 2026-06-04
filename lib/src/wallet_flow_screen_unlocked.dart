@@ -125,6 +125,7 @@ class _UnlockedStageState extends State<_UnlockedStage> {
             WalletAuthMethod.pin => 'PIN',
             WalletAuthMethod.biometric => 'Biometric unlock',
             WalletAuthMethod.externalDevice => 'External device',
+            WalletAuthMethod.remoteSession => 'Remote session',
           },
         ),
         const SizedBox(height: 10),

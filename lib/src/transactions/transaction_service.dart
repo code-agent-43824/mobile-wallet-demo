@@ -193,6 +193,15 @@ abstract interface class TransactionService {
     required int nonce,
   });
 
+  /// Assembles a [SignedTransfer] from a raw signed transaction produced
+  /// externally (e.g. by a WalletConnect/AirGap signer), without local key
+  /// material. The transaction hash is derived from [rawSignedTransaction].
+  SignedTransfer assembleSignedTransfer({
+    required PreparedTransfer preparedTransfer,
+    required Uint8List rawSignedTransaction,
+    String? signingNote,
+  });
+
   Future<SubmittedTransfer> submitSignedTransfer({
     required SignedTransfer signedTransfer,
     required TransactionBroadcaster broadcaster,
@@ -402,6 +411,25 @@ class LocalTransactionService implements TransactionService {
       transactionHashHex: transactionHashHex,
       signingNote:
           'Транзакция локально подписана. Для этой операции PIN нужен только один раз на весь high-level signing flow.',
+    );
+  }
+
+  @override
+  SignedTransfer assembleSignedTransfer({
+    required PreparedTransfer preparedTransfer,
+    required Uint8List rawSignedTransaction,
+    String? signingNote,
+  }) {
+    return SignedTransfer(
+      preview: preparedTransfer.preview,
+      networkConfig: preparedTransfer.networkConfig,
+      rawTransactionBytes: rawSignedTransaction,
+      rawTransactionHex: bytesToHex(rawSignedTransaction, include0x: true),
+      transactionHashHex: bytesToHex(
+        keccak256(rawSignedTransaction),
+        include0x: true,
+      ),
+      signingNote: signingNote ?? 'Транзакция собрана из внешней подписи.',
     );
   }
 

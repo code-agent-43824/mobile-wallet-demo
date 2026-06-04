@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../auth/wallet_operation_auth.dart';
 import '../blockchain/blockchain_provider.dart';
 import '../blockchain/network_config.dart';
@@ -101,6 +103,19 @@ class HardenedTransactionServiceImplementation
   }
 
   @override
+  SignedTransfer assembleSignedTransfer({
+    required PreparedTransfer preparedTransfer,
+    required Uint8List rawSignedTransaction,
+    String? signingNote,
+  }) {
+    return const LocalTransactionService().assembleSignedTransfer(
+      preparedTransfer: preparedTransfer,
+      rawSignedTransaction: rawSignedTransaction,
+      signingNote: signingNote,
+    );
+  }
+
+  @override
   Future<SubmittedTransfer> submitSignedTransfer({
     required SignedTransfer signedTransfer,
     required TransactionBroadcaster broadcaster,
@@ -187,7 +202,7 @@ class HardenedTransactionServiceImplementation
         networkConfig: preparedTransfer.networkConfig,
         address: fromAddress,
       );
-      final signedTransfer = signer.signPreparedTransfer(
+      final signedTransfer = await signer.signPreparedTransfer(
         transactionService: this,
         preparedTransfer: preparedTransfer,
         nonce: loadedNonce.nonce,

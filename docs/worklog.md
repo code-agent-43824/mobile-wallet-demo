@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-06-04 — Phase 8 / chunk A: async remote signing seam — branch claude/wonderful-rubin-eBDKZ — in progress
+## 2026-06-04 — Phase 8 / chunk A: async remote signing seam — branch claude/wonderful-rubin-eBDKZ — done
 - Plan:
   - Make `WalletTransactionSigner.signPreparedTransfer` async (`Future<SignedTransfer>`);
     the local signers wrap the existing synchronous signing, so the local path is unchanged.
@@ -34,9 +34,18 @@ Entry template:
     path and an end-to-end remote path via a fake transport; bump the version.
   - Out of scope for chunk A: real WC/AirGap protocols and deep signed-tx field validation
     (RLP decode + compare against the prepared tx) — flagged as follow-up for chunks C/D.
-- Done: (pending)
-- Next / open: (pending)
-- Refs: (pending)
+- Done: the signer contract is now async (`Future<SignedTransfer>`); local/external-device signers
+  wrap the synchronous local signing and the hardened flow awaits it (local path unchanged). Added the
+  remote foundation: `RemoteSigningTransport`, `RemoteWalletTransactionSigner`,
+  `WalletOperationAuthorizer.authorizeRemoteSigning`, `WalletAuthMethod.remoteSession`, and
+  `TransactionService.assembleSignedTransfer` (impl in `LocalTransactionService`, delegated by the hardened
+  service). Updated the unlocked-view auth-method switch. Tests: unit (`authorizeRemoteSigning` type +
+  auth method) and e2e (async remote signer through `submitAuthorizedTransferFlow` via a local-delegating
+  transport). Bumped to v1.11.0+22.
+- Next / open: chunk B (session/lifecycle state model for external signing), then C (WalletConnect v2
+  contract) and D (AirGap contract). Deep signed-tx field validation (RLP decode + compare against the
+  prepared tx) is still deferred to C/D.
+- Refs: 4c8a1ee (plan); this commit.
 
 ## 2026-06-04 — Cursor/Copilot pointer files — branch claude/wonderful-rubin-eBDKZ — done
 - Plan: add thin pointer files for non-Claude tools so they also follow the working

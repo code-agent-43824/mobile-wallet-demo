@@ -1,6 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/auth/wallet_operation_auth.dart';
 import 'package:mobile_wallet_demo/src/key_storage/key_storage_backend.dart';
+import 'package:mobile_wallet_demo/src/transactions/transaction_service.dart';
 
 void main() {
   test(
@@ -60,6 +63,20 @@ void main() {
       ),
       throwsA(isA<VaultFailure>()),
     );
+  });
+
+  test('authorizes remote signing through a session transport', () {
+    const authorizer = WalletOperationAuthorizer();
+    final operation = authorizer.authorizeRemoteSigning(
+      backendId: 'walletconnect',
+      address: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+      transport: _StubRemoteSigningTransport(),
+    );
+
+    expect(operation.backendId, 'walletconnect');
+    expect(operation.address, '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
+    expect(operation.authMethod, WalletAuthMethod.remoteSession);
+    expect(operation.signer, isA<RemoteWalletTransactionSigner>());
   });
 }
 
@@ -130,4 +147,18 @@ class _FakeUnlockedExternalBackend extends _FakeUnlockedBackend
 class _FakeLockedBackend extends _FakeUnlockedBackend {
   @override
   bool get isUnlocked => false;
+}
+
+class _StubRemoteSigningTransport implements RemoteSigningTransport {
+  @override
+  String get label => 'stub';
+
+  @override
+  Future<Uint8List> requestSignedTransaction({
+    required PreparedTransfer preparedTransfer,
+    required int nonce,
+    required String fromAddress,
+  }) async {
+    return Uint8List.fromList(const [1, 2, 3]);
+  }
 }
