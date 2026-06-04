@@ -18,6 +18,26 @@ Entry template:
 
 ---
 
+## 2026-06-04 — Phase 8 / chunk A: async remote signing seam — branch claude/wonderful-rubin-eBDKZ — in progress
+- Plan:
+  - Make `WalletTransactionSigner.signPreparedTransfer` async (`Future<SignedTransfer>`);
+    the local signers wrap the existing synchronous signing, so the local path is unchanged.
+    `submitAuthorizedTransferFlow` / `submitTransferFlow` await it.
+  - Add the remote-signer foundation that WC (chunk C) and AirGap (chunk D) will build on:
+    `RemoteSigningTransport` (returns a raw signed tx from an external party),
+    `RemoteWalletTransactionSigner` (async, holds no key material),
+    `WalletOperationAuthorizer.authorizeRemoteSigning(...)`, and `WalletAuthMethod.remoteSession`.
+  - Add `TransactionService.assembleSignedTransfer(preparedTransfer, rawSignedTransaction)` so a
+    remote signer can build a `SignedTransfer` from externally-provided raw bytes without
+    duplicating crypto (impl in `LocalTransactionService`, delegated by the hardened service).
+  - Update the `WalletAuthMethod` switch in the unlocked view; add tests for the async local
+    path and an end-to-end remote path via a fake transport; bump the version.
+  - Out of scope for chunk A: real WC/AirGap protocols and deep signed-tx field validation
+    (RLP decode + compare against the prepared tx) — flagged as follow-up for chunks C/D.
+- Done: (pending)
+- Next / open: (pending)
+- Refs: (pending)
+
 ## 2026-06-04 — Cursor/Copilot pointer files — branch claude/wonderful-rubin-eBDKZ — done
 - Plan: add thin pointer files for non-Claude tools so they also follow the working
   agreement, without duplicating it (avoid drift).

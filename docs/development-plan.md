@@ -257,7 +257,7 @@ Deliverables:
 ## Phase 8 — future extension points
 Goal: reserve clean extension paths.
 
-Status: ⏳ Not started
+Status: 🚧 In progress — foundation first. Started with **chunk A: an async/remote signing seam** so WalletConnect/AirGap (async, external-party) signers fit alongside the local one. The full chunk breakdown (A→G) and per-chunk progress live in `docs/worklog.md`.
 
 Deliverables:
 - [ ] protocol integration contracts for WalletConnect v2
