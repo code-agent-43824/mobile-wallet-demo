@@ -18,6 +18,16 @@ Entry template:
 
 ---
 
+## 2026-06-04 — Cursor/Copilot pointer files — branch claude/wonderful-rubin-eBDKZ — done
+- Plan: add thin pointer files for non-Claude tools so they also follow the working
+  agreement, without duplicating it (avoid drift).
+- Done: added `.github/copilot-instructions.md` and `.cursor/rules/working-agreement.mdc`,
+  both pointing at `AGENTS.md` as the canonical source (core rule + docs map + CI/format
+  note only). Completes the open item from the previous entry. Docs/config only, no version bump.
+- Next / open: **Phase 8** (WalletConnect v2 + AirGap contracts, external signing/session
+  state model) — to be started next session, document-first in the plan/worklog.
+- Refs: this commit.
+
 ## 2026-06-04 — Cross-agent docs + working agreement — branch claude/wonderful-rubin-eBDKZ — done
 - Plan: make the repo legible to other agents picking up work; persist the
   "document first, then code, then record" rule; fix doc drift found in analysis.

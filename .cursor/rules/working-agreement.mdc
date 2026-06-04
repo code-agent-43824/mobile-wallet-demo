@@ -1,0 +1,21 @@
+---
+description: Repo working agreement and docs map (canonical source is AGENTS.md)
+alwaysApply: true
+---
+
+Authoritative agent guidance for this repo is in `AGENTS.md` (read first), with the code
+map in `CLAUDE.md` and the roadmap in `docs/development-plan.md`. This rule is a pointer —
+keep the real rules in `AGENTS.md` to avoid drift.
+
+Working agreement — document first, then code, then record:
+
+1. Before a change (even small), write the plan in `docs/worklog.md` (and update
+   `docs/development-plan.md` if it's roadmap-level).
+2. Do the work.
+3. Record results in the same change: worklog *Done* + *Next / open*, the plan's status,
+   and fix any docs that drifted.
+
+The next agent should understand what was planned, what shipped, and what's next from the
+docs alone. Run `dart format .` before committing (CI: format → analyze → test). Develop
+on a feature branch. The app version is duplicated — see the sync list in `AGENTS.md`.
+UI strings and widget tests are in Russian.
