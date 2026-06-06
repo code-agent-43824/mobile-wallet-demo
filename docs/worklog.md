@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-06-04 — Phase 8 / chunk B: external signing session state model — branch claude/wonderful-rubin-eBDKZ — in progress
+## 2026-06-04 — Phase 8 / chunk B: external signing session state model — branch claude/wonderful-rubin-eBDKZ — done
 - Plan:
   - New module `lib/src/sessions/remote_signing_session.dart` — a protocol-agnostic session/lifecycle
     model that WC (chunk C) and AirGap (chunk D) will implement:
@@ -33,9 +33,17 @@ Entry template:
     e2e proving the session composes with chunk A through `submitAuthorizedTransferFlow`.
   - Ticks the Phase 8 deliverable "state model prepared for external signing/session flows".
   - Out of scope: real WC/AirGap protocols (C/D) and UI wiring (E/F).
-- Done: (pending)
-- Next / open: (pending)
-- Refs: (pending)
+- Done: added `lib/src/sessions/remote_signing_session.dart` — `RemoteSigningSessionStatus`, immutable
+  `RemoteSigningSession` (+ `copyWith`), `RemoteSessionSigner` (the inject point WC/AirGap implement), and
+  `RemoteSigningSessionController implements RemoteSigningTransport` with a `DemoRemoteSigningSessionController`
+  that walks connect → awaitingSignature → connected / error / disconnected and exposes a `changes` stream.
+  The controller is a drop-in transport for `authorizeRemoteSigning`. Tests cover the lifecycle (incl. the
+  awaitingSignature transition), the sign-before-connect guard, the error transition, and composition with
+  chunk A. Bumped to v1.12.0+23.
+- Next / open: chunk C (WalletConnect v2 contract — implement `RemoteSigningSessionController` over a WC
+  pairing/request model), then chunk D (AirGap). UI wiring (E/F) still pending; deep signed-tx field
+  validation still deferred to C/D.
+- Refs: 82de0e5 (plan); this commit.
 
 ## 2026-06-04 — Phase 8 / chunk A: async remote signing seam — branch claude/wonderful-rubin-eBDKZ — done
 - Plan:
