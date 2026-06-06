@@ -18,6 +18,25 @@ Entry template:
 
 ---
 
+## 2026-06-04 — Phase 8 / chunk C: WalletConnect v2 contract — branch claude/wonderful-rubin-eBDKZ — in progress
+- Plan:
+  - New module `lib/src/walletconnect/wallet_connect_v2.dart` — the WC v2 integration contract
+    (no relay/SDK; that stays a non-goal):
+    - `WalletConnectRpcRequest` + `WalletConnectV2RequestCodec` — maps a `PreparedTransfer` to a CAIP-2
+      `eth_signTransaction` request and decodes the signed-tx-hex response to raw bytes (the mapping).
+    - `WalletConnectSessionInfo` (topic / peer / chains / accounts) and `WalletConnectV2Connector`
+      (`implements RemoteSigningSessionController` from chunk B) with `pair(wcUri)` + `lastRequest`.
+    - `DemoWalletConnectV2Connector` — composes a `DemoRemoteSigningSessionController` for the lifecycle,
+      validates the `wc:` URI on pair, builds the WC request via the codec, and delegates signing to an
+      injected `RemoteSessionSigner` (the demo stand-in for the relay round-trip).
+  - Tests: codec mapping (native/erc20 → request, response hex → bytes), pair (reject bad URI, sets
+    session info), sign (delegates + records `lastRequest`), and composition via `authorizeRemoteSigning`.
+  - Ticks the Phase 8 deliverable "protocol integration contracts for WalletConnect v2".
+  - Out of scope: real WC relay/SDK + networking; deep signed-tx field validation; UI wiring (E/F).
+- Done: (pending)
+- Next / open: (pending)
+- Refs: (pending)
+
 ## 2026-06-04 — Phase 8 / chunk B: external signing session state model — branch claude/wonderful-rubin-eBDKZ — done
 - Plan:
   - New module `lib/src/sessions/remote_signing_session.dart` — a protocol-agnostic session/lifecycle
