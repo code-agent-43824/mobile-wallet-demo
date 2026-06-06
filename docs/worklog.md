@@ -18,6 +18,28 @@ Entry template:
 
 ---
 
+## 2026-06-04 — Phase 8 / chunk D: AirGap offline-signing contract — branch claude/wonderful-rubin-eBDKZ — in progress
+- Plan:
+  - New module `lib/src/airgap/airgap_signing.dart` — the AirGap (offline QR) integration contract:
+    - `AirGapSigningRequest` (export payload: tx fields as hex + a request id) and `AirGapSignedResponse`
+      (import payload: request id + raw signed-tx hex), both with `toJson`/`fromJson`.
+    - `AirGapPayloadCodec` — `buildRequest(preparedTransfer,…)`, `encodeRequest`/`decodeRequest`,
+      `encodeResponse`/`decodeResponse` (scheme-prefixed base64url JSON, QR-transportable), and
+      `toSignedBytes(response, expectedRequestId)` that **validates the request id** before returning bytes.
+    - `AirGapResponseProvider` (the air-gapped device: given an export payload, returns the response
+      payload — the demo stand-in for "scan request → device signs → scan response").
+    - `AirGapOfflineConnector` (`implements RemoteSigningSessionController` from chunk B, adds
+      `lastExportPayload`) + `DemoAirGapOfflineConnector` that composes a `DemoRemoteSigningSessionController`
+      and drives the export→sign→import round-trip through the codec.
+  - Tests: request/response encode↔decode round-trips, request-id mismatch guard, connector connect/sign
+    (records `lastExportPayload`), and composition via `authorizeRemoteSigning`.
+  - Ticks the Phase 8 deliverable "protocol integration contracts for AirGap" → all three Phase 8
+    deliverables done (only optional UI wiring E/F would remain).
+  - Out of scope: real AirGap protocol/QR library; deep signed-tx field validation; UI wiring (E/F).
+- Done: (pending)
+- Next / open: (pending)
+- Refs: (pending)
+
 ## 2026-06-04 — Phase 8 / chunk C: WalletConnect v2 contract — branch claude/wonderful-rubin-eBDKZ — done
 - Plan:
   - New module `lib/src/walletconnect/wallet_connect_v2.dart` — the WC v2 integration contract
