@@ -18,6 +18,19 @@ Entry template:
 
 ---
 
+## 2026-06-06 — Phase 8 / chunk F: remote-signer UI wiring — branch claude/wonderful-rubin-eBDKZ — done
+- Plan (from chunk E "next"): wire the catalog into the unlocked transfer UI so a send can be signed via a
+  WalletConnect/AirGap session.
+- Done: added a "Подписать через" dropdown (On-device / WalletConnect v2 / AirGap) to the transfer section
+  (`_TransferPreparationSection`); when a remote signer is chosen, `_signAndSubmit` builds a demo connector via
+  `RemoteSignerCatalog`, connects it, signs+broadcasts through `authorizeRemoteSigning`, and disposes it
+  afterwards. Added the `sessions/` imports to the orchestrator library. Widget test sends a transfer via the
+  WalletConnect remote signer end-to-end. (Same commit also fixes a chunk-E analyze warning — an unused private
+  parameter.) Bumped to v1.16.0+27.
+- Next / open: Phase 8 fully complete (3 deliverables + optional E/F). Real WC/AirGap relay/SDK and deep
+  signed-tx field validation remain non-goals.
+- Refs: this commit (includes the chunk-E analyze fix).
+
 ## 2026-06-06 — Phase 8 / chunk E: remote-signer registry — branch claude/wonderful-rubin-eBDKZ — done
 - Plan:
   - New module `lib/src/sessions/remote_signer_registry.dart` — a catalog of selectable remote signers

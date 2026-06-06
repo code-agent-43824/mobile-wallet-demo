@@ -13,6 +13,8 @@ import 'key_storage/external_device_pkcs11.dart';
 import 'key_storage/key_storage_backend.dart';
 import 'key_storage/phone_secure_vault.dart';
 import 'key_storage/secure_key_value_store.dart';
+import 'sessions/remote_signer_registry.dart';
+import 'sessions/remote_signing_session.dart';
 import 'transactions/hardened_transaction_service.dart';
 import 'transactions/transaction_service.dart';
 import 'transactions/transaction_tracker.dart';

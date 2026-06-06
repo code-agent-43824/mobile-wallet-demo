@@ -101,13 +101,9 @@ class _LocalRemoteSessionSigner implements RemoteSessionSigner {
 /// signs it locally (mirrors LocalTransactionService EIP-1559 signing), so the
 /// offline round-trip produces a real, broadcastable signature in the demo.
 class _LocalAirGapDevice implements AirGapResponseProvider {
-  _LocalAirGapDevice({
-    required this.walletMaterial,
-    this.codec = const AirGapPayloadCodec(),
-  });
+  _LocalAirGapDevice({required this.walletMaterial});
 
   final WalletMaterial walletMaterial;
-  final AirGapPayloadCodec codec;
 
   @override
   Future<String> provideSignature({
@@ -115,7 +111,7 @@ class _LocalAirGapDevice implements AirGapResponseProvider {
     required String exportPayload,
   }) async {
     final signed = _signRequest(request);
-    return codec.encodeResponse(
+    return const AirGapPayloadCodec().encodeResponse(
       AirGapSignedResponse(
         requestId: request.requestId,
         rawSignedTransactionHex: bytesToHex(signed, include0x: true),
