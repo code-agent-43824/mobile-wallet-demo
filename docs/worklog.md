@@ -18,6 +18,24 @@ Entry template:
 
 ---
 
+## 2026-06-06 — Phase 8 / chunk E: remote-signer registry — branch claude/wonderful-rubin-eBDKZ — in progress
+- Plan:
+  - New module `lib/src/sessions/remote_signer_registry.dart` — a catalog of selectable remote signers
+    (WalletConnect v2, AirGap) and a factory that builds a **working demo connector** for each, so the UI
+    (chunk F) can offer "sign via WalletConnect / AirGap".
+    - `RemoteSignerKind` + `RemoteSignerDescriptor` (id/label/description), `RemoteSignerCatalog` with
+      `descriptors` and `createDemoConnector({kind, walletMaterial, transactionService})`
+      → `RemoteSigningSessionController`.
+    - Demo signing produces a **real** signed tx using the on-device key (stand-in for the remote party):
+      WC via a local `RemoteSessionSigner`; AirGap via a local `AirGapResponseProvider` that rebuilds the tx
+      from the request and signs it (mirrors `LocalTransactionService` EIP-1559 signing).
+  - Tests: catalog descriptors; each kind builds the expected connector type; connect + sign returns a
+    `0x…` signed tx through the session; composition via `authorizeRemoteSigning`.
+  - Out of scope (chunk E): UI (that is chunk F).
+- Done: (pending)
+- Next / open: (pending)
+- Refs: (pending)
+
 ## 2026-06-04 — Phase 8 / chunk D: AirGap offline-signing contract — branch claude/wonderful-rubin-eBDKZ — done
 - Plan:
   - New module `lib/src/airgap/airgap_signing.dart` — the AirGap (offline QR) integration contract:
