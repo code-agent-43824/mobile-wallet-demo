@@ -3,7 +3,6 @@ import 'package:mobile_wallet_demo/src/airgap/airgap_signing.dart';
 import 'package:mobile_wallet_demo/src/auth/wallet_operation_auth.dart';
 import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
-import 'package:mobile_wallet_demo/src/key_storage/key_storage_backend.dart';
 import 'package:mobile_wallet_demo/src/sessions/remote_signing_session.dart';
 import 'package:mobile_wallet_demo/src/transactions/transaction_service.dart';
 
