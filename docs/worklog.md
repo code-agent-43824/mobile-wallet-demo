@@ -18,6 +18,25 @@ Entry template:
 
 ---
 
+## 2026-06-04 — Phase 8 / chunk B: external signing session state model — branch claude/wonderful-rubin-eBDKZ — in progress
+- Plan:
+  - New module `lib/src/sessions/remote_signing_session.dart` — a protocol-agnostic session/lifecycle
+    model that WC (chunk C) and AirGap (chunk D) will implement:
+    - `RemoteSigningSessionStatus` (idle → connecting → connected → awaitingSignature →
+      disconnected / error) + an immutable `RemoteSigningSession` snapshot.
+    - `RemoteSigningSessionController` (implements the chunk-A `RemoteSigningTransport`): owns the
+      lifecycle, exposes `state` + a `changes` stream and `connect()` / `disconnect()`, and updates
+      its state around `requestSignedTransaction` (awaitingSignature → connected / error).
+    - `DemoRemoteSigningSessionController` — in-memory simulation (signing delegated via an injected
+      callback), mirroring the Phase 7 external-device demo precedent.
+  - Tests: lifecycle transitions + change stream, sign-before-connect guard, error transition, and an
+    e2e proving the session composes with chunk A through `submitAuthorizedTransferFlow`.
+  - Ticks the Phase 8 deliverable "state model prepared for external signing/session flows".
+  - Out of scope: real WC/AirGap protocols (C/D) and UI wiring (E/F).
+- Done: (pending)
+- Next / open: (pending)
+- Refs: (pending)
+
 ## 2026-06-04 — Phase 8 / chunk A: async remote signing seam — branch claude/wonderful-rubin-eBDKZ — done
 - Plan:
   - Make `WalletTransactionSigner.signPreparedTransfer` async (`Future<SignedTransfer>`);
