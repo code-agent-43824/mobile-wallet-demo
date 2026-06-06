@@ -18,6 +18,19 @@ Entry template:
 
 ---
 
+## 2026-06-06 — Phase 9 plan composed (real WalletConnect v2 + connections screen) — branch claude/wonderful-rubin-eBDKZ — done
+- Plan: at the user's request, record a plan (no code) for a **real** WalletConnect v2 integration plus a
+  dedicated WalletConnect screen showing connection status with disconnect / details / "create new connection".
+- Done: added the **Phase 9** section to `docs/development-plan.md` — goal, **role decision (wallet-side, to
+  confirm)**, dependencies (`reown_walletkit`, WC Cloud project id, relay reachability, navigation),
+  architecture (`WalletConnectService` + fake + DI; request→vault signing; the screen; request sheet), a
+  chunk breakdown 9.1–9.6, deliverables checklist, risks/open questions, and non-goals. Noted Phase 9 in the
+  status snapshot + stopping point. Docs only — no code, no version change.
+- Next / open: **confirm the wallet-side role** (vs dApp-side) and how the WalletConnect Cloud project id is
+  supplied; then start **chunk 9.1** (deps + `WalletConnectService` abstraction + `FakeWalletConnectService`
+  + DI) by the usual plan → code → record loop.
+- Refs: this commit (docs only).
+
 ## 2026-06-06 — Phase 8 / chunk F: remote-signer UI wiring — branch claude/wonderful-rubin-eBDKZ — done
 - Plan (from chunk E "next"): wire the catalog into the unlocked transfer UI so a send can be signed via a
   WalletConnect/AirGap session.
