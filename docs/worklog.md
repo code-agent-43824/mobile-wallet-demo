@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-06-04 — Phase 8 / chunk C: WalletConnect v2 contract — branch claude/wonderful-rubin-eBDKZ — in progress
+## 2026-06-04 — Phase 8 / chunk C: WalletConnect v2 contract — branch claude/wonderful-rubin-eBDKZ — done
 - Plan:
   - New module `lib/src/walletconnect/wallet_connect_v2.dart` — the WC v2 integration contract
     (no relay/SDK; that stays a non-goal):
@@ -33,9 +33,17 @@ Entry template:
     session info), sign (delegates + records `lastRequest`), and composition via `authorizeRemoteSigning`.
   - Ticks the Phase 8 deliverable "protocol integration contracts for WalletConnect v2".
   - Out of scope: real WC relay/SDK + networking; deep signed-tx field validation; UI wiring (E/F).
-- Done: (pending)
-- Next / open: (pending)
-- Refs: (pending)
+- Done: added `lib/src/walletconnect/wallet_connect_v2.dart` — `WalletConnectRpcRequest` +
+  `WalletConnectV2RequestCodec` (PreparedTransfer → CAIP-2 `eth_signTransaction` request; signed-tx-hex →
+  bytes), `WalletConnectSessionInfo`, the `WalletConnectV2Connector` contract (implements the chunk-B
+  `RemoteSigningSessionController`, adds `pair(wcUri)` + `lastRequest`), and `DemoWalletConnectV2Connector`
+  (composes a `DemoRemoteSigningSessionController`, validates the `wc:` URI, builds the request via the codec,
+  delegates signing to an injected `RemoteSessionSigner`). Tests: native/erc20 encode, response decode
+  (+empty guard), pair (reject bad URI / record session info), sign (+`lastRequest`), composition via
+  `authorizeRemoteSigning`. Bumped to v1.13.0+24.
+- Next / open: chunk D (AirGap offline-signing contract — serialize unsigned tx to a transport payload,
+  ingest the signed payload), then UI wiring (E/F). Real WC relay/SDK + deep signed-tx validation remain deferred.
+- Refs: 7449e67 (plan); this commit.
 
 ## 2026-06-04 — Phase 8 / chunk B: external signing session state model — branch claude/wonderful-rubin-eBDKZ — done
 - Plan:
