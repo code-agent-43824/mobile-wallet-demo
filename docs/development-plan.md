@@ -14,9 +14,9 @@ Current factual status of the project:
 - ✅ Phase 5 is implemented
 - ✅ Phase 6 is implemented end-to-end, including retry/replacement handling and post-submit transaction lifecycle tracking
 - ✅ Phase 7 is completed as a foundation layer: backend selection model, backend-compatible signing/auth contracts, demo external-device runtime path, mock device lifecycle, and mock PKCS#11 session/operation contracts are in place; real NFC SDK integration is intentionally still out of scope for this phase
-- ⏳ Phase 8 is not started yet
+- ✅ Phase 8 contracts/foundation are complete (chunks A–D): the async/remote signing seam, the external-signing session/lifecycle model, and the WalletConnect v2 + AirGap integration contracts (each with a demo implementation); real relay/SDK integration is intentionally out of scope
 
-> **Current stopping point — v1.10.0+21.** Phases 0–7 are complete. On top of the already-complete phases, three hardening/maintenance passes shipped: **v1.8** (phone-vault security rework — DEK-based at-rest encryption, the PIN is no longer persisted, biometric unlock moved to a dedicated gated secret store), **v1.9** (PBKDF2 raised to 600k + failed-unlock lockout, transaction-layer cleanup, base-fee headroom, extra send-failure / nonce-reconciliation tests), and **v1.10** (at-rest payload schema validation + defensive parsing with resilient startup; `wallet_flow_screen.dart` split into `part` files; cross-agent docs + working agreement). The next net-new work is **Phase 8** (WalletConnect v2 + AirGap contracts, external signing/session state model).
+> **Current stopping point — v1.14.0+25.** Phases 0–7 are complete, plus security/maintenance passes v1.8–v1.10. **Phase 8 contracts are now complete** (chunks A–D, v1.11–v1.14): the async/remote signing seam (A), the external-signing session/lifecycle model (B), and the WalletConnect v2 (C) + AirGap (D) integration contracts — each with a demo implementation. Remaining/optional: UI + backend-registry wiring for the remote signers (breakdown chunks E/F); real relay/SDK integration and deep signed-tx validation stay non-goals. See `docs/worklog.md` for the granular per-chunk log.
 
 Completed deliverables so far:
 - ✅ project module structure started (`auth`, `key_storage`)
@@ -257,11 +257,11 @@ Deliverables:
 ## Phase 8 — future extension points
 Goal: reserve clean extension paths.
 
-Status: 🚧 In progress. **Chunks A, B and C have landed** (v1.13.0+24): A — async signer seam + remote-signer foundation (`RemoteSigningTransport` / `RemoteWalletTransactionSigner` / `TransactionService.assembleSignedTransfer`); B — protocol-agnostic session/lifecycle model (`RemoteSigningSessionController` in `sessions/remote_signing_session.dart`); C — the WalletConnect v2 integration contract (`walletconnect/wallet_connect_v2.dart`: a request codec + a connector implementing the session controller, with a demo). Next: D (AirGap). The full chunk breakdown (A→G) and per-chunk progress live in `docs/worklog.md`.
+Status: ✅ Completed as a contracts/foundation layer (chunks A–D, v1.11–v1.14): A — async/remote signing seam (`RemoteSigningTransport` / `RemoteWalletTransactionSigner` / `TransactionService.assembleSignedTransfer`); B — protocol-agnostic session/lifecycle model (`RemoteSigningSessionController` in `sessions/remote_signing_session.dart`); C — WalletConnect v2 contract (`walletconnect/wallet_connect_v2.dart`); D — AirGap offline-signing contract (`airgap/airgap_signing.dart`). Each ships a demo implementation; real relay/SDK integration and the UI + backend-registry wiring (breakdown chunks E/F) are intentionally out of scope for this phase. Per-chunk progress: `docs/worklog.md`.
 
 Deliverables:
 - [x] protocol integration contracts for WalletConnect v2 (chunk C)
-- [ ] protocol integration contracts for AirGap
+- [x] protocol integration contracts for AirGap (chunk D)
 - [x] state model prepared for external signing/session flows (chunk B)
 
 Starting points for the next agent:
@@ -290,6 +290,7 @@ Starting points for the next agent:
 - `v1.11` — Phase 8 chunk A: async signing seam + remote-signer foundation (`RemoteSigningTransport`, `RemoteWalletTransactionSigner`, `TransactionService.assembleSignedTransfer`) for WalletConnect/AirGap
 - `v1.12` — Phase 8 chunk B: protocol-agnostic remote-signing session/lifecycle model (`RemoteSigningSessionController` + demo implementation) for WalletConnect/AirGap
 - `v1.13` — Phase 8 chunk C: WalletConnect v2 integration contract (`WalletConnectV2RequestCodec` + `WalletConnectV2Connector` / demo over the chunk-B session controller)
+- `v1.14` — Phase 8 chunk D: AirGap offline-signing contract (`AirGapPayloadCodec` export/import payloads + `AirGapOfflineConnector` / demo over the chunk-B session controller); completes the Phase 8 contracts
 
 ## Non-goals for now
 - no hardware-device SDK implementation yet
