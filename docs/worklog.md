@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-06-06 — Phase 8 / chunk E: remote-signer registry — branch claude/wonderful-rubin-eBDKZ — in progress
+## 2026-06-06 — Phase 8 / chunk E: remote-signer registry — branch claude/wonderful-rubin-eBDKZ — done
 - Plan:
   - New module `lib/src/sessions/remote_signer_registry.dart` — a catalog of selectable remote signers
     (WalletConnect v2, AirGap) and a factory that builds a **working demo connector** for each, so the UI
@@ -32,9 +32,15 @@ Entry template:
   - Tests: catalog descriptors; each kind builds the expected connector type; connect + sign returns a
     `0x…` signed tx through the session; composition via `authorizeRemoteSigning`.
   - Out of scope (chunk E): UI (that is chunk F).
-- Done: (pending)
-- Next / open: (pending)
-- Refs: (pending)
+- Done: added `lib/src/sessions/remote_signer_registry.dart` — `RemoteSignerKind`, `RemoteSignerDescriptor`,
+  and `RemoteSignerCatalog` (`descriptors` + `createDemoConnector({kind, walletMaterial, transactionService})`).
+  Demo connectors sign the real prepared tx with the on-device key: WC via a local `RemoteSessionSigner`;
+  AirGap via a local `AirGapResponseProvider` that rebuilds the tx from the request and signs it (EIP-1559,
+  0x02-prefixed). Tests: catalog lists both, factory returns the right connector type, each connector
+  connects + signs a real `0x02…` tx. Bumped to v1.15.0+26.
+- Next / open: chunk F — wire the catalog into the unlocked transfer UI (pick WC/AirGap, connect, then
+  sign+send the prepared transfer via the remote session). Real relay/SDK still out of scope.
+- Refs: 06cfca5 (plan); this commit.
 
 ## 2026-06-04 — Phase 8 / chunk D: AirGap offline-signing contract — branch claude/wonderful-rubin-eBDKZ — done
 - Plan:
