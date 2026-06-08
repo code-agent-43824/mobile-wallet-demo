@@ -18,6 +18,27 @@ Entry template:
 
 ---
 
+## 2026-06-08 — Phase 9 / chunk 9.1: WalletConnectService inbound seam — branch claude/wonderful-rubin-eBDKZ — done
+- Plan (from the reframe "next"): add the wallet-side WalletConnect service abstraction + a fake for tests/DI,
+  pure Dart, no SDK yet. Refined during work: keep the `reown_walletkit` dep + DI wiring for 9.2 (where a real impl
+  and a consumer exist) to avoid an injected-but-unused field; ship an `UnavailableWalletConnectService` default
+  until then.
+- Done: new `lib/src/walletconnect/wallet_connect_service.dart`:
+  - inbound models — `WalletConnectPeer`, `WalletConnectSessionProposal`, `WalletConnectSession`,
+    `WalletConnectRequest`; `WalletConnectServiceException`.
+  - `WalletConnectService` interface (wallet-side): `init`, `isAvailable`, `pair`, `sessionProposals` stream,
+    `approveSession` / `rejectSession`, `activeSessions` + `sessionsChanges` stream, `requests` stream,
+    `respondResult` / `respondError`, `disconnect`, `dispose`.
+  - `UnavailableWalletConnectService` — shippable default (isAvailable=false, refuses pair/approve, empty streams).
+  - `FakeWalletConnectService` — in-memory: `pair` auto-emits a proposal; `simulateProposal` / `simulateRequest`
+    hooks; records `respondedResults` / `respondedErrors`.
+  - tests `test/wallet_connect_service_test.dart`: pair→proposal→approve→active session (+ stream), bad-URI reject,
+    incoming request → respondResult/Error, disconnect removes session, Unavailable refuses.
+  - Bumped to v1.18.0+29; plan updated (9.1 done; deps/config/DI moved to 9.2), release sequence + snapshot synced.
+- Next / open: chunk 9.2 — add `reown_walletkit` + `WC_PROJECT_ID` config + `ReownWalletConnectService` + DI into
+  `MobileWalletDemoApp` (init on startup). No local Flutter toolchain — validated via CI (workflow_dispatch).
+- Refs: 6639075 (reframe/plan); this commit.
+
 ## 2026-06-08 — Phase 9 / chunk 9.0: remove inverted outbound signing — branch claude/wonderful-rubin-eBDKZ — done
 - Plan (from the reframe entry's "next"): remove the Phase 8 **outbound** remote-signing direction (this app
   requesting a signature *from* a WC/AirGap signer); keep the reusable codecs + the vault `assembleSignedTransfer`

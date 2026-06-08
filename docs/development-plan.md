@@ -15,10 +15,10 @@ Current factual status of the project:
 - ✅ Phase 6 is implemented end-to-end, including retry/replacement handling and post-submit transaction lifecycle tracking
 - ✅ Phase 7 is completed as a foundation layer: backend selection model, backend-compatible signing/auth contracts, demo external-device runtime path, mock device lifecycle, and mock PKCS#11 session/operation contracts are in place; real NFC SDK integration is intentionally still out of scope for this phase
 - ✅ Phase 8 left reusable foundations — the WalletConnect v2 + AirGap **codec/payload mappings** (`WalletConnectV2RequestCodec`, `AirGapPayloadCodec`) and the vault `TransactionService.assembleSignedTransfer` seam. The **outbound** direction it also shipped (this app *requesting* a signature from an external WC/AirGap signer: the async remote-signing transport, the session controller, the `RemoteSignerCatalog`, and the "Подписать через" send-flow option) was the **wrong role** for this product and is **removed in chunk 9.0** — see the Phase 8 / Phase 9 sections below
-- ⏳ Phase 9 (real **wallet-side** inbound signing — WalletConnect v2 + AirGap — plus a connections screen and an incoming-request approval flow) is **in progress** (chunk 9.0 cleanup done, v1.17; next 9.1) — see the "Phase 9" section below
+- ⏳ Phase 9 (real **wallet-side** inbound signing — WalletConnect v2 + AirGap — plus a connections screen and an incoming-request approval flow) is **in progress** (chunks 9.0–9.1 done, v1.18; next 9.2) — see the "Phase 9" section below
 - ⏳ Phase 10 (custody/NFC refinement — tap-to-confirm + device PIN as a real second factor, composed with own-sends and inbound requests) is **planned** — see the "Phase 10" section below
 
-> **Current stopping point — v1.17.0+28.** Phases 0–7 are complete, plus security/maintenance passes v1.8–v1.10. **Phase 8 role correction:** the direction it shipped (chunks A–F, v1.11–v1.16) was *outbound* — this app *requesting* a signature from an external WalletConnect/AirGap signer (incl. the "Подписать через" option). That is the wrong role for this product: the wallet must *receive* and approve signing requests, not send them. The reusable **codec/payload mappings** (`WalletConnectV2RequestCodec`, `AirGapPayloadCodec`) and the vault `assembleSignedTransfer` seam are kept; the outbound transport/session/registry/UI was **removed in chunk 9.0 (v1.17)**. **Next: Phase 9** — real wallet-side inbound signing (WalletConnect v2 online + AirGap offline), a connections screen, and an incoming-request approval sheet; then **Phase 10** (custody/NFC). Full plan in the Phase 9 / Phase 10 sections; per-chunk log in `docs/worklog.md`.
+> **Current stopping point — v1.18.0+29.** Phases 0–7 are complete, plus security/maintenance passes v1.8–v1.10. **Phase 8 role correction:** the direction it shipped (chunks A–F, v1.11–v1.16) was *outbound* — this app *requesting* a signature from an external WalletConnect/AirGap signer (incl. the "Подписать через" option). That is the wrong role for this product: the wallet must *receive* and approve signing requests, not send them. The reusable **codec/payload mappings** (`WalletConnectV2RequestCodec`, `AirGapPayloadCodec`) and the vault `assembleSignedTransfer` seam are kept; the outbound transport/session/registry/UI was **removed in chunk 9.0 (v1.17)**. **Phase 9 is in progress** — chunks 9.0–9.1 done (v1.18: the `WalletConnectService` inbound seam + fake + unavailable default); next 9.2 (real `reown_walletkit`), then the connections screen + approval sheet, AirGap inbound, and **Phase 10** (custody/NFC). Full plan in the Phase 9 / Phase 10 sections; per-chunk log in `docs/worklog.md`.
 
 Completed deliverables so far:
 - ✅ project module structure started (`auth`, `key_storage`)
@@ -280,7 +280,7 @@ Both surface through a dedicated **Connections screen** (status, active sessions
 
 This corrects the Phase 8 role: Phase 8 modelled the *outbound* direction (the app requesting a signature from an external signer). The product is wallet-side, so **9.0** removes that and **9.1+** build the inbound integration, reusing the Phase 8 codecs.
 
-Status: ⏳ In progress (chunk 9.0 done, v1.17; next 9.1).
+Status: ⏳ In progress (chunks 9.0–9.1 done, v1.18; next 9.2).
 
 ### Two axes (do not conflate)
 - **Transport axis (this phase):** how a signing request *arrives* — WalletConnect (online relay) or AirGap (offline QR). The wallet still signs with whatever custody backend is active.
@@ -302,8 +302,8 @@ Status: ⏳ In progress (chunk 9.0 done, v1.17; next 9.1).
 
 ### Chunk breakdown (each chunk: plan → code → record, per AGENTS.md)
 - **9.0** — *cleanup*: remove the inverted Phase 8 **outbound** code (transport/session/registry/connectors + "Подписать через"); keep the codecs (`WalletConnectV2RequestCodec`, `AirGapPayloadCodec`) and `assembleSignedTransfer`. No new feature; tests trimmed to the codecs. ✅ done (v1.17)
-- **9.1** — deps + config + `WalletConnectService` interface + `FakeWalletConnectService` + DI wiring (no real SDK calls yet; unit-testable).
-- **9.2** — real SDK impl (`ReownWalletConnectService`) behind the interface: init, pair, proposal approve/reject, session list + streams, disconnect.
+- **9.1** — `WalletConnectService` interface + inbound models (`WalletConnectPeer` / `…SessionProposal` / `…Session` / `…Request`) + `FakeWalletConnectService` + `UnavailableWalletConnectService` (shippable default) + unit tests. Pure Dart, no SDK. ✅ done (v1.18). *(The `reown_walletkit` dep + `WC_PROJECT_ID` config + DI wiring moved to 9.2, where the real impl consumes them.)*
+- **9.2** — real SDK impl (`ReownWalletConnectService`) behind the interface: init, pair, proposal approve/reject, session list + streams, disconnect. Adds the `reown_walletkit` dep + `WC_PROJECT_ID` config + DI wiring into `MobileWalletDemoApp` (init on startup).
 - **9.3** — incoming request → vault signing: WC method parsing (inverse codec), the approval flow, `respond`; broadcast for `eth_sendTransaction`.
 - **9.4** — Connections screen: status + sessions list + details + disconnect + "new connection" (URI paste); navigation entry from the unlocked dashboard.
 - **9.5** — AirGap inbound: scan request QR → approve → sign → response QR (camera via `mobile_scanner`), reusing the approval sheet.
@@ -312,7 +312,7 @@ Status: ⏳ In progress (chunk 9.0 done, v1.17; next 9.1).
 
 ### Deliverables
 - [x] 9.0 cleanup (remove outbound, keep codecs)
-- [ ] `WalletConnectService` abstraction + `FakeWalletConnectService` + DI
+- [x] `WalletConnectService` abstraction + `FakeWalletConnectService` (+ `UnavailableWalletConnectService` default; real-impl DI deferred to 9.2)
 - [ ] real `reown_walletkit` implementation (init / pair / sessions / disconnect)
 - [ ] incoming-request → vault signing + approval flow + `respond`
 - [ ] Connections screen (status / details / disconnect / new connection)
@@ -373,6 +373,7 @@ Status: ⏳ Planned (after Phase 9).
 - `v1.15` — Phase 8 chunk E (post-deliverable polish): `RemoteSignerCatalog` — selectable WalletConnect/AirGap demo connectors that sign the real prepared tx with the on-device key
 - `v1.16` — Phase 8 chunk F (post-deliverable polish): "Подписать через" WalletConnect/AirGap option wired into the unlocked send flow + widget test
 - `v1.17` — Phase 9 chunk 9.0 (role correction): removed the inverted Phase 8 **outbound** remote-signing code (transport/session/registry/connectors + "Подписать через"); kept the reusable codecs (`WalletConnectV2RequestCodec`, `AirGapPayloadCodec`) and `assembleSignedTransfer`
+- `v1.18` — Phase 9 chunk 9.1: wallet-side `WalletConnectService` inbound seam — interface + models + `FakeWalletConnectService` + `UnavailableWalletConnectService` default + unit tests (pure Dart; real SDK + DI deferred to 9.2)
 
 ## Non-goals for now
 - no hardware-device SDK implementation yet
