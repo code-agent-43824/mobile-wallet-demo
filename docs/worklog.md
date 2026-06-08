@@ -18,6 +18,23 @@ Entry template:
 
 ---
 
+## 2026-06-08 — Phase 9 reframed to wallet-side inbound (two axes) + chunk 9.0 planned — branch claude/wonderful-rubin-eBDKZ — done
+- Plan: act on the role clarification — the product is **wallet-side** (it *receives* signing requests), so Phase 8's
+  **outbound** direction (requesting a signature *from* a WC/AirGap signer) is the wrong role. Two decisions taken:
+  (1) **remove** the outbound code, **keep** the reusable codecs; (2) do the **transport axis first** (WalletConnect +
+  AirGap inbound + connections screen + request approval), then NFC custody. This commit is docs-only.
+- Done: reframed `docs/development-plan.md` — Phase 8 marked **role-corrected/superseded** (codecs +
+  `assembleSignedTransfer` kept; outbound transport/session/registry/connectors + "Подписать через" to be removed in
+  **chunk 9.0**) with a "what survives" list; **Phase 9 rewritten** to wallet-side inbound signing across **two
+  transports** (WC online, AirGap offline) with a connections screen + shared approval sheet, a **two-axis** framing
+  (transport here, custody in Phase 10), inbound architecture, the **9.0–9.7** chunk breakdown, deliverables, risks,
+  non-goals; added **Phase 10** (custody/NFC second factor); updated the status snapshot + stopping point. No code, no
+  version change.
+- Next / open: execute **chunk 9.0** (remove the outbound transport/session/registry/connectors + "Подписать через";
+  keep `WalletConnectV2RequestCodec` + `AirGapPayloadCodec` + `assembleSignedTransfer`; trim tests to the codecs; bump
+  version), then **chunk 9.1** (deps + `WalletConnectService` + `FakeWalletConnectService` + DI).
+- Refs: this commit (docs only). Supersedes the 2026-06-06 Phase 9 plan below.
+
 ## 2026-06-06 — Phase 9 plan composed (real WalletConnect v2 + connections screen) — branch claude/wonderful-rubin-eBDKZ — done
 - Plan: at the user's request, record a plan (no code) for a **real** WalletConnect v2 integration plus a
   dedicated WalletConnect screen showing connection status with disconnect / details / "create new connection".
