@@ -3,7 +3,6 @@ import 'dart:typed_data';
 
 import 'package:web3dart/crypto.dart';
 
-import '../sessions/remote_signing_session.dart';
 import '../transactions/transaction_service.dart';
 
 class AirGapPayloadException implements Exception {
@@ -193,120 +192,5 @@ class AirGapPayloadCodec {
     } catch (_) {
       throw const AirGapPayloadException('AirGap payload is malformed.');
     }
-  }
-}
-
-/// The air-gapped device side: given the export payload it returns the response
-/// payload. A real flow shows the request QR, the device signs offline, and the
-/// user scans the response QR back; the demo/tests inject one.
-abstract interface class AirGapResponseProvider {
-  Future<String> provideSignature({
-    required AirGapSigningRequest request,
-    required String exportPayload,
-  });
-}
-
-/// AirGap offline-signing connector. It is a [RemoteSigningSessionController]
-/// (chunk B) so it plugs into [WalletOperationAuthorizer.authorizeRemoteSigning];
-/// it additionally exposes the last export payload (the QR to show the device).
-abstract interface class AirGapOfflineConnector
-    implements RemoteSigningSessionController {
-  /// The last request payload produced for the air-gapped device (QR content).
-  String? get lastExportPayload;
-}
-
-class DemoAirGapOfflineConnector implements AirGapOfflineConnector {
-  DemoAirGapOfflineConnector({
-    required AirGapResponseProvider device,
-    AirGapPayloadCodec codec = const AirGapPayloadCodec(),
-    DateTime Function()? now,
-  }) {
-    _session = DemoRemoteSigningSessionController(
-      label: 'airgap',
-      peerLabel: 'AirGap offline device',
-      signer: _AirGapRoundTripSigner(
-        codec: codec,
-        device: device,
-        onExport: (payload) => _lastExportPayload = payload,
-      ),
-      now: now,
-    );
-  }
-
-  late final DemoRemoteSigningSessionController _session;
-  String? _lastExportPayload;
-
-  @override
-  String get label => _session.label;
-
-  @override
-  RemoteSigningSession get state => _session.state;
-
-  @override
-  Stream<RemoteSigningSession> get changes => _session.changes;
-
-  @override
-  String? get lastExportPayload => _lastExportPayload;
-
-  @override
-  Future<RemoteSigningSession> connect({String? accountAddress}) {
-    return _session.connect(accountAddress: accountAddress);
-  }
-
-  @override
-  Future<Uint8List> requestSignedTransaction({
-    required PreparedTransfer preparedTransfer,
-    required int nonce,
-    required String fromAddress,
-  }) {
-    return _session.requestSignedTransaction(
-      preparedTransfer: preparedTransfer,
-      nonce: nonce,
-      fromAddress: fromAddress,
-    );
-  }
-
-  @override
-  Future<void> disconnect() => _session.disconnect();
-
-  @override
-  Future<void> dispose() => _session.dispose();
-}
-
-/// Internal: drives the AirGap export → sign → import round-trip through the
-/// codec, exposing the produced export payload via [onExport].
-class _AirGapRoundTripSigner implements RemoteSessionSigner {
-  _AirGapRoundTripSigner({
-    required AirGapPayloadCodec codec,
-    required AirGapResponseProvider device,
-    required void Function(String exportPayload) onExport,
-  }) : _codec = codec,
-       _device = device,
-       _onExport = onExport;
-
-  final AirGapPayloadCodec _codec;
-  final AirGapResponseProvider _device;
-  final void Function(String exportPayload) _onExport;
-
-  @override
-  Future<Uint8List> sign({
-    required PreparedTransfer preparedTransfer,
-    required int nonce,
-    required String fromAddress,
-  }) async {
-    final request = _codec.buildRequest(
-      preparedTransfer: preparedTransfer,
-      nonce: nonce,
-      fromAddress: fromAddress,
-    );
-    final exportPayload = _codec.encodeRequest(request);
-    _onExport(exportPayload);
-
-    final responsePayload = await _device.provideSignature(
-      request: request,
-      exportPayload: exportPayload,
-    );
-    final response = _codec.decodeResponse(responsePayload);
-    return _codec.toSignedBytes(response, expectedRequestId: request.requestId);
   }
 }

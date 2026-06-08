@@ -18,6 +18,34 @@ Entry template:
 
 ---
 
+## 2026-06-08 — Phase 9 / chunk 9.0: remove inverted outbound signing — branch claude/wonderful-rubin-eBDKZ — done
+- Plan (from the reframe entry's "next"): remove the Phase 8 **outbound** remote-signing direction (this app
+  requesting a signature *from* a WC/AirGap signer); keep the reusable codecs + the vault `assembleSignedTransfer`
+  seam. No new feature; trim tests to the codecs; bump the version.
+- Done:
+  - `auth/wallet_operation_auth.dart`: removed `RemoteSigningTransport`, `RemoteWalletTransactionSigner`,
+    `WalletOperationAuthorizer.authorizeRemoteSigning`, and `WalletAuthMethod.remoteSession` (+ the `dart:typed_data`
+    import). Local/external-device signers and `assembleSignedTransfer` are unchanged.
+  - Deleted `lib/src/sessions/remote_signing_session.dart` and `lib/src/sessions/remote_signer_registry.dart`
+    (the whole outbound session/registry layer; `sessions/` is now empty).
+  - `walletconnect/wallet_connect_v2.dart`: kept `WalletConnectRpcRequest` + `WalletConnectV2RequestCodec`; replaced
+    the cross-module `RemoteSigningSessionException` with a local `WalletConnectCodecException`; removed
+    `WalletConnectSessionInfo`, `WalletConnectV2Connector`, `DemoWalletConnectV2Connector`.
+  - `airgap/airgap_signing.dart`: kept `AirGapPayloadCodec` + request/response models; removed
+    `AirGapResponseProvider`, `AirGapOfflineConnector`, `DemoAirGapOfflineConnector`, `_AirGapRoundTripSigner`.
+  - UI: removed the "Подписать через" dropdown + the remote-connector branch/disposal in `_signAndSubmit`
+    (`wallet_flow_screen_unlocked.dart`), the `remoteSession` auth-method switch arm, and the two `sessions/` imports
+    from the orchestrator library.
+  - Tests: deleted `remote_signing_session_test.dart` + `remote_signer_registry_test.dart`; rewrote
+    `wallet_connect_v2_test.dart` / `airgap_signing_test.dart` to codec-only; pruned the remote cases (and now-unused
+    helpers/imports) from `wallet_operation_auth_test.dart`, `hardened_transaction_service_test.dart`, and
+    `widget_test.dart`.
+  - Bumped to **v1.17.0+28** across pubspec / `app_version.dart` / `widget_test.dart` / development-plan; also fixed
+    the stale README version (was `v1.10.0+21`).
+- Next / open: chunk **9.1** — deps + `WalletConnectService` abstraction + `FakeWalletConnectService` + DI (no real
+  SDK yet). Note: no local Flutter toolchain in this env — validated via CI.
+- Refs: 6639075 (reframe/plan); this commit.
+
 ## 2026-06-08 — Phase 9 reframed to wallet-side inbound (two axes) + chunk 9.0 planned — branch claude/wonderful-rubin-eBDKZ — done
 - Plan: act on the role clarification — the product is **wallet-side** (it *receives* signing requests), so Phase 8's
   **outbound** direction (requesting a signature *from* a WC/AirGap signer) is the wrong role. Two decisions taken:

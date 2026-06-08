@@ -147,7 +147,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Mobile Wallet Demo'), findsOneWidget);
-    expect(find.text('v1.16.0+27'), findsOneWidget);
+    expect(find.text('v1.17.0+28'), findsOneWidget);
     expect(find.text('Phone Secure Vault'), findsOneWidget);
     expect(find.text('External NFC demo device'), findsOneWidget);
     expect(find.text('Создать новый кошелёк'), findsOneWidget);
@@ -528,65 +528,5 @@ void main() {
 
     expect(find.textContaining('execution reverted'), findsOneWidget);
     expect(find.text('Успешная отправка'), findsNothing);
-  });
-
-  testWidgets('sends via the WalletConnect remote signer', (
-    WidgetTester tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(1200, 1800));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    await tester.pumpWidget(
-      MobileWalletDemoApp(
-        store: InMemorySecureKeyValueStore(),
-        blockchainProvider: _FakeBlockchainProvider(),
-        nonceProvider: _FakeNonceProvider(),
-        transactionBroadcaster: _FakeBroadcaster(),
-        trackingTransport: const _FakeTrackingTransport(),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Создать новый кошелёк'));
-    await tester.pumpAndSettle();
-
-    final setupFields = find.byType(TextField);
-    await tester.enterText(setupFields.at(0), '1234');
-    await tester.enterText(setupFields.at(1), '1234');
-    await tester.tap(find.text('Создать кошелёк'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Я сохранил seed-фразу'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Пока без биометрии'));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.byType(TextField).first, '1234');
-    await tester.tap(find.text('Разблокировать'));
-    await tester.pump();
-    await tester.pumpAndSettle();
-
-    final dropdown = find.text('On-device (по умолчанию)');
-    await tester.ensureVisible(dropdown);
-    await tester.tap(dropdown);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('WalletConnect v2').last);
-    await tester.pumpAndSettle();
-
-    final sendFields = find.byType(TextField);
-    await tester.enterText(
-      sendFields.at(0),
-      '0x1111111111111111111111111111111111111111',
-    );
-    await tester.enterText(sendFields.at(1), '0.1');
-
-    final sendButton = find.text('Подписать и отправить');
-    await tester.ensureVisible(sendButton);
-    await tester.tap(sendButton);
-    await tester.pump();
-    await tester.pumpAndSettle();
-
-    expect(find.text('Успешная отправка'), findsOneWidget);
-    expect(find.textContaining('walletconnect'), findsOneWidget);
   });
 }

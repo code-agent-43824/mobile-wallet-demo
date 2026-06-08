@@ -125,7 +125,6 @@ class _UnlockedStageState extends State<_UnlockedStage> {
             WalletAuthMethod.pin => 'PIN',
             WalletAuthMethod.biometric => 'Biometric unlock',
             WalletAuthMethod.externalDevice => 'External device',
-            WalletAuthMethod.remoteSession => 'Remote session',
           },
         ),
         const SizedBox(height: 10),
@@ -390,7 +389,6 @@ class _TransferPreparationSectionState
   int _submissionAttempts = 0;
   double _gasMultiplier = 1.0;
   bool _replacementTransfer = false;
-  RemoteSignerKind? _signWith;
 
   List<TransferAssetOption> get _assets =>
       widget.transactionService.availableAssets(
@@ -474,7 +472,6 @@ class _TransferPreparationSectionState
     }
 
     AuthorizedWalletOperation authorizedOperation;
-    RemoteSigningSessionController? remoteConnector;
     try {
       widget.transactionService.prepareTransfer(
         snapshot: widget.snapshot,
@@ -484,27 +481,7 @@ class _TransferPreparationSectionState
         asset: asset,
       );
 
-      final remoteKind = _signWith;
-      if (remoteKind != null) {
-        final material = widget.walletMaterial;
-        if (material == null) {
-          throw const VaultFailure(
-            'Нет доступного ключа для demo remote-подписи.',
-          );
-        }
-        remoteConnector = const RemoteSignerCatalog().createDemoConnector(
-          kind: remoteKind,
-          walletMaterial: material,
-          transactionService: widget.transactionService,
-        );
-        await remoteConnector.connect(accountAddress: widget.fromAddress);
-        authorizedOperation = widget.walletOperationAuthorizer
-            .authorizeRemoteSigning(
-              backendId: remoteConnector.label,
-              address: widget.fromAddress,
-              transport: remoteConnector,
-            );
-      } else if (widget.activeBackend is ExternalDeviceKeyStorageBackend) {
+      if (widget.activeBackend is ExternalDeviceKeyStorageBackend) {
         if (widget.activeBackend is ExternalDeviceDemoBackend) {
           await (widget.activeBackend as ExternalDeviceDemoBackend)
               .performPkcs11Operation(
@@ -531,7 +508,6 @@ class _TransferPreparationSectionState
             );
       }
     } on VaultFailure catch (error) {
-      await remoteConnector?.dispose();
       setState(() {
         _error = error.message;
       });
@@ -622,7 +598,6 @@ class _TransferPreparationSectionState
         _error = error.message;
       });
     } finally {
-      await remoteConnector?.dispose();
       if (mounted && _isSubmitting) {
         setState(() {
           _isSubmitting = false;
@@ -735,30 +710,6 @@ class _TransferPreparationSectionState
           ),
         ),
         const SizedBox(height: 12),
-        if (widget.walletMaterial != null) ...[
-          DropdownButtonFormField<RemoteSignerKind?>(
-            initialValue: _signWith,
-            decoration: const InputDecoration(
-              labelText: 'Подписать через',
-              border: OutlineInputBorder(),
-            ),
-            items: <DropdownMenuItem<RemoteSignerKind?>>[
-              const DropdownMenuItem<RemoteSignerKind?>(
-                value: null,
-                child: Text('On-device (по умолчанию)'),
-              ),
-              for (final descriptor in const RemoteSignerCatalog().descriptors)
-                DropdownMenuItem<RemoteSignerKind?>(
-                  value: descriptor.kind,
-                  child: Text(descriptor.label),
-                ),
-            ],
-            onChanged: _isSubmitting
-                ? null
-                : (kind) => setState(() => _signWith = kind),
-          ),
-          const SizedBox(height: 12),
-        ],
         Align(
           alignment: Alignment.centerLeft,
           child: Wrap(

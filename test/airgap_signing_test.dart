@@ -1,9 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/airgap/airgap_signing.dart';
-import 'package:mobile_wallet_demo/src/auth/wallet_operation_auth.dart';
 import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
-import 'package:mobile_wallet_demo/src/sessions/remote_signing_session.dart';
 import 'package:mobile_wallet_demo/src/transactions/transaction_service.dart';
 
 const network = EvmNetwork.ethereumMainnet;
@@ -130,77 +128,4 @@ void main() {
       throwsA(isA<AirGapPayloadException>()),
     );
   });
-
-  test('connects and signs through the export/import round-trip', () async {
-    final connector = DemoAirGapOfflineConnector(device: _StubAirGapDevice());
-    addTearDown(connector.dispose);
-
-    await connector.connect(accountAddress: sender);
-    expect(connector.state.status, RemoteSigningSessionStatus.connected);
-
-    final raw = await connector.requestSignedTransaction(
-      preparedTransfer: buildPrepared(),
-      nonce: 1,
-      fromAddress: sender,
-    );
-    expect(raw, <int>[2, 171, 205, 239]);
-    expect(connector.lastExportPayload, startsWith('airgap-tx:'));
-    expect(connector.state.status, RemoteSigningSessionStatus.connected);
-  });
-
-  test('moves to error on a mismatched device response', () async {
-    final connector = DemoAirGapOfflineConnector(
-      device: _StubAirGapDevice(requestIdOverride: 'wrong'),
-    );
-    addTearDown(connector.dispose);
-    await connector.connect(accountAddress: sender);
-
-    await expectLater(
-      connector.requestSignedTransaction(
-        preparedTransfer: buildPrepared(),
-        nonce: 1,
-        fromAddress: sender,
-      ),
-      throwsA(isA<AirGapPayloadException>()),
-    );
-    expect(connector.state.status, RemoteSigningSessionStatus.error);
-  });
-
-  test('composes via authorizeRemoteSigning', () async {
-    final connector = DemoAirGapOfflineConnector(device: _StubAirGapDevice());
-    addTearDown(connector.dispose);
-    await connector.connect(accountAddress: sender);
-
-    final operation = const WalletOperationAuthorizer().authorizeRemoteSigning(
-      backendId: 'airgap',
-      address: sender,
-      transport: connector,
-    );
-
-    final signed = await operation.signer.signPreparedTransfer(
-      transactionService: const LocalTransactionService(),
-      preparedTransfer: buildPrepared(),
-      nonce: 1,
-    );
-    expect(signed.rawTransactionHex, '0x02abcdef');
-    expect(signed.signingNote, contains('airgap'));
-  });
-}
-
-class _StubAirGapDevice implements AirGapResponseProvider {
-  _StubAirGapDevice({this.requestIdOverride});
-
-  final String? requestIdOverride;
-
-  @override
-  Future<String> provideSignature({
-    required AirGapSigningRequest request,
-    required String exportPayload,
-  }) async {
-    final response = AirGapSignedResponse(
-      requestId: requestIdOverride ?? request.requestId,
-      rawSignedTransactionHex: '0x02abcdef',
-    );
-    return const AirGapPayloadCodec().encodeResponse(response);
-  }
 }
