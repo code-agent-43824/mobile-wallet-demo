@@ -89,7 +89,7 @@ jobs:
           if-no-files-found: error
 
   ios_simulator:
-    name: iOS Simulator App
+    name: iOS Simulator build
     runs-on: macos-latest
     needs: validate
     steps:
@@ -124,11 +124,91 @@ jobs:
       - name: Build iOS simulator app
         run: flutter build ios --simulator --debug
 
-      - name: Upload iOS artifact
+      - name: Package simulator .app (keep the .app folder, not its contents)
+        run: |
+          set -euo pipefail
+          app="build/ios/iphonesimulator/Runner.app"
+          stage="build/ios/sim-artifact"
+          rm -rf "$stage"
+          mkdir -p "$stage"
+          # ditto preserves the bundle; staging it under a parent dir makes
+          # upload-artifact keep the ".app" folder instead of stripping it,
+          # so the downloaded zip unpacks to a single "Mobile Wallet Demo.app".
+          ditto "$app" "$stage/Mobile Wallet Demo.app"
+
+      - name: Upload iOS simulator artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-simulator-app
-          path: build/ios/iphonesimulator/Runner.app
+          path: build/ios/sim-artifact
+          if-no-files-found: error
+
+  ios_device:
+    name: iOS Device build (unsigned)
+    runs-on: macos-latest
+    needs: validate
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Cache pub packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/CocoaPods
+            ios/Pods
+          key: ${{ runner.os }}-cocoapods-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cocoapods-
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Report code-signing status
+        env:
+          # Secrets are referenced only to test for presence; their values are
+          # never printed. A real signed-IPA export would be wired here, gated
+          # behind these Secrets (see README -> iOS artifacts). Nothing secret
+          # is ever committed to this public repo.
+          HAS_SIGNING: ${{ secrets.IOS_CERTIFICATE_BASE64 != '' && secrets.IOS_PROVISIONING_PROFILE_BASE64 != '' }}
+        run: |
+          if [ "$HAS_SIGNING" = "true" ]; then
+            echo "iOS signing secrets are present, but signed export is not implemented in this workflow."
+            echo "Building UNSIGNED. Extend this job to import the secrets and export a signed .ipa."
+          else
+            echo "No iOS signing secrets configured -> building an UNSIGNED device app (technical artifact)."
+            echo "An unsigned build cannot be installed on a real device. See README -> iOS artifacts."
+          fi
+
+      - name: Build iOS device app (unsigned)
+        run: flutter build ios --release --no-codesign
+
+      - name: Package device .app (keep the .app folder, not its contents)
+        run: |
+          set -euo pipefail
+          app="build/ios/iphoneos/Runner.app"
+          stage="build/ios/device-artifact"
+          rm -rf "$stage"
+          mkdir -p "$stage"
+          ditto "$app" "$stage/Mobile Wallet Demo.app"
+
+      - name: Upload iOS device artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-device-build
+          path: build/ios/device-artifact
           if-no-files-found: error
 
   windows:

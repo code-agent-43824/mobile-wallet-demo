@@ -78,8 +78,53 @@
 Workflow публикует скачиваемые артефакты так, чтобы при скачивании с GitHub был нужен только один `unzip`:
 
 - Android: `app-release.apk`
-- iOS: один архив GitHub Artifact с `Runner.app` для iOS Simulator внутри
+- iOS Simulator: `ios-simulator-app.zip` — внутри одна папка `Mobile Wallet Demo.app` (см. раздел «iOS artifacts»)
+- iOS Device: `ios-device-build.zip` — **неподписанный** device-build (технический артефакт; см. «iOS artifacts»)
 - Windows x64: один архив GitHub Artifact с содержимым `Release/` внутри
+
+## iOS artifacts
+
+CI собирает два независимых iOS-артефакта (параллельные job'ы после `validate`):
+`ios-simulator-app` и `ios-device-build`.
+
+### 1. Запуск в iOS Simulator (на Mac)
+
+1. Открой нужный запуск в GitHub → вкладка **Actions** → job **iOS Simulator build**.
+2. Скачай артефакт **`ios-simulator-app.zip`**.
+3. Распакуй — внутри одна папка **`Mobile Wallet Demo.app`** (готовый `.app` bundle, а не набор файлов
+   `Info.plist` / `Runner` / `Frameworks` / `Assets.car`).
+4. Запусти **Simulator** (Xcode → Open Developer Tool → Simulator) и дождись загрузки симулятора.
+5. Установи приложение одним из способов:
+   - перетащи `Mobile Wallet Demo.app` на окно запущенного симулятора; **или**
+   - в Finder правый клик по `Mobile Wallet Demo.app` → **Share / Поделиться** → **Simulator** → выбери
+     запущенный симулятор.
+
+Так приложение можно посмотреть на Mac без Apple-аккаунта и без подписи.
+
+### 2. Запуск на реальном iPhone / iPad
+
+Артефакт **`ios-device-build.zip`** содержит **неподписанный** device-build (`Mobile Wallet Demo.app`) —
+это технический артефакт. **Установить его на реальное устройство без подписи нельзя.**
+
+Способы запустить на устройстве:
+
+- **Официальный бесплатный способ (рекомендуется):** открой проект в **Xcode** на Mac, в *Signing &
+  Capabilities* выбери свой **Personal Team** (бесплатный Apple ID), подключи iPhone/iPad кабелем и нажми
+  **Run**. Xcode сам подпишет сборку development-сертификатом и provisioning profile.
+- **Через CI с подписью:** device-артефакт можно подписать в GitHub Actions, **только** если заранее заданы
+  signing-credentials в *Settings → Secrets and variables → Actions* (certificate + provisioning profile как
+  секреты). Без них job намеренно собирает unsigned-сборку и пишет об этом в лог. Никакие Apple ID, пароли,
+  сертификаты или профили в репозиторий не коммитятся — он публичный.
+
+Ограничения (честно):
+
+- Simulator-артефакт запускается только в iOS Simulator на Mac, не на реальном устройстве.
+- Для реального iPhone/iPad сборку нужно подписать Apple development certificate + provisioning profile.
+- С **бесплатным** Apple Developer account самый надёжный официальный путь — открыть проект в Xcode, выбрать
+  Personal Team и нажать **Run**.
+- GitHub-hosted runner **не сможет** сам «подключиться» к твоему бесплатному Apple Developer account без
+  заранее подготовленных signing-credentials в Secrets. Обычный IPA из GitHub Actions нельзя просто скачать и
+  поставить на iPhone без подписи.
 
 ## Локальный запуск
 

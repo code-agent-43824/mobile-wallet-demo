@@ -18,6 +18,28 @@ Entry template:
 
 ---
 
+## 2026-06-09 — CI: fix iOS Simulator artifact packaging + add unsigned Device build — branch main — done
+- Plan: the iOS Simulator artifact unzipped to loose bundle contents (`Info.plist`, `Runner`, `Frameworks`,
+  …) instead of a `.app`, because `upload-artifact` was pointed straight at `Runner.app` and strips the dir
+  it is given. Fix it to yield a single `.app`; add a separate, parallel iOS **device** job (unsigned by
+  default, signing only via Secrets); document both scenarios in README. No app code change.
+- Done: `ci.yml` —
+  - `ios_simulator` (renamed "iOS Simulator build"): after the build, `ditto` the bundle to
+    `build/ios/sim-artifact/Mobile Wallet Demo.app` and upload the **parent** dir, so the artifact
+    `ios-simulator-app` (→ `ios-simulator-app.zip`) unzips to one `Mobile Wallet Demo.app` — single unzip,
+    no double-zip (uploading a self-made `.zip` would double-zip on download).
+  - new `ios_device` ("iOS Device build (unsigned)"): `flutter build ios --release --no-codesign` (iphoneos),
+    a code-signing-status step that only checks Secret *presence* (never prints values) and logs clearly that
+    the build is unsigned, then packages the `.app` the same way and uploads `ios-device-build`. Runs in
+    parallel with the simulator job (both `needs: validate`).
+  - No Apple credentials in the repo; a real signed export would be gated behind `IOS_CERTIFICATE_BASE64` /
+    `IOS_PROVISIONING_PROFILE_BASE64` Secrets.
+  - README: updated the CI-artifacts list + added an **"iOS artifacts"** section (Simulator install via
+    Finder → Share → Simulator; device run via Xcode Personal Team; honest signing limits).
+- Next / open: optional — implement a real signed-IPA export gated on the iOS Secrets if on-device installs
+  are needed. Phase 9 still paused.
+- Refs: this commit.
+
 ## 2026-06-09 — Phase 8/9 docs consolidation + dead-end cleanup — branch main — done
 - Plan: after the Phase 8 → 9 role correction, make the docs internally consistent and strip dead-end
   clutter — the **outbound** ("server-side") WC/AirGap remote-signing model, and the conflation of the
