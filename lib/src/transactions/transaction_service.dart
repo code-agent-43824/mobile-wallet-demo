@@ -193,9 +193,10 @@ abstract interface class TransactionService {
     required int nonce,
   });
 
-  /// Assembles a [SignedTransfer] from a raw signed transaction produced
-  /// externally (e.g. by a WalletConnect/AirGap signer), without local key
-  /// material. The transaction hash is derived from [rawSignedTransaction].
+  /// Assembles a [SignedTransfer] from raw signed-transaction bytes without
+  /// re-running local signing — the seam the wallet-side WC v2 / AirGap flow
+  /// uses to wrap an already-signed transaction. The transaction hash is
+  /// derived from [rawSignedTransaction].
   SignedTransfer assembleSignedTransfer({
     required PreparedTransfer preparedTransfer,
     required Uint8List rawSignedTransaction,

@@ -18,6 +18,22 @@ Entry template:
 
 ---
 
+## 2026-06-09 — Phase 8/9 docs consolidation + dead-end cleanup — branch main — done
+- Plan: after the Phase 8 → 9 role correction, make the docs internally consistent and strip dead-end
+  clutter — the **outbound** ("server-side") WC/AirGap remote-signing model, and the conflation of the
+  external NFC device with a signing *transport*. No code/logic change.
+- Done: rewrote the stale `CLAUDE.md` architecture (dropped `RemoteWalletTransactionSigner` /
+  `RemoteSigningTransport` / `RemoteSigningSessionController` / `sessions/…` / `RemoteSignerCatalog` /
+  "Подписать через"; documented the surviving codecs + the wallet-side `WalletConnectService` seam; fixed the
+  Phase status line). Condensed the development-plan status snapshot, stopping point, Phase 8 section, and the
+  v1.11–v1.16 release notes; clarified the external-NFC device as the **custody** axis (Phase 10), explicitly
+  *not* a signing transport. Collapsed the six per-chunk Phase 8 worklog entries (A–F) into one historical
+  summary (record kept, dead-end detail removed). Reworded the `assembleSignedTransfer` doc comment off the
+  outbound framing. Docs + one code comment only — no version bump.
+- Next / open: Phase 9 intentionally not started (paused). When resumed: chunk 9.2 (real `reown_walletkit` +
+  `WC_PROJECT_ID` + DI) or 9.3/9.4 on the fake first. Workflow note: now developing on `main` directly.
+- Refs: this commit.
+
 ## 2026-06-08 — Phase 9 / chunk 9.1: WalletConnectService inbound seam — branch claude/wonderful-rubin-eBDKZ — done
 - Plan (from the reframe "next"): add the wallet-side WalletConnect service abstraction + a fake for tests/DI,
   pure Dart, no SDK yet. Refined during work: keep the `reown_walletkit` dep + DI wiring for 9.2 (where a real impl
@@ -97,155 +113,22 @@ Entry template:
   + DI) by the usual plan → code → record loop.
 - Refs: this commit (docs only).
 
-## 2026-06-06 — Phase 8 / chunk F: remote-signer UI wiring — branch claude/wonderful-rubin-eBDKZ — done
-- Plan (from chunk E "next"): wire the catalog into the unlocked transfer UI so a send can be signed via a
-  WalletConnect/AirGap session.
-- Done: added a "Подписать через" dropdown (On-device / WalletConnect v2 / AirGap) to the transfer section
-  (`_TransferPreparationSection`); when a remote signer is chosen, `_signAndSubmit` builds a demo connector via
-  `RemoteSignerCatalog`, connects it, signs+broadcasts through `authorizeRemoteSigning`, and disposes it
-  afterwards. Added the `sessions/` imports to the orchestrator library. Widget test sends a transfer via the
-  WalletConnect remote signer end-to-end. (Same commit also fixes a chunk-E analyze warning — an unused private
-  parameter.) Bumped to v1.16.0+27.
-- Next / open: Phase 8 fully complete (3 deliverables + optional E/F). Real WC/AirGap relay/SDK and deep
-  signed-tx field validation remain non-goals.
-- Refs: this commit (includes the chunk-E analyze fix).
-
-## 2026-06-06 — Phase 8 / chunk E: remote-signer registry — branch claude/wonderful-rubin-eBDKZ — done
-- Plan:
-  - New module `lib/src/sessions/remote_signer_registry.dart` — a catalog of selectable remote signers
-    (WalletConnect v2, AirGap) and a factory that builds a **working demo connector** for each, so the UI
-    (chunk F) can offer "sign via WalletConnect / AirGap".
-    - `RemoteSignerKind` + `RemoteSignerDescriptor` (id/label/description), `RemoteSignerCatalog` with
-      `descriptors` and `createDemoConnector({kind, walletMaterial, transactionService})`
-      → `RemoteSigningSessionController`.
-    - Demo signing produces a **real** signed tx using the on-device key (stand-in for the remote party):
-      WC via a local `RemoteSessionSigner`; AirGap via a local `AirGapResponseProvider` that rebuilds the tx
-      from the request and signs it (mirrors `LocalTransactionService` EIP-1559 signing).
-  - Tests: catalog descriptors; each kind builds the expected connector type; connect + sign returns a
-    `0x…` signed tx through the session; composition via `authorizeRemoteSigning`.
-  - Out of scope (chunk E): UI (that is chunk F).
-- Done: added `lib/src/sessions/remote_signer_registry.dart` — `RemoteSignerKind`, `RemoteSignerDescriptor`,
-  and `RemoteSignerCatalog` (`descriptors` + `createDemoConnector({kind, walletMaterial, transactionService})`).
-  Demo connectors sign the real prepared tx with the on-device key: WC via a local `RemoteSessionSigner`;
-  AirGap via a local `AirGapResponseProvider` that rebuilds the tx from the request and signs it (EIP-1559,
-  0x02-prefixed). Tests: catalog lists both, factory returns the right connector type, each connector
-  connects + signs a real `0x02…` tx. Bumped to v1.15.0+26.
-- Next / open: chunk F — wire the catalog into the unlocked transfer UI (pick WC/AirGap, connect, then
-  sign+send the prepared transfer via the remote session). Real relay/SDK still out of scope.
-- Refs: 06cfca5 (plan); this commit.
-
-## 2026-06-04 — Phase 8 / chunk D: AirGap offline-signing contract — branch claude/wonderful-rubin-eBDKZ — done
-- Plan:
-  - New module `lib/src/airgap/airgap_signing.dart` — the AirGap (offline QR) integration contract:
-    - `AirGapSigningRequest` (export payload: tx fields as hex + a request id) and `AirGapSignedResponse`
-      (import payload: request id + raw signed-tx hex), both with `toJson`/`fromJson`.
-    - `AirGapPayloadCodec` — `buildRequest(preparedTransfer,…)`, `encodeRequest`/`decodeRequest`,
-      `encodeResponse`/`decodeResponse` (scheme-prefixed base64url JSON, QR-transportable), and
-      `toSignedBytes(response, expectedRequestId)` that **validates the request id** before returning bytes.
-    - `AirGapResponseProvider` (the air-gapped device: given an export payload, returns the response
-      payload — the demo stand-in for "scan request → device signs → scan response").
-    - `AirGapOfflineConnector` (`implements RemoteSigningSessionController` from chunk B, adds
-      `lastExportPayload`) + `DemoAirGapOfflineConnector` that composes a `DemoRemoteSigningSessionController`
-      and drives the export→sign→import round-trip through the codec.
-  - Tests: request/response encode↔decode round-trips, request-id mismatch guard, connector connect/sign
-    (records `lastExportPayload`), and composition via `authorizeRemoteSigning`.
-  - Ticks the Phase 8 deliverable "protocol integration contracts for AirGap" → all three Phase 8
-    deliverables done (only optional UI wiring E/F would remain).
-  - Out of scope: real AirGap protocol/QR library; deep signed-tx field validation; UI wiring (E/F).
-- Done: added `lib/src/airgap/airgap_signing.dart` — `AirGapSigningRequest` / `AirGapSignedResponse`
-  (+ JSON), `AirGapPayloadCodec` (`buildRequest`, `encode/decodeRequest`, `encode/decodeResponse` as
-  scheme-prefixed base64url JSON, and `toSignedBytes` with request-id validation), `AirGapResponseProvider`,
-  and `AirGapOfflineConnector` / `DemoAirGapOfflineConnector` (composes the chunk-B demo session controller,
-  drives the export→sign→import round-trip, exposes `lastExportPayload`). Tests: request/response
-  encode↔decode round-trips, request-id mismatch + empty + wrong-scheme guards, connector connect/sign,
-  error transition, and composition via `authorizeRemoteSigning`. Bumped to v1.14.0+25.
-- Next / open: all three Phase 8 deliverables are done (state model + WalletConnect v2 + AirGap), so Phase 8
-  contracts are complete. Remaining/optional: UI + backend-registry wiring for the remote signers (breakdown
-  chunks E/F); real relay/SDK + deep signed-tx field validation remain non-goals.
-- Refs: ef861e9 (plan); this commit.
-
-## 2026-06-04 — Phase 8 / chunk C: WalletConnect v2 contract — branch claude/wonderful-rubin-eBDKZ — done
-- Plan:
-  - New module `lib/src/walletconnect/wallet_connect_v2.dart` — the WC v2 integration contract
-    (no relay/SDK; that stays a non-goal):
-    - `WalletConnectRpcRequest` + `WalletConnectV2RequestCodec` — maps a `PreparedTransfer` to a CAIP-2
-      `eth_signTransaction` request and decodes the signed-tx-hex response to raw bytes (the mapping).
-    - `WalletConnectSessionInfo` (topic / peer / chains / accounts) and `WalletConnectV2Connector`
-      (`implements RemoteSigningSessionController` from chunk B) with `pair(wcUri)` + `lastRequest`.
-    - `DemoWalletConnectV2Connector` — composes a `DemoRemoteSigningSessionController` for the lifecycle,
-      validates the `wc:` URI on pair, builds the WC request via the codec, and delegates signing to an
-      injected `RemoteSessionSigner` (the demo stand-in for the relay round-trip).
-  - Tests: codec mapping (native/erc20 → request, response hex → bytes), pair (reject bad URI, sets
-    session info), sign (delegates + records `lastRequest`), and composition via `authorizeRemoteSigning`.
-  - Ticks the Phase 8 deliverable "protocol integration contracts for WalletConnect v2".
-  - Out of scope: real WC relay/SDK + networking; deep signed-tx field validation; UI wiring (E/F).
-- Done: added `lib/src/walletconnect/wallet_connect_v2.dart` — `WalletConnectRpcRequest` +
-  `WalletConnectV2RequestCodec` (PreparedTransfer → CAIP-2 `eth_signTransaction` request; signed-tx-hex →
-  bytes), `WalletConnectSessionInfo`, the `WalletConnectV2Connector` contract (implements the chunk-B
-  `RemoteSigningSessionController`, adds `pair(wcUri)` + `lastRequest`), and `DemoWalletConnectV2Connector`
-  (composes a `DemoRemoteSigningSessionController`, validates the `wc:` URI, builds the request via the codec,
-  delegates signing to an injected `RemoteSessionSigner`). Tests: native/erc20 encode, response decode
-  (+empty guard), pair (reject bad URI / record session info), sign (+`lastRequest`), composition via
-  `authorizeRemoteSigning`. Bumped to v1.13.0+24.
-- Next / open: chunk D (AirGap offline-signing contract — serialize unsigned tx to a transport payload,
-  ingest the signed payload), then UI wiring (E/F). Real WC relay/SDK + deep signed-tx validation remain deferred.
-- Refs: 7449e67 (plan); this commit.
-
-## 2026-06-04 — Phase 8 / chunk B: external signing session state model — branch claude/wonderful-rubin-eBDKZ — done
-- Plan:
-  - New module `lib/src/sessions/remote_signing_session.dart` — a protocol-agnostic session/lifecycle
-    model that WC (chunk C) and AirGap (chunk D) will implement:
-    - `RemoteSigningSessionStatus` (idle → connecting → connected → awaitingSignature →
-      disconnected / error) + an immutable `RemoteSigningSession` snapshot.
-    - `RemoteSigningSessionController` (implements the chunk-A `RemoteSigningTransport`): owns the
-      lifecycle, exposes `state` + a `changes` stream and `connect()` / `disconnect()`, and updates
-      its state around `requestSignedTransaction` (awaitingSignature → connected / error).
-    - `DemoRemoteSigningSessionController` — in-memory simulation (signing delegated via an injected
-      callback), mirroring the Phase 7 external-device demo precedent.
-  - Tests: lifecycle transitions + change stream, sign-before-connect guard, error transition, and an
-    e2e proving the session composes with chunk A through `submitAuthorizedTransferFlow`.
-  - Ticks the Phase 8 deliverable "state model prepared for external signing/session flows".
-  - Out of scope: real WC/AirGap protocols (C/D) and UI wiring (E/F).
-- Done: added `lib/src/sessions/remote_signing_session.dart` — `RemoteSigningSessionStatus`, immutable
-  `RemoteSigningSession` (+ `copyWith`), `RemoteSessionSigner` (the inject point WC/AirGap implement), and
-  `RemoteSigningSessionController implements RemoteSigningTransport` with a `DemoRemoteSigningSessionController`
-  that walks connect → awaitingSignature → connected / error / disconnected and exposes a `changes` stream.
-  The controller is a drop-in transport for `authorizeRemoteSigning`. Tests cover the lifecycle (incl. the
-  awaitingSignature transition), the sign-before-connect guard, the error transition, and composition with
-  chunk A. Bumped to v1.12.0+23.
-- Next / open: chunk C (WalletConnect v2 contract — implement `RemoteSigningSessionController` over a WC
-  pairing/request model), then chunk D (AirGap). UI wiring (E/F) still pending; deep signed-tx field
-  validation still deferred to C/D.
-- Refs: 82de0e5 (plan); this commit.
-
-## 2026-06-04 — Phase 8 / chunk A: async remote signing seam — branch claude/wonderful-rubin-eBDKZ — done
-- Plan:
-  - Make `WalletTransactionSigner.signPreparedTransfer` async (`Future<SignedTransfer>`);
-    the local signers wrap the existing synchronous signing, so the local path is unchanged.
-    `submitAuthorizedTransferFlow` / `submitTransferFlow` await it.
-  - Add the remote-signer foundation that WC (chunk C) and AirGap (chunk D) will build on:
-    `RemoteSigningTransport` (returns a raw signed tx from an external party),
-    `RemoteWalletTransactionSigner` (async, holds no key material),
-    `WalletOperationAuthorizer.authorizeRemoteSigning(...)`, and `WalletAuthMethod.remoteSession`.
-  - Add `TransactionService.assembleSignedTransfer(preparedTransfer, rawSignedTransaction)` so a
-    remote signer can build a `SignedTransfer` from externally-provided raw bytes without
-    duplicating crypto (impl in `LocalTransactionService`, delegated by the hardened service).
-  - Update the `WalletAuthMethod` switch in the unlocked view; add tests for the async local
-    path and an end-to-end remote path via a fake transport; bump the version.
-  - Out of scope for chunk A: real WC/AirGap protocols and deep signed-tx field validation
-    (RLP decode + compare against the prepared tx) — flagged as follow-up for chunks C/D.
-- Done: the signer contract is now async (`Future<SignedTransfer>`); local/external-device signers
-  wrap the synchronous local signing and the hardened flow awaits it (local path unchanged). Added the
-  remote foundation: `RemoteSigningTransport`, `RemoteWalletTransactionSigner`,
-  `WalletOperationAuthorizer.authorizeRemoteSigning`, `WalletAuthMethod.remoteSession`, and
-  `TransactionService.assembleSignedTransfer` (impl in `LocalTransactionService`, delegated by the hardened
-  service). Updated the unlocked-view auth-method switch. Tests: unit (`authorizeRemoteSigning` type +
-  auth method) and e2e (async remote signer through `submitAuthorizedTransferFlow` via a local-delegating
-  transport). Bumped to v1.11.0+22.
-- Next / open: chunk B (session/lifecycle state model for external signing), then C (WalletConnect v2
-  contract) and D (AirGap contract). Deep signed-tx field validation (RLP decode + compare against the
-  prepared tx) is still deferred to C/D.
-- Refs: 4c8a1ee (plan); this commit.
+## 2026-06-04 → 06 — Phase 8 (chunks A–F): outbound WC v2 + AirGap remote-signing — branch claude/wonderful-rubin-eBDKZ — superseded
+- Summary (condensed; per-chunk Plan/Done detail removed as dead-end clutter). Phase 8 shipped an **outbound**
+  remote-signing model (v1.11–v1.16) — this app *requesting* a signature from an external WalletConnect/AirGap
+  signer:
+  - A (v1.11): async `WalletTransactionSigner` seam + `RemoteSigningTransport` / `RemoteWalletTransactionSigner`
+    / `authorizeRemoteSigning` + `TransactionService.assembleSignedTransfer`.
+  - B (v1.12): protocol-agnostic `RemoteSigningSessionController` lifecycle (`sessions/remote_signing_session.dart`).
+  - C/D (v1.13/v1.14): WC v2 + AirGap contracts — the `WalletConnectV2RequestCodec` / `AirGapPayloadCodec`
+    codecs plus outbound demo connectors over the chunk-B controller.
+  - E/F (v1.15/v1.16): `RemoteSignerCatalog` (`sessions/remote_signer_registry.dart`) + a "Подписать через"
+    send-flow option.
+- Outcome: the **outbound role was wrong** — the wallet must *receive* signing requests, not request them.
+  Chunk 9.0 (v1.17) removed the transport/session/registry/connectors + the "Подписать через" UI; only the
+  codecs (`WalletConnectV2RequestCodec`, `AirGapPayloadCodec`) and `assembleSignedTransfer` were kept. The
+  wallet-side inbound rebuild is Phase 9 (see the 9.0 entry above and `docs/development-plan.md`).
+- Refs: v1.11–v1.16 (4c8a1ee / 82de0e5 / 7449e67 / ef861e9 / 06cfca5 + per-chunk commits); superseded by 9.0.
 
 ## 2026-06-04 — Cursor/Copilot pointer files — branch claude/wonderful-rubin-eBDKZ — done
 - Plan: add thin pointer files for non-Claude tools so they also follow the working
