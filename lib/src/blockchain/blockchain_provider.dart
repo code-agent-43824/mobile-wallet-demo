@@ -2,78 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../key_storage/secure_key_value_store.dart';
+import 'blockchain_models.dart';
 import 'network_config.dart';
+import 'snapshot_cache.dart';
 
-class BlockchainFailure implements Exception {
-  const BlockchainFailure(this.message);
-
-  final String message;
-
-  @override
-  String toString() => 'BlockchainFailure: $message';
-}
-
-class WalletChainSnapshot {
-  const WalletChainSnapshot({
-    required this.network,
-    required this.address,
-    required this.nativeBalanceWei,
-    required this.nativeBalanceFormatted,
-    required this.baseFeeGwei,
-    required this.providerLabel,
-    required this.fetchedAtUtc,
-    required this.tokenBalances,
-    required this.recentTransactions,
-    this.loadedFromCache = false,
-  });
-
-  final EvmNetwork network;
-  final String address;
-  final BigInt nativeBalanceWei;
-  final String nativeBalanceFormatted;
-  final double? baseFeeGwei;
-  final String providerLabel;
-  final DateTime fetchedAtUtc;
-  final List<TokenBalanceSnapshot> tokenBalances;
-  final List<RecentTransactionSnapshot> recentTransactions;
-  final bool loadedFromCache;
-}
-
-class TokenBalanceSnapshot {
-  const TokenBalanceSnapshot({
-    required this.symbol,
-    required this.name,
-    required this.balanceFormatted,
-    required this.rawBalance,
-    required this.decimals,
-    required this.contractAddress,
-  });
-
-  final String symbol;
-  final String name;
-  final String balanceFormatted;
-  final BigInt rawBalance;
-  final int decimals;
-  final String contractAddress;
-}
-
-class RecentTransactionSnapshot {
-  const RecentTransactionSnapshot({
-    required this.hash,
-    required this.timestampUtc,
-    required this.directionLabel,
-    required this.counterparty,
-    required this.valueFormatted,
-    required this.statusLabel,
-  });
-
-  final String hash;
-  final DateTime? timestampUtc;
-  final String directionLabel;
-  final String counterparty;
-  final String valueFormatted;
-  final String statusLabel;
-}
+export 'blockchain_models.dart';
 
 abstract interface class BlockchainProvider {
   Future<WalletChainSnapshot> loadSnapshot({
@@ -147,11 +80,11 @@ class PublicRpcBlockchainProvider implements BlockchainProvider {
     SecureKeyValueStore? cacheStore,
   }) : _rpcTransport = rpcTransport ?? HttpJsonRpcTransport(),
        _apiTransport = apiTransport ?? HttpJsonApiTransport(),
-       _cacheStore = cacheStore;
+       _cache = cacheStore == null ? null : SnapshotCache(cacheStore);
 
   final JsonRpcTransport _rpcTransport;
   final JsonApiTransport _apiTransport;
-  final SecureKeyValueStore? _cacheStore;
+  final SnapshotCache? _cache;
 
   @override
   Future<WalletChainSnapshot> loadSnapshot({
@@ -160,7 +93,7 @@ class PublicRpcBlockchainProvider implements BlockchainProvider {
   }) async {
     final config = evmNetworkConfigs[network]!;
     BlockchainFailure? lastFailure;
-    final cachedSnapshot = await _readCachedSnapshot(
+    final cachedSnapshot = await _cache?.read(
       network: network,
       address: address,
     );
@@ -199,7 +132,7 @@ class PublicRpcBlockchainProvider implements BlockchainProvider {
           tokenBalances: explorerData.tokenBalances,
           recentTransactions: explorerData.recentTransactions,
         );
-        await _writeCachedSnapshot(snapshot);
+        await _cache?.write(snapshot);
 
         return snapshot;
       } on BlockchainFailure catch (error) {
@@ -427,116 +360,6 @@ class PublicRpcBlockchainProvider implements BlockchainProvider {
         ? fractional.substring(0, 6)
         : fractional;
     return '$whole.$compact';
-  }
-
-  String _cacheKey({required EvmNetwork network, required String address}) {
-    return 'wallet_snapshot.${network.name}.${address.toLowerCase()}';
-  }
-
-  Future<WalletChainSnapshot?> _readCachedSnapshot({
-    required EvmNetwork network,
-    required String address,
-  }) async {
-    final store = _cacheStore;
-    if (store == null) {
-      return null;
-    }
-
-    final raw = await store.read(_cacheKey(network: network, address: address));
-    if (raw == null) {
-      return null;
-    }
-
-    try {
-      final data = jsonDecode(raw) as Map<String, dynamic>;
-      return WalletChainSnapshot(
-        network: network,
-        address: data['address'] as String? ?? address,
-        nativeBalanceWei: BigInt.parse(data['nativeBalanceWei'] as String),
-        nativeBalanceFormatted:
-            data['nativeBalanceFormatted'] as String? ?? '0',
-        baseFeeGwei: (data['baseFeeGwei'] as num?)?.toDouble(),
-        providerLabel: data['providerLabel'] as String? ?? 'cache',
-        fetchedAtUtc: DateTime.parse(data['fetchedAtUtc'] as String).toUtc(),
-        tokenBalances: (data['tokenBalances'] as List<dynamic>? ?? <dynamic>[])
-            .map((item) => item as Map<String, dynamic>)
-            .map(
-              (item) => TokenBalanceSnapshot(
-                symbol: item['symbol'] as String? ?? 'TOKEN',
-                name: item['name'] as String? ?? 'Unknown token',
-                balanceFormatted: item['balanceFormatted'] as String? ?? '0',
-                rawBalance:
-                    BigInt.tryParse(item['rawBalance'] as String? ?? '0') ??
-                    BigInt.zero,
-                decimals: item['decimals'] as int? ?? 18,
-                contractAddress: item['contractAddress'] as String? ?? '—',
-              ),
-            )
-            .toList(growable: false),
-        recentTransactions:
-            (data['recentTransactions'] as List<dynamic>? ?? <dynamic>[])
-                .map((item) => item as Map<String, dynamic>)
-                .map(
-                  (item) => RecentTransactionSnapshot(
-                    hash: item['hash'] as String? ?? '—',
-                    timestampUtc: _tryParseTimestamp(
-                      item['timestampUtc'] as String?,
-                    ),
-                    directionLabel:
-                        item['directionLabel'] as String? ?? 'Unknown',
-                    counterparty: item['counterparty'] as String? ?? '—',
-                    valueFormatted: item['valueFormatted'] as String? ?? '0',
-                    statusLabel: item['statusLabel'] as String? ?? 'Unknown',
-                  ),
-                )
-                .toList(growable: false),
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<void> _writeCachedSnapshot(WalletChainSnapshot snapshot) async {
-    final store = _cacheStore;
-    if (store == null) {
-      return;
-    }
-
-    await store.write(
-      _cacheKey(network: snapshot.network, address: snapshot.address),
-      jsonEncode(<String, dynamic>{
-        'address': snapshot.address,
-        'nativeBalanceWei': snapshot.nativeBalanceWei.toString(),
-        'nativeBalanceFormatted': snapshot.nativeBalanceFormatted,
-        'baseFeeGwei': snapshot.baseFeeGwei,
-        'providerLabel': snapshot.providerLabel,
-        'fetchedAtUtc': snapshot.fetchedAtUtc.toIso8601String(),
-        'tokenBalances': snapshot.tokenBalances
-            .map(
-              (token) => <String, dynamic>{
-                'symbol': token.symbol,
-                'name': token.name,
-                'balanceFormatted': token.balanceFormatted,
-                'rawBalance': token.rawBalance.toString(),
-                'decimals': token.decimals,
-                'contractAddress': token.contractAddress,
-              },
-            )
-            .toList(growable: false),
-        'recentTransactions': snapshot.recentTransactions
-            .map(
-              (tx) => <String, dynamic>{
-                'hash': tx.hash,
-                'timestampUtc': tx.timestampUtc?.toIso8601String(),
-                'directionLabel': tx.directionLabel,
-                'counterparty': tx.counterparty,
-                'valueFormatted': tx.valueFormatted,
-                'statusLabel': tx.statusLabel,
-              },
-            )
-            .toList(growable: false),
-      }),
-    );
   }
 
   BigInt _hexToBigInt(String? value) {

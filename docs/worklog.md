@@ -18,6 +18,20 @@ Entry template:
 
 ---
 
+## 2026-06-11 — Refactor: extract SnapshotCache + record audit decisions — branch main — done
+- Plan (acts on docs/repo-review.md #3/#4): split the cache concern out of the 589-line
+  `blockchain_provider.dart`; record the decided/deferred audit items (single-account, l10n, test fidelity).
+- Done: new `blockchain/blockchain_models.dart` (the snapshot models + `BlockchainFailure`, **re-exported**
+  from `blockchain_provider.dart` so no importer changes) and `blockchain/snapshot_cache.dart` (`SnapshotCache`:
+  cache-key + `read`/`write`, bodies moved **verbatim**). `PublicRpcBlockchainProvider` now composes a
+  `SnapshotCache?` built from the unchanged `cacheStore` constructor arg → provider is 412 lines (was 589).
+  Behaviour unchanged: same cache key + JSON format (the provider test pins both). Documented
+  single-account / l10n / test-fidelity as explicit non-goals in `development-plan.md`. No behaviour change →
+  no version bump.
+- Next / open: optional follow-up — extract the Blockscout explorer parsing into an `ExplorerClient` (the
+  other mixed concern in the provider); pubspec template comments remain (cosmetic). Phase 9 still paused.
+- Refs: this commit.
+
 ## 2026-06-11 — Refactor: extract WalletFlowController (UI orchestrator) — branch main — done
 - Plan (acts on docs/repo-review.md #1): pull the wallet state machine + all domain actions out of the
   ~560-line `WalletFlowScreen` State into a widget-free `WalletFlowController` (`ChangeNotifier`), so the

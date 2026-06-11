@@ -371,3 +371,6 @@ Status: ⏳ Planned (after Phase 9).
 - no real WalletConnect v2 relay/SDK integration yet (only the codec + the inbound service seam)
 - no real AirGap relay/QR integration yet (only the payload codec)
 - no multi-chain support beyond Ethereum Mainnet and Sepolia yet
+- **single-account by design** (audit decision): one EVM address derived at `m/44'/60'/0'/0/0`; HD-account discovery / multiple accounts are out of scope — Phase 9 WalletConnect sessions expose this one account (`eip155:*:<address>`)
+- **localization**: UI strings are intentionally inlined Russian and asserted by widget tests; no ARB/`intl` extraction is planned for the demo
+- **test fidelity**: tests run against in-memory fakes; there are no live RPC/relay/secure-storage integration tests — the real `reown_walletkit` path (chunk 9.2) will need manual/dogfood validation
