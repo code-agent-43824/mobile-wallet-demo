@@ -18,6 +18,21 @@ Entry template:
 
 ---
 
+## 2026-06-11 — Refactor: extract WalletFlowController (UI orchestrator) — branch main — done
+- Plan (acts on docs/repo-review.md #1): pull the wallet state machine + all domain actions out of the
+  ~560-line `WalletFlowScreen` State into a widget-free `WalletFlowController` (`ChangeNotifier`), so the
+  logic is unit-testable and the widget becomes a thin listener. No behavior change.
+- Done: new `lib/src/wallet_flow_controller.dart` (`part of wallet_flow_screen.dart`, public class) owns the
+  vault/external-device/registry collaborators, all stage+session state, and every action (load/create/
+  import/unlock/biometrics/lock/external-device ops). `setState` → guarded `notifyListeners`; `if (!mounted)`
+  → `if (_disposed)`. `wallet_flow_screen.dart` is now just create+listen+render (identical widget tree and
+  callback wiring). Kept it a `part` (not a separate library) so the library's imports stay invariant — zero
+  unused-import risk with no local analyzer. Added `test/wallet_flow_controller_test.dart` driving the state
+  machine with no widget. Bumped v1.19.0+30.
+- Next / open: per the review — `blockchain_provider.dart` split, single-account decision, then Phase 9
+  (9.3/9.4 on the fake before the 9.2 native SDK). Phase 9 still paused.
+- Refs: this commit.
+
 ## 2026-06-11 — Quick repo audit recorded — branch main — done
 - Plan: shallow-but-honest review (goals/code/docs/results) to guide further work.
 - Done: `docs/repo-review.md` — strengths, ranked weaknesses (UI orchestrator debt, fake-only

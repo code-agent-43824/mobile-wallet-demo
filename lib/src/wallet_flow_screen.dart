@@ -17,8 +17,11 @@ import 'transactions/hardened_transaction_service.dart';
 import 'transactions/transaction_service.dart';
 import 'transactions/transaction_tracker.dart';
 
-// The presentational widgets for each WalletFlowStage live in part files to keep
-// this orchestrator focused on state-machine wiring. See:
+// The wallet state machine + every domain action live in a widget-free
+// WalletFlowController; the presentational widgets for each WalletFlowStage live
+// in part files. This orchestrator just owns the controller and renders its
+// current stage.
+part 'wallet_flow_controller.dart';
 part 'wallet_flow_screen_widgets.dart';
 part 'wallet_flow_screen_onboarding.dart';
 part 'wallet_flow_screen_unlocked.dart';
@@ -59,337 +62,35 @@ class WalletFlowScreen extends StatefulWidget {
 }
 
 class _WalletFlowScreenState extends State<WalletFlowScreen> {
-  late final PhoneSecureVault _vault;
-  late final ExternalDeviceDemoBackend _externalDeviceBackend;
-  late final WalletBackendRegistry _backendRegistry;
-  final WalletOperationAuthorizer _walletOperationAuthorizer =
-      const WalletOperationAuthorizer();
-
-  WalletFlowStage _stage = WalletFlowStage.loading;
-  StoredWalletSummary? _summary;
-  WalletMaterial? _material;
-  String? _seedPhraseToShow;
-  String? _errorMessage;
-  String? _pendingBiometricPin;
-  String? _selectedBackendId;
-  ExternalDeviceDemoRuntimeState? _externalRuntimeState;
-  WalletAuthMethod _lastUnlockAuthMethod = WalletAuthMethod.pin;
-  bool _biometricsEnabled = false;
-  bool _biometricsAvailable = false;
+  late final WalletFlowController _controller;
 
   @override
   void initState() {
     super.initState();
-    _vault = PhoneSecureVault(
+    _controller = WalletFlowController(
       store: widget.store,
-      biometricAuth: widget.biometricAuthGateway,
-    );
-    _externalDeviceBackend = ExternalDeviceDemoBackend(store: widget.store);
-    _backendRegistry = WalletBackendRegistry(
-      store: widget.store,
-      entries: <WalletBackendCatalogEntry>[
-        WalletBackendCatalogEntry(
-          descriptor: const WalletBackendDescriptor(
-            id: 'phone_secure_vault',
-            kind: WalletBackendKind.phoneSecureVault,
-            label: 'Phone Secure Vault',
-            description:
-                'Seed хранится локально в защищённом phone vault под PIN и опциональной биометрией.',
-          ),
-          backend: _vault,
-        ),
-        WalletBackendCatalogEntry(
-          descriptor: const WalletBackendDescriptor(
-            id: 'external_nfc_demo_device',
-            kind: WalletBackendKind.externalDevice,
-            label: 'External NFC demo device',
-            description:
-                'Симулированный внешний NFC-подписант для Phase 7: отдельная UX-ветка и отдельный signing/auth runtime без реального SDK.',
-            availabilityNote:
-                'Demo-only путь: настоящий NFC SDK пока не подключён.',
-          ),
-          backend: _externalDeviceBackend,
-        ),
-      ],
-    );
-    _loadInitialState();
+      biometricAuthGateway: widget.biometricAuthGateway,
+    )..addListener(_onControllerChanged);
+    _controller.loadInitialState();
   }
 
-  KeyStorageBackend get _activeBackend {
-    final selectedBackendId = _selectedBackendId;
-    if (selectedBackendId != null) {
-      final backend = _backendRegistry.backendById(selectedBackendId);
-      if (backend != null) {
-        return backend;
-      }
-    }
-    return _vault;
-  }
-
-  bool get _isExternalBackendSelected =>
-      _activeBackend is ExternalDeviceKeyStorageBackend;
-
-  Future<void> _selectBackend(String backendId) async {
-    await _runGuarded(() async {
-      await _backendRegistry.selectBackend(backendId);
-      _selectedBackendId = backendId;
-      if (backendId == _externalDeviceBackend.backendId) {
-        _externalRuntimeState = await _externalDeviceBackend.loadRuntimeState();
-      } else {
-        _externalRuntimeState = null;
-      }
-      _errorMessage = null;
-    });
-  }
-
-  Future<void> _loadInitialState() async {
-    try {
-      final selectedBackendId = await _backendRegistry.loadSelectedBackendId();
-      final activeBackend =
-          _backendRegistry.backendById(selectedBackendId) ?? _vault;
-      final summary = await activeBackend.getWalletSummary();
-      final biometricsEnabled = await activeBackend.isBiometricUnlockEnabled();
-      final biometricsAvailable = await activeBackend
-          .isBiometricUnlockAvailable();
-      final externalRuntimeState = activeBackend is ExternalDeviceDemoBackend
-          ? await activeBackend.loadRuntimeState()
-          : null;
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _selectedBackendId = selectedBackendId;
-        _summary = summary;
-        _externalRuntimeState = externalRuntimeState;
-        _biometricsEnabled = biometricsEnabled;
-        _biometricsAvailable = biometricsAvailable;
-        _stage = summary == null
-            ? WalletFlowStage.welcome
-            : WalletFlowStage.locked;
-      });
-    } on VaultFailure catch (error) {
-      // A corrupt or unsupported at-rest payload must not crash startup; surface
-      // it and fall back to the welcome flow so the wallet can be re-created.
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _errorMessage = error.message;
-        _stage = WalletFlowStage.welcome;
-      });
+  void _onControllerChanged() {
+    if (mounted) {
+      setState(() {});
     }
   }
 
-  Future<void> _createWallet({required String pin}) async {
-    await _runGuarded(() async {
-      final backend = _activeBackend;
-      final material = await backend.createWallet(pin: pin);
-      _summary = StoredWalletSummary(
-        address: material.address,
-        backendId: backend.backendId,
-        createdAtUtc: DateTime.now().toUtc(),
-      );
-      _material = material;
-      _pendingBiometricPin = pin;
-      _lastUnlockAuthMethod = _isExternalBackendSelected
-          ? WalletAuthMethod.externalDevice
-          : WalletAuthMethod.pin;
-      if (_isExternalBackendSelected) {
-        _seedPhraseToShow = null;
-        _biometricsEnabled = false;
-        _biometricsAvailable = false;
-        _material = null;
-        backend.lock();
-        _externalRuntimeState = await _externalDeviceBackend.loadRuntimeState();
-        _stage = WalletFlowStage.locked;
-      } else {
-        _seedPhraseToShow = material.mnemonic;
-        _stage = WalletFlowStage.showSeed;
-      }
-    });
-  }
-
-  Future<void> _importWallet({
-    required String mnemonic,
-    required String pin,
-  }) async {
-    await _runGuarded(() async {
-      final backend = _activeBackend;
-      final material = await backend.importWallet(mnemonic: mnemonic, pin: pin);
-      _summary = StoredWalletSummary(
-        address: material.address,
-        backendId: backend.backendId,
-        createdAtUtc: DateTime.now().toUtc(),
-      );
-      _material = material;
-      _pendingBiometricPin = pin;
-      _seedPhraseToShow = null;
-      _lastUnlockAuthMethod = _isExternalBackendSelected
-          ? WalletAuthMethod.externalDevice
-          : WalletAuthMethod.pin;
-      if (_isExternalBackendSelected) {
-        _biometricsEnabled = false;
-        _biometricsAvailable = false;
-        _material = null;
-        backend.lock();
-        _externalRuntimeState = await _externalDeviceBackend.loadRuntimeState();
-        _stage = WalletFlowStage.locked;
-      } else {
-        _stage = WalletFlowStage.biometricPrompt;
-      }
-    });
-  }
-
-  Future<void> _unlockWallet(String pin) async {
-    await _runGuarded(() async {
-      _material = await _activeBackend.unlock(pin: pin);
-      _lastUnlockAuthMethod = _activeBackend is ExternalDeviceKeyStorageBackend
-          ? WalletAuthMethod.externalDevice
-          : WalletAuthMethod.pin;
-      if (_activeBackend is ExternalDeviceDemoBackend) {
-        _externalRuntimeState = await _externalDeviceBackend.loadRuntimeState();
-      }
-      _stage = WalletFlowStage.unlocked;
-    });
-  }
-
-  Future<void> _runGuarded(Future<void> Function() action) async {
-    try {
-      await action();
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _errorMessage = null;
-      });
-    } on VaultFailure catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _errorMessage = error.message;
-      });
-    }
-  }
-
-  void _goToWelcome() {
-    setState(() {
-      _errorMessage = null;
-      _stage = WalletFlowStage.welcome;
-    });
-  }
-
-  void _finishSeedBackup() {
-    setState(() {
-      _stage = WalletFlowStage.biometricPrompt;
-    });
-  }
-
-  Future<void> _completeBiometricChoice(bool enabled) async {
-    await _runGuarded(() async {
-      final pin = _pendingBiometricPin;
-      if (enabled) {
-        if (pin == null || pin.isEmpty) {
-          throw const VaultFailure(
-            'Не удалось включить биометрию: PIN текущей сессии недоступен.',
-          );
-        }
-        await _activeBackend.setBiometricUnlockEnabled(enabled: true, pin: pin);
-      } else {
-        await _activeBackend.setBiometricUnlockEnabled(enabled: false, pin: '');
-      }
-
-      _biometricsEnabled = enabled;
-      _material = null;
-      _pendingBiometricPin = null;
-      _seedPhraseToShow = null;
-      _stage = WalletFlowStage.locked;
-      _activeBackend.lock();
-      if (_activeBackend is ExternalDeviceDemoBackend) {
-        _externalRuntimeState = await _externalDeviceBackend.loadRuntimeState();
-      }
-    });
-  }
-
-  Future<void> _unlockWithBiometrics() async {
-    await _runGuarded(() async {
-      _material = await _activeBackend.unlockWithBiometrics();
-      _lastUnlockAuthMethod = WalletAuthMethod.biometric;
-      _stage = WalletFlowStage.unlocked;
-    });
-  }
-
-  Future<void> _refreshExternalRuntimeState() async {
-    if (_activeBackend is! ExternalDeviceDemoBackend) {
-      return;
-    }
-    final runtimeState = await (_activeBackend as ExternalDeviceDemoBackend)
-        .loadRuntimeState();
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _externalRuntimeState = runtimeState;
-    });
-  }
-
-  Future<void> _simulateExternalDeviceOffline() async {
-    await _runGuarded(() async {
-      await _externalDeviceBackend.simulateDeviceUnavailable();
-      _material = null;
-      _stage = WalletFlowStage.locked;
-      await _refreshExternalRuntimeState();
-    });
-  }
-
-  Future<void> _reconnectExternalDevice() async {
-    await _runGuarded(() async {
-      await _externalDeviceBackend.reconnectDevice();
-      await _refreshExternalRuntimeState();
-    });
-  }
-
-  Future<void> _disconnectExternalSession() async {
-    await _runGuarded(() async {
-      await _externalDeviceBackend.disconnectSession();
-      _material = null;
-      _stage = WalletFlowStage.locked;
-      await _refreshExternalRuntimeState();
-    });
-  }
-
-  Future<void> _performExternalPkcs11Operation(
-    ExternalDevicePkcs11Operation operation,
-  ) async {
-    await _runGuarded(() async {
-      await _externalDeviceBackend.performPkcs11Operation(operation);
-      await _refreshExternalRuntimeState();
-    });
-  }
-
-  void _lockWallet() {
-    _activeBackend.lock();
-    if (_activeBackend is ExternalDeviceDemoBackend) {
-      _externalDeviceBackend.loadRuntimeState().then((runtimeState) {
-        if (!mounted) {
-          return;
-        }
-        setState(() {
-          _externalRuntimeState = runtimeState;
-        });
-      });
-    }
-    setState(() {
-      _material = null;
-      _pendingBiometricPin = null;
-      _stage = WalletFlowStage.locked;
-    });
+  @override
+  void dispose() {
+    _controller.removeListener(_onControllerChanged);
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final errorMessage = _controller.errorMessage;
 
     return Scaffold(
       body: SafeArea(
@@ -410,10 +111,10 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _Header(stage: _stage),
-                      if (_errorMessage case final String message) ...[
+                      _Header(stage: _controller.stage),
+                      if (errorMessage != null) ...[
                         const SizedBox(height: 20),
-                        _ErrorBanner(message: message),
+                        _ErrorBanner(message: errorMessage),
                       ],
                       const SizedBox(height: 24),
                       _buildStageBody(),
@@ -429,85 +130,69 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
   }
 
   Widget _buildStageBody() {
-    switch (_stage) {
+    final controller = _controller;
+    switch (controller.stage) {
       case WalletFlowStage.loading:
         return const Center(child: CircularProgressIndicator());
       case WalletFlowStage.welcome:
         return _WelcomeStage(
-          backendEntries: _backendRegistry.entries,
-          selectedBackendId:
-              _selectedBackendId ?? _backendRegistry.defaultBackendId,
-          isExternalBackendSelected: _isExternalBackendSelected,
-          onBackendSelected: _selectBackend,
-          onCreatePressed: () {
-            setState(() {
-              _errorMessage = null;
-              _stage = WalletFlowStage.createWallet;
-            });
-          },
-          onImportPressed: () {
-            setState(() {
-              _errorMessage = null;
-              _stage = WalletFlowStage.importWallet;
-            });
-          },
+          backendEntries: controller.backendEntries,
+          selectedBackendId: controller.effectiveBackendId,
+          isExternalBackendSelected: controller.isExternalBackendSelected,
+          onBackendSelected: controller.selectBackend,
+          onCreatePressed: controller.goToCreateWallet,
+          onImportPressed: controller.goToImportWallet,
         );
       case WalletFlowStage.createWallet:
         return _PinSetupStage(
-          title: _isExternalBackendSelected
+          title: controller.isExternalBackendSelected
               ? 'Подключить demo NFC-устройство'
               : 'Создать новый кошелёк',
-          description: _isExternalBackendSelected
+          description: controller.isExternalBackendSelected
               ? 'Это отдельная UX-ветка для внешнего backend. Задаём PIN устройства для demo-подписанта и сохраняем linked-device runtime.'
               : 'Сначала задаём обязательный PIN. После этого приложение создаст seed-фразу и покажет её один раз для резервного сохранения.',
-          actionLabel: _isExternalBackendSelected
+          actionLabel: controller.isExternalBackendSelected
               ? 'Подключить устройство'
               : 'Создать кошелёк',
-          onSubmit: _createWallet,
-          onBack: _goToWelcome,
+          onSubmit: controller.createWallet,
+          onBack: controller.goToWelcome,
         );
       case WalletFlowStage.importWallet:
         return _ImportWalletStage(
-          isExternalBackendSelected: _isExternalBackendSelected,
-          onSubmit: _importWallet,
-          onBack: _goToWelcome,
+          isExternalBackendSelected: controller.isExternalBackendSelected,
+          onSubmit: controller.importWallet,
+          onBack: controller.goToWelcome,
         );
       case WalletFlowStage.showSeed:
         return _SeedPhraseStage(
-          mnemonic: _seedPhraseToShow ?? '',
-          onContinue: _finishSeedBackup,
+          mnemonic: controller.seedPhraseToShow ?? '',
+          onContinue: controller.finishSeedBackup,
         );
       case WalletFlowStage.biometricPrompt:
         return _BiometricPromptStage(
-          isAvailable: _biometricsAvailable,
+          isAvailable: controller.biometricsAvailable,
           isWindowsSimulation: Platform.isWindows,
-          onSkip: () => _completeBiometricChoice(false),
-          onEnable: _biometricsAvailable
-              ? () => _completeBiometricChoice(true)
+          onSkip: () => controller.completeBiometricChoice(false),
+          onEnable: controller.biometricsAvailable
+              ? () => controller.completeBiometricChoice(true)
               : null,
         );
       case WalletFlowStage.locked:
         return _LockedStage(
-          summary: _summary,
-          backendLabel:
-              _backendRegistry
-                  .descriptorById(
-                    _summary?.backendId ?? _selectedBackendId ?? '',
-                  )
-                  ?.label ??
-              'Unknown backend',
-          isExternalBackend: _activeBackend is ExternalDeviceKeyStorageBackend,
-          externalRuntimeState: _externalRuntimeState,
-          biometricsEnabled: _biometricsEnabled,
-          onUnlock: _unlockWallet,
-          onUnlockWithBiometrics: _biometricsEnabled && _biometricsAvailable
-              ? _unlockWithBiometrics
+          summary: controller.summary,
+          backendLabel: controller.backendLabel,
+          isExternalBackend: controller.isExternalBackendSelected,
+          externalRuntimeState: controller.externalRuntimeState,
+          biometricsEnabled: controller.biometricsEnabled,
+          onUnlock: controller.unlockWallet,
+          onUnlockWithBiometrics: controller.canUnlockWithBiometrics
+              ? controller.unlockWithBiometrics
               : null,
-          onReconnectExternalDevice: _isExternalBackendSelected
-              ? _reconnectExternalDevice
+          onReconnectExternalDevice: controller.isExternalBackendSelected
+              ? controller.reconnectExternalDevice
               : null,
-          onSimulateExternalOffline: _isExternalBackendSelected
-              ? _simulateExternalDeviceOffline
+          onSimulateExternalOffline: controller.isExternalBackendSelected
+              ? controller.simulateExternalDeviceOffline
               : null,
         );
       case WalletFlowStage.unlocked:
@@ -517,46 +202,32 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           transactionBroadcaster: widget.transactionBroadcaster,
           nonceProvider: widget.nonceProvider,
           trackingTransport: widget.trackingTransport,
-          walletOperationAuthorizer: _walletOperationAuthorizer,
-          activeBackend: _activeBackend,
-          authMethod: _lastUnlockAuthMethod,
-          material: _material,
-          summary: _summary,
-          backendLabel:
-              _backendRegistry
-                  .descriptorById(
-                    _summary?.backendId ?? _selectedBackendId ?? '',
-                  )
-                  ?.label ??
-              'Unknown backend',
-          externalRuntimeState: _externalRuntimeState,
-          biometricsEnabled: _biometricsEnabled,
-          onLock: _lockWallet,
-          onReconnectExternalDevice: _isExternalBackendSelected
-              ? _reconnectExternalDevice
+          walletOperationAuthorizer: controller.walletOperationAuthorizer,
+          activeBackend: controller.activeBackend,
+          authMethod: controller.lastUnlockAuthMethod,
+          material: controller.material,
+          summary: controller.summary,
+          backendLabel: controller.backendLabel,
+          externalRuntimeState: controller.externalRuntimeState,
+          biometricsEnabled: controller.biometricsEnabled,
+          onLock: controller.lockWallet,
+          onReconnectExternalDevice: controller.isExternalBackendSelected
+              ? controller.reconnectExternalDevice
               : null,
-          onDisconnectExternalSession: _isExternalBackendSelected
-              ? _disconnectExternalSession
+          onDisconnectExternalSession: controller.isExternalBackendSelected
+              ? controller.disconnectExternalSession
               : null,
-          onSimulateExternalOffline: _isExternalBackendSelected
-              ? _simulateExternalDeviceOffline
+          onSimulateExternalOffline: controller.isExternalBackendSelected
+              ? controller.simulateExternalDeviceOffline
               : null,
-          onPingExternalDevice: _isExternalBackendSelected
-              ? () => _performExternalPkcs11Operation(
-                  const ExternalDevicePkcs11Operation(
-                    kind: ExternalDevicePkcs11OperationKind.probeSession,
-                  ),
-                )
+          onPingExternalDevice: controller.isExternalBackendSelected
+              ? controller.pingExternalDevice
               : null,
-          onReadExternalAddress: _isExternalBackendSelected
-              ? () => _performExternalPkcs11Operation(
-                  const ExternalDevicePkcs11Operation(
-                    kind: ExternalDevicePkcs11OperationKind.readPublicAddress,
-                  ),
-                )
+          onReadExternalAddress: controller.isExternalBackendSelected
+              ? controller.readExternalAddress
               : null,
-          onRefreshExternalRuntimeState: _isExternalBackendSelected
-              ? _refreshExternalRuntimeState
+          onRefreshExternalRuntimeState: controller.isExternalBackendSelected
+              ? controller.refreshExternalRuntimeState
               : null,
         );
     }
