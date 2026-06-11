@@ -18,6 +18,20 @@ Entry template:
 
 ---
 
+## 2026-06-11 — Refactor: extract Blockscout ExplorerClient (completes blockchain split) — branch main — done
+- Plan (finishes docs/repo-review.md #4): pull the explorer-parsing concern out of the provider, completing
+  the RPC / explorer / cache split started with `SnapshotCache`.
+- Done: new `blockchain/explorer_client.dart` — `JsonApiTransport` + `HttpJsonApiTransport` (moved) +
+  `ExplorerData` + `BlockscoutExplorerClient` (`load` + token/tx parsing, bodies **verbatim**; the cache
+  fallback is now passed in as `fallbackTokenBalances`/`fallbackTransactions` instead of depending on a cached
+  snapshot). `blockchain_provider.dart` is now a **204-line** RPC orchestrator (was 589) that composes the
+  explorer + cache and **re-exports both** (`export 'explorer_client.dart';`), so no importer changes. The
+  wei→ETH formatter is a small private copy on each side (kept local to avoid a cross-concern import).
+  Behaviour unchanged: same explorer URLs + parsing + fallback (the provider test pins it). No version bump.
+- Net: `blockchain_provider.dart` 589 → 204; models 72, explorer 252, cache 125. **Blockchain split done.**
+- Next / open: pubspec template comments remain (cosmetic, low value). Phase 9 still paused.
+- Refs: this commit.
+
 ## 2026-06-11 — Refactor: extract SnapshotCache + record audit decisions — branch main — done
 - Plan (acts on docs/repo-review.md #3/#4): split the cache concern out of the 589-line
   `blockchain_provider.dart`; record the decided/deferred audit items (single-account, l10n, test fidelity).
