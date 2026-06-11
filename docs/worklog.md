@@ -18,6 +18,14 @@ Entry template:
 
 ---
 
+## 2026-06-11 — Quick repo audit recorded — branch main — done
+- Plan: shallow-but-honest review (goals/code/docs/results) to guide further work.
+- Done: `docs/repo-review.md` — strengths, ranked weaknesses (UI orchestrator debt, fake-only
+  test ceiling, single-account hard-wiring), Phase 9 risks, suggested work order (extract
+  `WalletFlowController` first; build 9.3/9.4 on the fake before the 9.2 native SDK).
+- Next / open: Phase 9 still paused; next agent should read the review before resuming.
+- Refs: this commit.
+
 ## 2026-06-09 — CI: fix iOS Simulator artifact packaging + add unsigned Device build — branch main — done
 - Plan: the iOS Simulator artifact unzipped to loose bundle contents (`Info.plist`, `Runner`, `Frameworks`,
   …) instead of a `.app`, because `upload-artifact` was pointed straight at `Runner.app` and strips the dir
