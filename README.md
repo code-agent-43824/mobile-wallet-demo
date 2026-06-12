@@ -175,6 +175,29 @@ Apple ID (Personal Team) — через Xcode, без платного Apple Dev
   `flutter build ios --config-only`, затем заново открой `Runner.xcworkspace` (как запасной вариант —
   `cd ios && pod install`).
 
+## Run iOS app on Apple Silicon Mac
+
+На **Apple Silicon Mac** (M1/M2/M3…) этот же iOS-таргет можно запускать прямо на macOS как
+**«Designed for iPad / iPhone»** — без отдельной macOS-сборки и без Simulator. В проекте это уже включено
+(`SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES` на target `Runner`; Mac Catalyst **не** используется,
+отдельного Flutter macOS-таргета и папки `macos/` нет).
+
+1. Открой `ios/Runner.xcworkspace` в Xcode (сначала `flutter pub get` и `flutter build ios --config-only`
+   для CocoaPods — как в разделе про iPhone выше).
+2. Выбери target **Runner**.
+3. **Signing & Capabilities** → выбери свой **Personal Team** (бесплатный Apple ID); при необходимости замени
+   Bundle Identifier на свой уникальный (см. iOS-раздел выше).
+4. В выпадающем списке destination вверху выбери **My Mac (Designed for iPad)** (или **My Mac (Designed for
+   iPhone)**).
+5. Нажми **Run** (⌘R) — приложение откроется окном на Mac.
+
+Важно:
+- Работает **только на Apple Silicon Mac** — на Intel-маках такой destination недоступен.
+- Это **не** iOS Simulator и **не** нативная macOS-сборка: запускается тот же iOS-бинарь (`iphoneos`/arm64)
+  на macOS как «Designed for iPad/iPhone».
+- Отдельный Flutter macOS-таргет для этого **не нужен**. Часть чисто-iOS возможностей (например, биометрия)
+  на Mac может вести себя иначе — это ограничение режима «Designed for iPad», а не проекта.
+
 ## Идентификаторы приложения и запуск на Android / Windows
 
 Во всех платформах стоят нейтральные **placeholder-идентификаторы** — для локального запуска их менять не

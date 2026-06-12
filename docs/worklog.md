@@ -18,6 +18,18 @@ Entry template:
 
 ---
 
+## 2026-06-11 — iOS: enable "Designed for iPad/iPhone" on Apple Silicon Mac — branch main — done
+- Plan: let the existing iOS `Runner` target run on Apple Silicon Macs as "Designed for iPad/iPhone" — no
+  `macos/` folder, no `flutter create --platforms=macos`, no separate macOS target, no Mac Catalyst.
+- Done: `ios/Runner.xcodeproj/project.pbxproj` — added `SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;` to all 3
+  Runner target configs (Debug/Release/Profile). Verified: `TARGETED_DEVICE_FAMILY = "1,2"` (iPhone+iPad) and
+  `SDKROOT = iphoneos` already set; `SUPPORTS_MACCATALYST` absent (Catalyst stays off). README: new
+  "Run iOS app on Apple Silicon Mac" section (open Runner.xcworkspace → Runner → Personal Team → destination
+  "My Mac (Designed for iPad/iPhone)" → Run; Apple-Silicon-only; not Simulator, not a native macOS build).
+- Next / open: CI iOS jobs unaffected (they target iphoneos/simulator; the setting is inert there). Phase 9
+  still paused.
+- Refs: this commit.
+
 ## 2026-06-11 — Android + Windows: neutralise org id (same rules as iOS) — branch main — done
 - Plan: bring Android + Windows under the iOS rules — replace the org-tied `dev.codeagent43824.*` identifiers
   with neutral `com.example.*` placeholders + document the (simple) local runs.
