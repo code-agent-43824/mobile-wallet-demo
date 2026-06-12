@@ -18,6 +18,21 @@ Entry template:
 
 ---
 
+## 2026-06-11 — Android + Windows: neutralise org id (same rules as iOS) — branch main — done
+- Plan: bring Android + Windows under the iOS rules — replace the org-tied `dev.codeagent43824.*` identifiers
+  with neutral `com.example.*` placeholders + document the (simple) local runs.
+- Done:
+  - Android: `applicationId` + `namespace` → `com.example.mobile_wallet_demo` (`build.gradle.kts`); moved
+    `MainActivity.kt` from `.../kotlin/dev/codeagent43824/...` to `.../kotlin/com/example/mobile_wallet_demo/`
+    and updated its `package` (the manifest uses relative `.MainActivity`, so it stays aligned with the
+    namespace); removed the empty org dirs.
+  - Windows: `Runner.rc` `CompanyName` `dev.codeagent43824` → `com.example`; `LegalCopyright` likewise.
+  - README: new section listing the placeholder ids (iOS/Android/Windows) + simple local runs
+    (`flutter run -d android` with USB-debugging + auto debug-keystore; `flutter run -d windows` with VS C++).
+  - No org id left in code (only a historical mention in this worklog). No app/Dart change, no version bump.
+- Next / open: none. Phase 9 still paused.
+- Refs: this commit.
+
 ## 2026-06-11 — iOS: simplify local Xcode device runs (free Apple account) — branch main — done
 - Plan: make "open in Xcode → Run on a real iPhone with a free Apple ID" robust + documented; neutralise the
   org-tied bundle id; add the missing Podfile.

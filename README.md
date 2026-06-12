@@ -175,6 +175,27 @@ Apple ID (Personal Team) — через Xcode, без платного Apple Dev
   `flutter build ios --config-only`, затем заново открой `Runner.xcworkspace` (как запасной вариант —
   `cd ios && pod install`).
 
+## Идентификаторы приложения и запуск на Android / Windows
+
+Во всех платформах стоят нейтральные **placeholder-идентификаторы** — для локального запуска их менять не
+нужно, но **перед публикацией** замени на свои уникальные:
+
+| Платформа | Где | Текущее значение |
+|---|---|---|
+| iOS | `ios/Runner.xcodeproj` → Bundle Identifier | `com.example.mobileWalletDemo` |
+| Android | `android/app/build.gradle.kts` → `applicationId` (и `namespace`) | `com.example.mobile_wallet_demo` |
+| Windows | `windows/runner/Runner.rc` → `CompanyName` | `com.example` |
+
+Локальный запуск (после `flutter pub get`; та же Flutter `3.41.7`, что в CI / `.fvmrc`):
+
+- **Android:** включи на устройстве **USB-debugging** (*Settings → Developer options*), подключи кабелем и
+  запусти `flutter run -d android`. Debug-сборка подписывается автоматически локальным debug-keystore —
+  отдельный аккаунт/сертификат не нужен. `applicationId` важен только для публикации в Google Play.
+- **Windows:** установи **Visual Studio** с компонентом *«Desktop development with C++»* и выполни
+  `flutter run -d windows`. Подпись не требуется.
+- **iOS на реальном устройстве:** см. раздел «Run on real iPhone/iPad with free Apple Account» выше — там
+  подпись через Personal Team.
+
 ## Локальный запуск
 
 ```bash
