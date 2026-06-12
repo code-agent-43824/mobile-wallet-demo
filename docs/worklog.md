@@ -18,6 +18,27 @@ Entry template:
 
 ---
 
+## 2026-06-11 — iOS: simplify local Xcode device runs (free Apple account) — branch main — done
+- Plan: make "open in Xcode → Run on a real iPhone with a free Apple ID" robust + documented; neutralise the
+  org-tied bundle id; add the missing Podfile.
+- Done:
+  - `ios/Runner.xcodeproj/project.pbxproj`: bundle id `dev.codeagent43824.mobileWalletDemo` → neutral
+    placeholder `com.example.mobileWalletDemo` (Runner + RunnerTests, 6 configs); added explicit
+    `CODE_SIGN_STYLE = Automatic` to the 3 Runner configs (RunnerTests already had it). No `DEVELOPMENT_TEAM`
+    hardcoded — the user picks their Personal Team.
+  - new `ios/Podfile` — standard Flutter iOS Podfile (the app uses native plugins `flutter_secure_storage` +
+    `local_auth`; no Podfile existed → Xcode flow was fragile).
+  - new `.fvmrc` pinning Flutter `3.41.7` (matches CI `ci.yml`).
+  - README: new **"Run on real iPhone/iPad with free Apple Account"** section (Xcode + Flutter 3.41.7 → clone →
+    `flutter pub get` → `flutter build ios --config-only` (runs pod install, wires the workspace) → open
+    `Runner.xcworkspace` → Personal Team → replace the placeholder bundle id → device + Developer Mode → Run;
+    plus notes on 7-day expiry, RunnerTests not blocking Run, and troubleshooting). Cross-linked from the
+    existing "iOS artifacts" device bullet.
+  - Checked: Runner = Automatic signing; RunnerTests doesn't block Run (only built on Test). No app/Dart
+    change, no version bump.
+- Next / open: CI iOS jobs now build with the committed Podfile (validates it). Phase 9 still paused.
+- Refs: this commit.
+
 ## 2026-06-11 — Refactor: extract Blockscout ExplorerClient (completes blockchain split) — branch main — done
 - Plan (finishes docs/repo-review.md #4): pull the explorer-parsing concern out of the provider, completing
   the RPC / explorer / cache split started with `SnapshotCache`.

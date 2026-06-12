@@ -110,7 +110,8 @@ CI собирает два независимых iOS-артефакта (пар
 
 - **Официальный бесплатный способ (рекомендуется):** открой проект в **Xcode** на Mac, в *Signing &
   Capabilities* выбери свой **Personal Team** (бесплатный Apple ID), подключи iPhone/iPad кабелем и нажми
-  **Run**. Xcode сам подпишет сборку development-сертификатом и provisioning profile.
+  **Run**. Xcode сам подпишет сборку development-сертификатом и provisioning profile. Пошаговая
+  инструкция — в разделе «Run on real iPhone/iPad with free Apple Account» ниже.
 - **Через CI с подписью:** device-артефакт можно подписать в GitHub Actions, **только** если заранее заданы
   signing-credentials в *Settings → Secrets and variables → Actions* (certificate + provisioning profile как
   секреты). Без них job намеренно собирает unsigned-сборку и пишет об этом в лог. Никакие Apple ID, пароли,
@@ -125,6 +126,54 @@ CI собирает два независимых iOS-артефакта (пар
 - GitHub-hosted runner **не сможет** сам «подключиться» к твоему бесплатному Apple Developer account без
   заранее подготовленных signing-credentials в Secrets. Обычный IPA из GitHub Actions нельзя просто скачать и
   поставить на iPhone без подписи.
+
+## Run on real iPhone/iPad with free Apple Account
+
+Пошаговая инструкция, чтобы собрать и запустить приложение на своём iPhone/iPad с **бесплатным**
+Apple ID (Personal Team) — через Xcode, без платного Apple Developer Program.
+
+**Что понадобится:** Mac с **Xcode** и **Flutter `3.41.7`** — та же версия, что в CI (см.
+`.github/workflows/ci.yml` и файл `.fvmrc`); на других версиях сборка может вести себя иначе.
+
+1. **Установи Xcode** из Mac App Store и открой его хотя бы раз (доустановит компоненты командной строки).
+2. **Установи Flutter `3.41.7`.** Через [fvm](https://fvm.app): `fvm install 3.41.7 && fvm use 3.41.7`
+   (версия уже зафиксирована в `.fvmrc`), либо вручную поставь этот релиз и проверь `flutter --version`.
+3. **Склонируй репозиторий** и зайди в папку проекта:
+   ```bash
+   git clone <repo-url>
+   cd mobile-wallet-demo
+   ```
+4. **Поставь зависимости и подготовь iOS-проект для Xcode:**
+   ```bash
+   flutter pub get
+   flutter build ios --config-only   # ставит CocoaPods и настраивает workspace; подписи не требует
+   ```
+   Шаг `--config-only` важен: он выполняет `pod install` (проект использует нативные плагины
+   `flutter_secure_storage` и `local_auth`) и дописывает в `Runner.xcworkspace` ссылку на `Pods`.
+5. **Открой `ios/Runner.xcworkspace`** в Xcode — именно `.xcworkspace`, не `.xcodeproj` (иначе не
+   подхватятся CocoaPods).
+6. Выбери проект **Runner** → target **Runner** → вкладку **Signing & Capabilities**:
+   - включи **Automatically manage signing** (в проекте уже выставлено `Automatic`);
+   - в поле **Team** выбери свой **Personal Team** — твой бесплатный Apple ID (при необходимости добавь
+     аккаунт через Xcode → Settings → Accounts).
+7. **Замени Bundle Identifier.** В репозитории стоит нейтральный placeholder
+   **`com.example.mobileWalletDemo`**; Apple требует **глобально уникальный** id, поэтому поменяй его на
+   свой — например `com.<твой-ник>.mobileWalletDemo`. (Подписать `com.example.*` бесплатным аккаунтом не
+   получится.)
+8. **Подключи iPhone/iPad** кабелем и подтверди на устройстве **Trust This Computer**.
+9. **Включи Developer Mode** на устройстве (iOS 16+): *Settings → Privacy & Security → Developer Mode → On*,
+   затем перезагрузи устройство и подтверди включение.
+10. В Xcode выбери своё устройство в выпадающем списке вверху и нажми **Run** (⌘R).
+11. **На первом запуске** разреши свой dev-сертификат на устройстве: *Settings → General → VPN & Device
+    Management → <твой Apple ID> → Trust*. После этого приложение запустится.
+
+**Полезно знать:**
+- Сборка с бесплатным аккаунтом подписана development-сертификатом и **живёт ~7 дней** — потом просто
+  снова нажми **Run**, чтобы переустановить.
+- Target **RunnerTests** запуску приложения не мешает: при **Run** он не собирается (только при **Test**).
+- Если Xcode жалуется на CocoaPods или `Generated.xcconfig` — повтори `flutter pub get` и
+  `flutter build ios --config-only`, затем заново открой `Runner.xcworkspace` (как запасной вариант —
+  `cd ios && pod install`).
 
 ## Локальный запуск
 
