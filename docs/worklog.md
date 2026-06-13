@@ -18,6 +18,20 @@ Entry template:
 
 ---
 
+## 2026-06-13 — WC_PROJECT_ID config plumbing (committed + build-injected) — branch main — done
+- Plan: per the owner's explicit call, commit the WalletConnect project id and have builds read it from a
+  file and pass it as a dart-define. Plumbing only — the real `reown_walletkit` consumer is chunk 9.2.
+- Done: `dart_defines.json` (repo root) holds `WC_PROJECT_ID`, **committed deliberately** (public client id;
+  owner accepts quota use). `lib/src/walletconnect/wc_config.dart` reads it via `String.fromEnvironment`
+  (`wcProjectId` + `isWalletConnectConfigured`) with a tiny contract test. CI build jobs
+  (android / ios×2 / windows) now pass `--dart-define-from-file=dart_defines.json`; local helpers
+  `scripts/run.sh` / `scripts/build.sh` inject the same flag. README "WalletConnect project id" section +
+  a CLAUDE.md gotcha (so the committed id isn't "fixed" as a leak). Value is unused until 9.2 → no app
+  behaviour change, no version bump.
+- Next / open: chunk 9.2 — `reown_walletkit` + `ReownWalletConnectService` consuming `wcProjectId` + DI into
+  `MobileWalletDemoApp`.
+- Refs: this commit.
+
 ## 2026-06-11 — iOS: enable "Designed for iPad/iPhone" on Apple Silicon Mac — branch main — done
 - Plan: let the existing iOS `Runner` target run on Apple Silicon Macs as "Designed for iPad/iPhone" — no
   `macos/` folder, no `flutter create --platforms=macos`, no separate macOS target, no Mac Catalyst.

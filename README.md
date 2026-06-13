@@ -219,6 +219,26 @@ Apple ID (Personal Team) — через Xcode, без платного Apple Dev
 - **iOS на реальном устройстве:** см. раздел «Run on real iPhone/iPad with free Apple Account» выше — там
   подпись через Personal Team.
 
+## WalletConnect project id
+
+Project ID для WalletConnect/Reown хранится в **`dart_defines.json`** в репозитории (осознанно — это
+публичный client-id; владелец не против использования квоты). Сборки и запуск читают его оттуда нативным
+флагом Flutter `--dart-define-from-file`:
+
+```bash
+flutter run                     --dart-define-from-file=dart_defines.json   # или scripts/run.sh
+flutter build apk     --release --dart-define-from-file=dart_defines.json   # или scripts/build.sh apk --release
+flutter build ios     --release --dart-define-from-file=dart_defines.json
+flutter build windows --release --dart-define-from-file=dart_defines.json
+```
+
+- В коде значение доступно как `wcProjectId` (`lib/src/walletconnect/wc_config.dart`, через
+  `String.fromEnvironment('WC_PROJECT_ID')`).
+- CI уже передаёт этот флаг во всех build-джобах.
+- Реально его **использует** настоящий `reown_walletkit`-сервис в чанке 9.2; пока он не подключён, без id
+  приложение работает в режиме «WalletConnect не настроен» (`UnavailableWalletConnectService`).
+- Чтобы подставить свой id — поменяй значение в `dart_defines.json`.
+
 ## Локальный запуск
 
 ```bash

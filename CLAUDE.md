@@ -78,3 +78,4 @@ The wallet is the side that *receives* signing requests. Two payload codecs surv
 - **Commit messages** follow Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `style:`.
 - **UI text and many error messages are Russian.** Widget tests locate elements by Russian strings — keep them consistent when editing UI.
 - Keep `docs/development-plan.md` phase status in sync when completing roadmap items (existing `docs:` commits do this).
+- **`dart_defines.json`** (repo root) holds the WalletConnect `WC_PROJECT_ID`; builds/runs pass it via `--dart-define-from-file=dart_defines.json` (helpers: `scripts/run.sh` / `scripts/build.sh`) and the app reads it as `wcProjectId` (`walletconnect/wc_config.dart`). It is **intentionally committed** (public client id; the owner accepts quota use) — don't treat it as a leaked secret or remove it. Real consumption arrives with `reown_walletkit` in chunk 9.2.
