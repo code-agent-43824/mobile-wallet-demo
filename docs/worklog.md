@@ -18,6 +18,21 @@ Entry template:
 
 ---
 
+## 2026-06-14 — Phase 9 / chunk 9.3b-ii: inbound request coordinator (9.3 done) — branch main — done
+- Plan: tie the inbound flow together on the fake — requests → decode → prepare → sign → broadcast/hex →
+  respond. Completes 9.3.
+- Done: `walletconnect/wallet_connect_inbound.dart` — `WalletConnectInboundCoordinator.handleRequest({request,
+  signer})`: guards (unsupported method / unsupported chain / from≠wallet → `respondError`), maps CAIP-2 chain
+  → `EvmNetwork`, fills nonce (request or `NonceProvider`) + gas/fee fallbacks, `prepareInboundTransaction` →
+  signs via the active `WalletTransactionSigner` → `eth_sendTransaction` broadcasts (returns hash) /
+  `eth_signTransaction` returns signed hex → `respond`; every path responds (catch-all → `respondError`).
+  Tests `test/wallet_connect_inbound_test.dart` via `FakeWalletConnectService`: send→broadcast hash,
+  sign→`0x02` hex, wrong-account→error, unsupported-method→error. No version bump.
+- Next / open: **9.4** — connections screen + wire `WalletConnectService` into `MobileWalletDemoApp` /
+  `WalletFlowController` (listen to proposals/requests, approve, drive the coordinator on unlock), still on the
+  fake / `Unavailable` default. Real `reown_walletkit` (9.2) deferred (iOS Xcode + Windows blockers).
+- Refs: this commit.
+
 ## 2026-06-14 — Phase 9 / chunk 9.3b-i: prepareInboundTransaction — branch main — done
 - Plan: build a `PreparedTransfer` from a decoded inbound WC request's raw tx fields, so the existing
   `signPreparedTransfer` / signer seam signs it (no app snapshot/asset model). Foundation for the 9.3b-ii
