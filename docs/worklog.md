@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-06-14 — Phase 9 / chunk 9.2a: add reown_walletkit dependency (isolated) — branch main — done
+## 2026-06-14 — Phase 9 / chunk 9.2a: add reown_walletkit dependency (isolated) — branch main — reverted (build blockers)
 - Plan: do 9.2 carefully + incrementally. **9.2a** (this commit): add ONLY the `reown_walletkit` dependency and
   let CI prove `pub get` + all 4 platform builds still pass — isolating native-dep risk before any code uses
   it. **9.2b** (next): `ReownWalletConnectService` + DI, behind a **platform (Android/iOS) + config guard**,
@@ -34,8 +34,16 @@ Entry template:
   Caveat: `pubspec.lock`
   is committed but there's no local Flutter toolchain to regenerate it — CI `flutter pub get` reconciles it
   (the committed lock lags until a real `pub get` is run + committed). No version bump.
-- Next / open: confirm 9.2a CI green on android / ios×2 / windows (watch for minSdk bump, iOS deployment-target,
-  or transitive resolution conflicts); then 9.2b.
+- Outcome (CI run cba54f5): after the web3dart fix, two more blockers — **iOS** (both) fail to compile pods
+  (`Value of type 'NWPath' has no member 'isUltraConstrained'` — a reown/transitive pod uses an API newer than
+  the `macos-latest` runner's Xcode SDK), and **Windows** fails building `local_auth_windows` (MSVC
+  `<experimental/coroutine>` STL1011 hard error, surfaced by the re-resolution). Android + Validate were green.
+  With no local Flutter toolchain (each fix = a blind ~15-min CI cycle), **reverted the `reown_walletkit` dep
+  to restore green `main`** instead of thrashing. The dart-define plumbing (`wc_config.dart` /
+  `dart_defines.json` / `scripts/`) stays — it's inert without the dep.
+- Next / open: decide direction — (a) build **9.3/9.4 on `FakeWalletConnectService`** first (no native dep,
+  fully buildable + testable), defer the real SDK; or (b) invest in the iOS (pin a newer Xcode on the runner)
+  + Windows (`local_auth` bump / coroutine workaround) build fixes for 9.2. **Recommend (a).**
 - Refs: this commit.
 
 ## 2026-06-13 — WC_PROJECT_ID config plumbing (committed + build-injected) — branch main — done
