@@ -18,6 +18,30 @@ Entry template:
 
 ---
 
+## 2026-06-14 — Phase 10 prep: augment NFC/PKCS#11 notes from the Rutoken demo wallets (docs only) — branch main — done
+- Plan: the owner supplied the two previously-unreachable owncloud archives — the **official Aktiv-Soft /
+  Rutoken demo wallets** (iOS Swift + Android Kotlin). Study them and upgrade `docs/nfc-pkcs11-integration-
+  notes.md` from "spec + third-party CLI" to first-party, code-verified guidance.
+- Done: rewrote the notes against the demos and the **vendor C headers** shipped in
+  `wtpkcs11ecp.xcframework` (lib v2.17.8.1). Now **all four mechanism hex values are confirmed**
+  (KEY_PAIR_GEN=0x80000006, DERIVE_PRIVATE=0x80000007, DERIVE_PUBLIC=0x80000008, WITH_BIP39=0x80000009;
+  CKK_VENDOR_BIP32=0x80000002) — the three I'd previously only had by name. **Found + flagged a real
+  discrepancy:** the vendor header defines the BIP32 attribute base as `CKA_VENDOR_DEFINED|0x5000`
+  (→ CKA_VENDOR_BIP32_CHAINCODE=0x80005000 …5005), whereas the Python wallet-tool lists 0x85000000 — doc
+  now says trust the header. Verified recipes against real code (import template in `Pkcs11TokenWrapper`,
+  PBKDF2(2048,"mnemonic")→HMAC-SHA512("Bitcoin seed") in `Bip39WalletCrypto`, derive at m/44'/60'/0'/0/0
+  with hardened 0x80000000, CKM_ECDSA sign of a 32-byte digest, CKA_EC_POINT = DER ANSI X9.62). Added a
+  new **NFC/PC-SC transport** section (iOS `RtPcscWrapper`+CoreNFC+cooldown; Android `rtpcscbridge`/
+  `pkcs11jna`/`pkcs11wrapper`+`libwtpkcs11ecp.so` arm64, physical-device only) and a per-platform
+  native-stack/deps section (the Flutter FFI/channel cost for chunk 10.0). Trimmed the open-questions
+  list (4 now answered). Updated the development-plan Phase 10 reference pointer. Docs-only; no bump.
+- Note: did **not** vendor the demos' native blobs (`wtpkcs11ecp.xcframework` / `libwtpkcs11ecp.so`) into
+  the repo — proprietary vendor redistributables; documented + flagged instead. iOS/Android demos are
+  Aktiv-Soft official samples (Android is BSD-2-Clause); a physical Rutoken «криптокошелёк» is required.
+- Next / open: Phase 10 still planned (Phase 9 first). Remaining token-only unknowns listed in §10 of the
+  notes (C_Sign r‖s-vs-DER, mnemonic extractability policy, transport reach, passphrase UX, SDK delivery).
+- Refs: this commit; `docs/nfc-pkcs11-integration-notes.md`, `docs/development-plan.md`.
+
 ## 2026-06-14 — Phase 10 prep: NFC / PKCS#11 integration notes (docs only) — branch main — done
 - Plan: the owner supplied NFC/PKCS#11 reference material (a vendor mechanism spec PDF + two
   owncloud links + the `mescheryakov1/wallet-tool` repo) and asked to distill the useful bits into

@@ -331,7 +331,7 @@ Goal: turn the simulated external-NFC device (Phase 7) into a real **custody** s
 
 Status: ⏳ Planned (after Phase 9).
 
-> **Reference:** `docs/nfc-pkcs11-integration-notes.md` is the deep dive for this phase — the vendor `wtpkcs11ecp` BIP32/BIP39 PKCS#11 mechanisms (from the owner-supplied spec PDF + the `mescheryakov1/wallet-tool` reference CLI), the confirmed constants/templates, the **Ethereum-specific corrections** (secp256k1 not P-256; keccak256 not `CKM_SHA256`; build v/recovery-id + low-s yourself), how it maps onto our existing seams, and the open questions to resolve against a real token. Read it before starting any chunk below.
+> **Reference:** `docs/nfc-pkcs11-integration-notes.md` is the deep dive for this phase — built from the **official Aktiv-Soft / Rutoken demo wallets** (iOS Swift + Android Kotlin, incl. the vendor `wtpkcs11ecp` C headers), the vendor mechanism spec PDF, and the `mescheryakov1/wallet-tool` CLI. It has the confirmed constants/mechanisms/templates, the NFC/PC-SC transport model ("tap + device PIN"), the **Ethereum-specific corrections** (secp256k1 not P-256; keccak256 not `CKM_SHA256`; build v/recovery-id + low-s yourself), per-platform native-stack details (FFI/channel cost), how it maps onto our existing seams, and the open questions to resolve against a real token. Read it before starting any chunk below.
 
 ### Scope
 - Real (or realistically-simulated) NFC tap as the device-session trigger, with the device PIN as a true second factor distinct from the phone PIN.
