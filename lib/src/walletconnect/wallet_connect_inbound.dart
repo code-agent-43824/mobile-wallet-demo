@@ -104,10 +104,7 @@ class WalletConnectInboundCoordinator {
 
       await _service.respondResult(request: request, result: result);
     } catch (error) {
-      await _service.respondError(
-        request: request,
-        message: error.toString(),
-      );
+      await _service.respondError(request: request, message: error.toString());
     }
   }
 

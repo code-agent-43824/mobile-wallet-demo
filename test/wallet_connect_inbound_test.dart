@@ -80,10 +80,9 @@ void main() {
       params: <Object?>[_txObject()],
     );
 
-    await _coordinator(service).handleRequest(
-      request: request,
-      signer: _signer,
-    );
+    await _coordinator(
+      service,
+    ).handleRequest(request: request, signer: _signer);
 
     expect(service.respondedErrors, isEmpty);
     expect(service.respondedResults.single.id, request.id);
@@ -99,10 +98,9 @@ void main() {
       params: <Object?>[_txObject()],
     );
 
-    await _coordinator(service).handleRequest(
-      request: request,
-      signer: _signer,
-    );
+    await _coordinator(
+      service,
+    ).handleRequest(request: request, signer: _signer);
 
     expect(service.respondedErrors, isEmpty);
     expect(service.respondedResults.single.result, startsWith('0x02'));
@@ -117,10 +115,9 @@ void main() {
       params: <Object?>[_txObject(from: '0xother')],
     );
 
-    await _coordinator(service).handleRequest(
-      request: request,
-      signer: _signer,
-    );
+    await _coordinator(
+      service,
+    ).handleRequest(request: request, signer: _signer);
 
     expect(service.respondedResults, isEmpty);
     expect(service.respondedErrors.single.id, request.id);
@@ -135,10 +132,9 @@ void main() {
       params: const <Object?>['0xdeadbeef', _walletAddress],
     );
 
-    await _coordinator(service).handleRequest(
-      request: request,
-      signer: _signer,
-    );
+    await _coordinator(
+      service,
+    ).handleRequest(request: request, signer: _signer);
 
     expect(service.respondedResults, isEmpty);
     expect(service.respondedErrors.single.id, request.id);
