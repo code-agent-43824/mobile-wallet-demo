@@ -18,6 +18,20 @@ Entry template:
 
 ---
 
+## 2026-06-14 — Phase 9 / chunk 9.3b-i: prepareInboundTransaction — branch main — done
+- Plan: build a `PreparedTransfer` from a decoded inbound WC request's raw tx fields, so the existing
+  `signPreparedTransfer` / signer seam signs it (no app snapshot/asset model). Foundation for the 9.3b-ii
+  request handler.
+- Done: `TransactionService.prepareInboundTransaction({network, fromAddress, toAddress, valueWei, data,
+  gasLimit, maxFeePerGasWei, maxPriorityFeePerGasWei})` — added to the interface, implemented in
+  `LocalTransactionService` (builds the EIP-1559 web3dart `Transaction` directly + a display-only preview),
+  and forwarded by `HardenedTransactionServiceImplementation`. Test `test/transaction_inbound_test.dart`:
+  prepare from raw fields → `signPreparedTransfer` → asserts a `0x02` EIP-1559 signed tx. Pure Dart; no bump.
+- Next / open: 9.3b-ii — the request coordinator (`WalletConnectService.requests` → decode → prepareInbound →
+  sign via the active signer → broadcast (`eth_sendTransaction`) / hex (`eth_signTransaction`) → `respond`),
+  tested via `FakeWalletConnectService`.
+- Refs: this commit.
+
 ## 2026-06-14 — Phase 9 / chunk 9.3a: inbound WC request codec (decode) — branch main — done
 - Plan (option A — build on the fake, defer the real SDK after the 9.2 native blockers): 9.3 = inbound request
   → vault sign → respond, in small steps. **9.3a** (this commit): the **inverse** of the WC tx codec — decode

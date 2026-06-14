@@ -187,6 +187,20 @@ abstract interface class TransactionService {
     double gasMultiplier = 1.0,
   });
 
+  /// Builds a [PreparedTransfer] from a decoded inbound WalletConnect request's
+  /// raw tx fields (no app snapshot/asset model). Sign it via the usual
+  /// [signPreparedTransfer] / signer seam.
+  PreparedTransfer prepareInboundTransaction({
+    required EvmNetwork network,
+    required String fromAddress,
+    required String toAddress,
+    required BigInt valueWei,
+    required Uint8List data,
+    required int gasLimit,
+    required BigInt maxFeePerGasWei,
+    required BigInt maxPriorityFeePerGasWei,
+  });
+
   SignedTransfer signPreparedTransfer({
     required PreparedTransfer preparedTransfer,
     required WalletMaterial walletMaterial,
@@ -362,6 +376,57 @@ class LocalTransactionService implements TransactionService {
         amountUnits: amountUnits,
         maxFeePerGasWei: maxFeePerGasWei,
         maxPriorityFeePerGasWei: maxPriorityFeePerGasWei,
+      ),
+    );
+  }
+
+  @override
+  PreparedTransfer prepareInboundTransaction({
+    required EvmNetwork network,
+    required String fromAddress,
+    required String toAddress,
+    required BigInt valueWei,
+    required Uint8List data,
+    required int gasLimit,
+    required BigInt maxFeePerGasWei,
+    required BigInt maxPriorityFeePerGasWei,
+  }) {
+    final networkConfig = evmNetworkConfigs[network]!;
+    final symbol = networkConfig.nativeSymbol;
+    final feeWei = maxFeePerGasWei * BigInt.from(gasLimit);
+    final preview = TransferPreview(
+      network: network,
+      fromAddress: fromAddress,
+      toAddress: toAddress,
+      asset: TransferAssetOption(
+        kind: TransferAssetKind.native,
+        symbol: symbol,
+        name: symbol,
+        balanceFormatted: '—',
+        balanceRaw: BigInt.zero,
+        decimals: 18,
+      ),
+      amountFormatted: '${_formatUnits(valueWei, 18)} $symbol',
+      gasLimit: gasLimit,
+      maxFeePerGasGwei: maxFeePerGasWei.toDouble() / 1000000000,
+      estimatedNetworkFeeNativeFormatted: '${_formatUnits(feeWei, 18)} $symbol',
+      totalDebitFormatted: '${_formatUnits(valueWei + feeWei, 18)} $symbol',
+      previewNote: 'Входящий WalletConnect-запрос на подпись.',
+    );
+    return PreparedTransfer(
+      preview: preview,
+      networkConfig: networkConfig,
+      amountUnits: valueWei,
+      maxFeePerGasWei: maxFeePerGasWei,
+      maxPriorityFeePerGasWei: maxPriorityFeePerGasWei,
+      estimatedFeeWei: feeWei,
+      transaction: Transaction(
+        to: EthereumAddress.fromHex(toAddress),
+        maxGas: gasLimit,
+        value: EtherAmount.inWei(valueWei),
+        data: data,
+        maxFeePerGas: EtherAmount.inWei(maxFeePerGasWei),
+        maxPriorityFeePerGas: EtherAmount.inWei(maxPriorityFeePerGasWei),
       ),
     );
   }

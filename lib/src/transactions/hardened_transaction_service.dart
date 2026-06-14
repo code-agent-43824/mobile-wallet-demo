@@ -90,6 +90,29 @@ class HardenedTransactionServiceImplementation
   }
 
   @override
+  PreparedTransfer prepareInboundTransaction({
+    required EvmNetwork network,
+    required String fromAddress,
+    required String toAddress,
+    required BigInt valueWei,
+    required Uint8List data,
+    required int gasLimit,
+    required BigInt maxFeePerGasWei,
+    required BigInt maxPriorityFeePerGasWei,
+  }) {
+    return const LocalTransactionService().prepareInboundTransaction(
+      network: network,
+      fromAddress: fromAddress,
+      toAddress: toAddress,
+      valueWei: valueWei,
+      data: data,
+      gasLimit: gasLimit,
+      maxFeePerGasWei: maxFeePerGasWei,
+      maxPriorityFeePerGasWei: maxPriorityFeePerGasWei,
+    );
+  }
+
+  @override
   SignedTransfer signPreparedTransfer({
     required PreparedTransfer preparedTransfer,
     required WalletMaterial walletMaterial,
