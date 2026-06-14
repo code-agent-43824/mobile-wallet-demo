@@ -28,7 +28,10 @@ Entry template:
   break and 9.2b must not construct the real service off-mobile / it'd `MissingPluginException`). Direct deps:
   event / reown_core / reown_sign / walletconnect_pay — none of our crypto deps directly (transitive conflicts,
   if any, surface in CI `pub get`).
-- Done (9.2a): pinned `reown_walletkit: 1.4.0` in `pubspec.yaml`, nothing consumes it yet. Caveat: `pubspec.lock`
+- Done (9.2a): pinned `reown_walletkit: 1.3.8` in `pubspec.yaml`, nothing consumes it yet. (First try `1.4.0`
+  failed CI `pub get` — run 07e5b1a: `reown_walletkit` 1.3.9+ pull `web3dart ^3.0.1`, clashing with our
+  `web3dart ^2.7.3`; 1.3.8 is the last 1.3.x on web3dart 2.x, chosen over a risky web3dart 2→3 major bump.)
+  Caveat: `pubspec.lock`
   is committed but there's no local Flutter toolchain to regenerate it — CI `flutter pub get` reconciles it
   (the committed lock lags until a real `pub get` is run + committed). No version bump.
 - Next / open: confirm 9.2a CI green on android / ios×2 / windows (watch for minSdk bump, iOS deployment-target,
