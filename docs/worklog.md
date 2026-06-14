@@ -18,6 +18,32 @@ Entry template:
 
 ---
 
+## 2026-06-14 — Phase 10 prep: NFC / PKCS#11 integration notes (docs only) — branch main — done
+- Plan: the owner supplied NFC/PKCS#11 reference material (a vendor mechanism spec PDF + two
+  owncloud links + the `mescheryakov1/wallet-tool` repo) and asked to distill the useful bits into
+  repo docs so future agents can do Phase 10. Extract → synthesize → cross-link from the roadmap.
+- Done: new `docs/nfc-pkcs11-integration-notes.md` — provenance/caveats, the reference tool overview,
+  **confirmed** constants from `wallet-tool/pkcs11_structs.py` (CKK_VENDOR_BIP32=0x80000002,
+  CKM_VENDOR_BIP32_WITH_BIP39_KEY_PAIR_GEN=0x80000009, the CKA_VENDOR_BIP32/BIP39 attrs, std EC/sign
+  consts), the **four vendor mechanisms verbatim from the spec PDF** (KEY_PAIR_GEN, WITH_BIP39, two
+  DERIVE_*_FROM_PRIVATE) incl. their C param structs, operation recipes (create/import/derive/sign/
+  read-mnemonic), the **Ethereum-specific corrections** (secp256k1 OID not P-256; keccak256 not
+  CKM_SHA256; build v/recovery-id + low-s ourselves since CKM_ECDSA returns raw r‖s), a mapping onto
+  our existing seams (`external_device_pkcs11.dart` adapter, `external_device_demo_backend.dart`,
+  `wallet_operation_auth.dart` signer, `assembleSignedTransfer`), a 10.0–10.6 chunk plan, and open
+  questions to confirm against a real token. Fleshed out the `development-plan.md` Phase 10 section
+  (reference pointer + chunk breakdown; transport FFI-vs-NFC is the remaining TBD, vendor model no
+  longer TBD). Docs-only — no code, no version bump.
+- Sources note: the spec **PDF was the canonical content** (extracted via `pdftotext` after
+  installing poppler-utils); the two **owncloud links returned HTTP 503** from this environment and
+  could not be fetched — the PDF is presumed to be their export. `wallet-tool` (GitHub, MIT) is fully
+  accessible and is the source of the confirmed numeric constants + recipes. Three vendor mechanism
+  hex values (plain KEY_PAIR_GEN + both DERIVE_*) are **not** in the accessible source — documented by
+  name only, flagged to confirm against vendor `wtpkcs11ecp` headers (not guessed).
+- Next / open: Phase 10 is still planned (Phase 9 first). If the owncloud pages hold detail beyond the
+  PDF (error tables etc.), ask the owner to re-share/paste — links were unreachable here.
+- Refs: this commit; `docs/nfc-pkcs11-integration-notes.md`, `docs/development-plan.md`.
+
 ## 2026-06-14 — Phase 9 / chunk 9.3b-ii: inbound request coordinator (9.3 done) — branch main — done
 - Plan: tie the inbound flow together on the fake — requests → decode → prepare → sign → broadcast/hex →
   respond. Completes 9.3.

@@ -331,6 +331,8 @@ Goal: turn the simulated external-NFC device (Phase 7) into a real **custody** s
 
 Status: ⏳ Planned (after Phase 9).
 
+> **Reference:** `docs/nfc-pkcs11-integration-notes.md` is the deep dive for this phase — the vendor `wtpkcs11ecp` BIP32/BIP39 PKCS#11 mechanisms (from the owner-supplied spec PDF + the `mescheryakov1/wallet-tool` reference CLI), the confirmed constants/templates, the **Ethereum-specific corrections** (secp256k1 not P-256; keccak256 not `CKM_SHA256`; build v/recovery-id + low-s yourself), how it maps onto our existing seams, and the open questions to resolve against a real token. Read it before starting any chunk below.
+
 ### Scope
 - Real (or realistically-simulated) NFC tap as the device-session trigger, with the device PIN as a true second factor distinct from the phone PIN.
 - The device signing path actually routes the prepared transaction to the device (vs the Phase 7/8 demo that signs from locally-held material after exercising a mock PKCS#11 op).
@@ -338,9 +340,17 @@ Status: ⏳ Planned (after Phase 9).
 - One PIN source per backend (phone PIN for the vault, device PIN for the device), per the product security model.
 
 ### Non-goals
-- A specific vendor SDK is still TBD; until one is chosen this stays a high-fidelity simulation behind the existing `ExternalDeviceKeyStorageBackend` contract.
+- The **transport** is still TBD — FFI to the `wtpkcs11ecp` native library vs. an NFC APDU bridge to the token's PKCS#11 applet (decided in chunk 10.0). Until that lands and a real token is validated, this stays a high-fidelity simulation behind the existing `ExternalDeviceKeyStorageBackend` contract. (The *vendor model* is no longer TBD — the BIP32/BIP39 PKCS#11 extension in `docs/nfc-pkcs11-integration-notes.md` is the target.)
 
-(Detailed chunk breakdown to be written when Phase 9 lands.)
+### Chunk breakdown
+Small, reviewable steps that keep `main` green (full detail + recipes in `docs/nfc-pkcs11-integration-notes.md` §8):
+- **10.0** — decide the transport (FFI vs NFC APDU); record the decision here.
+- **10.1** — pure-Dart crypto utilities (keccak256 RLP digest, low-s/EIP-2, recovery-id, secp256k1 OID) with known-vector tests. No device.
+- **10.2** — `Pkcs11TransactionSigner` on a *fake* PKCS#11 adapter; assert byte-identical output to the local signer for the same inputs.
+- **10.3** — real adapter behind `ExternalDevicePkcs11Adapter` (`C_Initialize`/slot discovery/`C_OpenSession`/`C_Login(USER, devicePin)`), wired into `ExternalDeviceDemoBackend`'s lifecycle. Manual/dogfood validation (no CI token).
+- **10.4** — keygen (`CKM_VENDOR_BIP32_WITH_BIP39_KEY_PAIR_GEN`) / import (`C_CreateObject`) / address derivation, incl. one-time mnemonic display via `CKA_VENDOR_BIP39_MNEMONIC`.
+- **10.5** — end-to-end device sign for own-sends **and** Phase 9 inbound WC requests (compose with `WalletConnectInboundCoordinator`); "tap + device PIN" becomes a real confirmation step.
+- **10.6** — UX: real NFC presence/affordances in the external-device branch of `WalletFlowScreen` / `WalletFlowController` (replaces the simulated online/offline toggles).
 
 ## Suggested release sequence
 - `v0.3` — architecture skeleton + secure vault foundation
