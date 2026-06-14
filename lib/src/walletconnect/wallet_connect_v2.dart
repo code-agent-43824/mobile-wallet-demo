@@ -33,6 +33,32 @@ class WalletConnectRpcRequest {
   final List<Object?> params;
 }
 
+/// A decoded incoming `eth_sendTransaction` / `eth_signTransaction` request —
+/// the inverse of [WalletConnectV2RequestCodec.encodeSignTransaction]. Optional
+/// fields (nonce/gas/fees) are null when the dApp didn't supply them; the wallet
+/// fills them in before signing.
+class WalletConnectTransactionRequest {
+  const WalletConnectTransactionRequest({
+    required this.fromAddress,
+    required this.toAddress,
+    required this.valueWei,
+    required this.data,
+    this.nonce,
+    this.gasLimit,
+    this.maxFeePerGasWei,
+    this.maxPriorityFeePerGasWei,
+  });
+
+  final String fromAddress;
+  final String toAddress;
+  final BigInt valueWei;
+  final Uint8List data;
+  final int? nonce;
+  final int? gasLimit;
+  final BigInt? maxFeePerGasWei;
+  final BigInt? maxPriorityFeePerGasWei;
+}
+
 /// Maps the app's prepared transfer to/from the WalletConnect v2 wire format.
 /// This is the WC v2 mapping contract reused by the Phase 9 wallet-side flow;
 /// here it is pure serialization (no relay/SDK).
@@ -40,6 +66,11 @@ class WalletConnectV2RequestCodec {
   const WalletConnectV2RequestCodec();
 
   static const String signTransactionMethod = 'eth_signTransaction';
+  static const String sendTransactionMethod = 'eth_sendTransaction';
+
+  /// Whether [method] is a transaction request this codec can decode.
+  bool isTransactionMethod(String method) =>
+      method == signTransactionMethod || method == sendTransactionMethod;
 
   WalletConnectRpcRequest encodeSignTransaction({
     required PreparedTransfer preparedTransfer,
@@ -80,6 +111,66 @@ class WalletConnectV2RequestCodec {
       throw const WalletConnectCodecException(
         'WalletConnect вернул пустую подпись.',
       );
+    }
+    return Uint8List.fromList(hexToBytes(normalized));
+  }
+
+  /// Decodes the transaction object from an incoming `eth_sendTransaction` /
+  /// `eth_signTransaction` request's [params] (the first element is the tx
+  /// object). Inverse of [encodeSignTransaction].
+  WalletConnectTransactionRequest decodeTransactionRequest(
+    List<Object?> params,
+  ) {
+    if (params.isEmpty || params.first is! Map) {
+      throw const WalletConnectCodecException(
+        'WalletConnect-запрос не содержит объект транзакции.',
+      );
+    }
+    final tx = (params.first as Map).cast<String, Object?>();
+    final from = tx['from'] as String?;
+    final to = tx['to'] as String?;
+    if (from == null || from.isEmpty) {
+      throw const WalletConnectCodecException(
+        'В транзакции отсутствует поле from.',
+      );
+    }
+    if (to == null || to.isEmpty) {
+      throw const WalletConnectCodecException(
+        'В транзакции отсутствует поле to.',
+      );
+    }
+    return WalletConnectTransactionRequest(
+      fromAddress: from,
+      toAddress: to,
+      valueWei: _hexToBigInt(tx['value']) ?? BigInt.zero,
+      data: _hexToBytes(tx['data']),
+      nonce: _hexToInt(tx['nonce']),
+      gasLimit: _hexToInt(tx['gas']),
+      maxFeePerGasWei: _hexToBigInt(tx['maxFeePerGas']),
+      maxPriorityFeePerGasWei: _hexToBigInt(tx['maxPriorityFeePerGas']),
+    );
+  }
+
+  BigInt? _hexToBigInt(Object? value) {
+    if (value is! String || value.isEmpty) {
+      return null;
+    }
+    final normalized = value.startsWith('0x') ? value.substring(2) : value;
+    if (normalized.isEmpty) {
+      return null;
+    }
+    return BigInt.tryParse(normalized, radix: 16);
+  }
+
+  int? _hexToInt(Object? value) => _hexToBigInt(value)?.toInt();
+
+  Uint8List _hexToBytes(Object? value) {
+    if (value is! String) {
+      return Uint8List(0);
+    }
+    final normalized = value.startsWith('0x') ? value.substring(2) : value;
+    if (normalized.isEmpty) {
+      return Uint8List(0);
     }
     return Uint8List.fromList(hexToBytes(normalized));
   }

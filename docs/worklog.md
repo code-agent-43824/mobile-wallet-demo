@@ -18,6 +18,21 @@ Entry template:
 
 ---
 
+## 2026-06-14 — Phase 9 / chunk 9.3a: inbound WC request codec (decode) — branch main — done
+- Plan (option A — build on the fake, defer the real SDK after the 9.2 native blockers): 9.3 = inbound request
+  → vault sign → respond, in small steps. **9.3a** (this commit): the **inverse** of the WC tx codec — decode
+  an incoming `eth_sendTransaction` / `eth_signTransaction` tx object into a typed struct. Pure Dart + tests.
+- Done: `walletconnect/wallet_connect_v2.dart` — added `WalletConnectTransactionRequest` + codec
+  `decodeTransactionRequest(params)` (+ `sendTransactionMethod` / `isTransactionMethod` + hex parse helpers),
+  inverse of `encodeSignTransaction`; optional nonce/gas/fees stay null for the wallet to fill. Tests:
+  `test/wallet_connect_request_decode_test.dart` (full tx, minimal tx + defaults, missing-field guards).
+  No version bump. (`main` confirmed green at 650f9b0 before starting.)
+- Next / open: **9.3b** — add `prepareInboundTransaction` to `TransactionService` (build a `PreparedTransfer`
+  from raw fields, reusing the EIP-1559 `Transaction` construction) + a request handler wiring
+  `WalletConnectService.requests` → sign via the active `WalletOperationAuthorizer` signer → broadcast
+  (`eth_sendTransaction`) / signed-hex (`eth_signTransaction`) → `respond`; tested via `FakeWalletConnectService`.
+- Refs: this commit.
+
 ## 2026-06-14 — CI: pin Windows runner to windows-2022 (pre-existing local_auth_windows break) — branch main — done
 - Finding: the reown revert run (24482e3) was green on Validate/Android/iOS×2 but **Windows STILL failed** →
   the `local_auth_windows` MSVC `<experimental/coroutine>` STL1011 error is **pre-existing**, caused by the
