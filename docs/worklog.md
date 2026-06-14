@@ -18,6 +18,23 @@ Entry template:
 
 ---
 
+## 2026-06-14 — Phase 9 / chunk 9.2a: add reown_walletkit dependency (isolated) — branch main — done
+- Plan: do 9.2 carefully + incrementally. **9.2a** (this commit): add ONLY the `reown_walletkit` dependency and
+  let CI prove `pub get` + all 4 platform builds still pass — isolating native-dep risk before any code uses
+  it. **9.2b** (next): `ReownWalletConnectService` + DI, behind a **platform (Android/iOS) + config guard**,
+  falling back to `UnavailableWalletConnectService` elsewhere.
+- Research (pub.dev): `reown_walletkit` latest **1.4.0**; env sdk `>=3.8.0 <4.0.0` (OK with our `^3.11.0`),
+  Flutter `>=1.10.0`; **platforms: Android + iOS only** (no Windows/macOS/web → the Windows CI build must not
+  break and 9.2b must not construct the real service off-mobile / it'd `MissingPluginException`). Direct deps:
+  event / reown_core / reown_sign / walletconnect_pay — none of our crypto deps directly (transitive conflicts,
+  if any, surface in CI `pub get`).
+- Done (9.2a): pinned `reown_walletkit: 1.4.0` in `pubspec.yaml`, nothing consumes it yet. Caveat: `pubspec.lock`
+  is committed but there's no local Flutter toolchain to regenerate it — CI `flutter pub get` reconciles it
+  (the committed lock lags until a real `pub get` is run + committed). No version bump.
+- Next / open: confirm 9.2a CI green on android / ios×2 / windows (watch for minSdk bump, iOS deployment-target,
+  or transitive resolution conflicts); then 9.2b.
+- Refs: this commit.
+
 ## 2026-06-13 — WC_PROJECT_ID config plumbing (committed + build-injected) — branch main — done
 - Plan: per the owner's explicit call, commit the WalletConnect project id and have builds read it from a
   file and pass it as a dart-define. Plumbing only — the real `reown_walletkit` consumer is chunk 9.2.

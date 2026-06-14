@@ -41,6 +41,10 @@ dependencies:
   flutter_secure_storage: ^9.2.4
   web3dart: ^2.7.3
   local_auth: ^2.3.0
+  # WalletConnect/Reown wallet-side SDK (Phase 9, chunk 9.2). Pinned; the
+  # package supports Android + iOS only, so it is consumed behind a
+  # platform + config guard (see lib/src/walletconnect/wc_config.dart).
+  reown_walletkit: 1.4.0
 
 dev_dependencies:
   flutter_test:
