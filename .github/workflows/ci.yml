@@ -213,7 +213,11 @@ jobs:
 
   windows:
     name: Windows x64
-    runs-on: windows-latest
+    # Pinned to windows-2022 (VS 2022 / MSVC 17.x): windows-latest moved to
+    # VS 18 / MSVC 14.51, which turns local_auth_windows's <experimental/coroutine>
+    # usage into a hard STL1011 error. Temporary until local_auth ships a C++20
+    # <coroutine> Windows plugin (or we add the silence define).
+    runs-on: windows-2022
     needs: validate
     steps:
       - uses: actions/checkout@v5

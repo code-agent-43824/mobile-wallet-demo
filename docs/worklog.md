@@ -18,6 +18,19 @@ Entry template:
 
 ---
 
+## 2026-06-14 — CI: pin Windows runner to windows-2022 (pre-existing local_auth_windows break) — branch main — done
+- Finding: the reown revert run (24482e3) was green on Validate/Android/iOS×2 but **Windows STILL failed** →
+  the `local_auth_windows` MSVC `<experimental/coroutine>` STL1011 error is **pre-existing**, caused by the
+  `windows-latest` image moving to VS 18 / MSVC 14.51 (deprecation became a hard error). NOT a reown issue;
+  it would have broken Windows on the next run regardless. (The iOS failure, by contrast, WAS reown's pod and
+  went green once reverted.)
+- Done: pinned the Windows CI job `runs-on: windows-latest` → `windows-2022` (VS 2022 / MSVC 17.x still
+  accepts experimental/coroutine), restoring green.
+- Next / open: proper long-term fix = bump `local_auth` to a version whose Windows plugin uses C++20
+  `<coroutine>` (or add `_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS`); windows-2022 is a temporary
+  reprieve.
+- Refs: this commit.
+
 ## 2026-06-14 — Phase 9 / chunk 9.2a: add reown_walletkit dependency (isolated) — branch main — reverted (build blockers)
 - Plan: do 9.2 carefully + incrementally. **9.2a** (this commit): add ONLY the `reown_walletkit` dependency and
   let CI prove `pub get` + all 4 platform builds still pass — isolating native-dep risk before any code uses
