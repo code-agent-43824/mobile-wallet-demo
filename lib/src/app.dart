@@ -6,6 +6,7 @@ import 'app_version.dart';
 import 'auth/biometric_auth.dart';
 import 'blockchain/blockchain_provider.dart';
 import 'key_storage/secure_key_value_store.dart';
+import 'qr/camera_qr_scanner.dart';
 import 'qr/file_qr_scanner.dart';
 import 'qr/qr_scanner.dart';
 import 'transactions/transaction_service.dart';
@@ -24,6 +25,22 @@ WalletConnectService _defaultWalletConnectService() {
     return ReownWalletConnectService();
   }
   return const UnavailableWalletConnectService();
+}
+
+/// Global navigator key installed on the app's `MaterialApp`, so the
+/// [CameraQrScanner] can push the camera-scanner route without a `BuildContext`
+/// (the `QrScanner` seam is UI-agnostic). There is one app `Navigator`, so one
+/// key for the app's lifetime is correct.
+final GlobalKey<NavigatorState> _appNavigatorKey = GlobalKey<NavigatorState>();
+
+/// The production [QrScanner]: live camera + file load on Android/iOS (via
+/// [CameraQrScanner]), file load only elsewhere (Windows x64, where camera
+/// plugins don't exist). Tests inject [FakeQrScanner].
+QrScanner _defaultQrScanner() {
+  if (Platform.isAndroid || Platform.isIOS) {
+    return CameraQrScanner(navigatorKey: _appNavigatorKey);
+  }
+  return FileQrScanner();
 }
 
 class MobileWalletDemoApp extends StatelessWidget {
@@ -70,6 +87,7 @@ class MobileWalletDemoApp extends StatelessWidget {
     return MaterialApp(
       title: 'Mobile Wallet Demo',
       debugShowCheckedModeBanner: false,
+      navigatorKey: _appNavigatorKey,
       theme: theme,
       builder: (context, child) {
         return Stack(
@@ -103,7 +121,7 @@ class MobileWalletDemoApp extends StatelessWidget {
             _biometricAuthGateway ?? defaultBiometricAuthGateway(),
         walletConnectService:
             _walletConnectService ?? _defaultWalletConnectService(),
-        qrScanner: _qrScanner ?? FileQrScanner(),
+        qrScanner: _qrScanner ?? _defaultQrScanner(),
       ),
     );
   }

@@ -18,7 +18,34 @@ Entry template:
 
 ---
 
-## 2026-06-15 — Phase 9 / chunk 9.9a: probe — add mobile_scanner dep only — branch main — planned
+## 2026-06-15 — Phase 9 / chunk 9.9b: live camera QR scan (CameraQrScanner) — branch main — done (CI green on all 4 platforms)
+- Plan: with the 9.9a probe green, write the camera integration against the verified `mobile_scanner` 7.2.0
+  API (pulled from package source, not guessed): a `CameraQrScanner` that adds the camera source and reuses
+  the existing file-decode path; wire it via DI on Android/iOS; add the iOS camera permission. The connections
+  UI + controller already call the `scanWithCamera`/`loadFromFile` seam (gated on `isCameraScanAvailable`), so
+  this is purely "provide a camera-capable `QrScanner`".
+- Done: `qr/camera_qr_scanner.dart` — `CameraQrScanner implements QrScanner`: `isCameraScanAvailable => true`;
+  `scanWithCamera({title})` resolves the global `navigatorKey.currentState` (throws `QrScannerException` if
+  unmounted) and pushes a full-screen `_CameraScannerScreen` (a `MobileScanner` with
+  `MobileScannerController(formats: [BarcodeFormat.qrCode], detectionSpeed: noDuplicates)`, `onDetect` pops
+  the first non-empty `barcode.rawValue`; AppBar back = cancel→null; Russian hint using the passed title +
+  a Russian `errorBuilder`); `loadFromFile`/`isFileLoadAvailable` **delegate to a composed `FileQrScanner`**
+  (no duplication). DI (`app.dart`): a top-level `_appNavigatorKey` installed on `MaterialApp.navigatorKey`;
+  `_defaultQrScanner()` returns `CameraQrScanner(navigatorKey: _appNavigatorKey)` on `Platform.isAndroid||isIOS`,
+  else `FileQrScanner` (Windows = file-only; the camera class still compiles everywhere — 9.9a proved the
+  native side builds/excludes cleanly). iOS `NSCameraUsageDescription` added to `Info.plist` (Russian). Android
+  `CAMERA` permission is provided by the plugin's own manifest (merged) — no app-manifest change. New
+  `test/camera_qr_scanner_test.dart`: camera-available + file-delegation + the no-navigator error path (the
+  live `MobileScanner` widget can't run headless). **Version bump v1.27.0+38 → v1.28.0+39.**
+- Next / open: CI green check (analyze must accept the `mobile_scanner` API usage on all platforms). Then it's
+  part of the owner's device dogfood: open Connections, tap «Сканировать … камерой», grant the camera
+  permission, scan a real `wc:`/`airgap-tx:` QR, confirm it fills the field. **Phase 9 feature work (tx +
+  message + typed-data, WalletConnect + AirGap, file + camera QR) is now complete**; the remaining open item
+  is real-relay reown dogfooding (9.2).
+- Refs: this commit; `lib/src/qr/camera_qr_scanner.dart`, `lib/src/app.dart`, `ios/Runner/Info.plist`,
+  `test/camera_qr_scanner_test.dart`, version files, `docs/development-plan.md`.
+
+## 2026-06-15 — Phase 9 / chunk 9.9a: probe — add mobile_scanner dep only — branch main — done (CI green on all 4 platforms)
 - Plan: the camera is the remaining QR input source (file-load already ships via `FileQrScanner`; camera is
   declared unavailable today). Before writing the `CameraQrScanner` + scanner-screen widget + NavigatorKey +
   camera permissions + DI wiring, run the same isolation probe that paid off for reown (9.2a): add
@@ -26,12 +53,14 @@ Entry template:
   code from the pubspec), push, and poll CI on all 4 platforms. mobile_scanner declares android/ios/macos/web
   only (NOT windows/linux), and its native iOS pods are the risk (cf. connectivity_plus's too-new SDK symbol).
   This isolates "does it build everywhere?" from the integration code. Build/config only — no version bump.
-- Done: …
-- Next / open: if green → 9.9b: `CameraQrScanner` over `mobile_scanner` (camera on Android/iOS; falls back to
-  the file decoder), scanner route via a global NavigatorKey, iOS `NSCameraUsageDescription` + Android
-  `CAMERA` permission, DI swap of the default `QrScanner`. If iOS pods fail like connectivity_plus, pin/adjust
-  the version or bump CI Xcode, then revert the probe to keep `main` green.
-- Refs: this commit; `pubspec.yaml`.
+- Done: **CI run 27581949021 green on all 4 platforms** (Validate + Windows + Android APK + iOS Simulator +
+  iOS Device). Pre-analysis from package source held: iOS is **pure-Swift on the Apple Vision API** (no
+  GoogleMLKit pod) with `deployment_target = 12.0` ≤ the app's 13.0 — none of the connectivity_plus-style pod
+  risk; Android pulls MLKit from **standard Google Maven** (no JitPack) with **no flavor dimension** and
+  `minSdk 23` (already satisfied — reown forces ≥23 and builds green) / `compileSdk 36` (Flutter 3.41.7
+  default); Windows is excluded cleanly as unsupported. So the dep is safe to keep — no revert needed.
+- Next / open: 9.9b (done in the entry above) — the `CameraQrScanner` integration.
+- Refs: probe commit b16ef86; `pubspec.yaml`.
 
 ## 2026-06-15 — Phase 9 / chunk 9.2b-ii: real ReownWalletConnectService — branch main — done (code-complete; pending device dogfood)
 - Plan: with reown building green (9.2b-i), implement the real service over `reown_walletkit` 1.4.0 behind

@@ -54,5 +54,7 @@
 	<string>Use Face ID to unlock your wallet</string>
 	<key>NSBiometricUsageDescription</key>
 	<string>Use biometrics to unlock your wallet</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Доступ к камере нужен для сканирования QR-кодов (WalletConnect и AirGap).</string>
 </dict>
 </plist>
