@@ -18,6 +18,30 @@ Entry template:
 
 ---
 
+## 2026-06-15 — Phase 9 / chunk 9.4c: incoming-request approval sheet — branch main — done
+- Plan: connect the already-tested 9.3 `WalletConnectInboundCoordinator` to the UI. Controller subscribes
+  to `WalletConnectService.requests`, the Connections screen shows a request card, approve drives the
+  coordinator (sign → broadcast/respond), reject → respondError. On the fake.
+- Done: `WalletFlowController` now takes `transactionService`/`transactionBroadcaster`/`nonceProvider`
+  (nullable, default to the prod impls — `HardenedTransactionServiceImplementation` /
+  `PublicRpcTransactionBroadcaster` / `PublicRpcNonceProvider`), passed from `WalletFlowScreen` (which
+  already has them). Subscribes to `requests` → `pendingRequest`; `approvePendingRequest` builds the active
+  backend's `WalletTransactionSigner` via `WalletOperationAuthorizer` (reuses the in-memory unlocked
+  material — no per-request prompt) and runs a `WalletConnectInboundCoordinator`; `rejectPendingRequest` →
+  `respondError`; requests sub cancelled in `dispose`. UI: `_RequestCard` (method/chain/to/value +
+  «Одобрить и подписать»/«Отклонить запрос») on the Connections screen. Tests: controller approve→
+  `respondedResults` single = broadcast hash (real local signing of an Anvil-style tx, fake broadcaster/
+  nonce) + reject→`respondedErrors`; widget test simulates a request → card → reject → gone +
+  `respondedErrors` length 1. **Version bump v1.20.0+31 → v1.21.0+32** (pubspec, `app_version.dart`,
+  `widget_test.dart`, README, development-plan stopping point + release sequence). `dart format` clean.
+- Next / open: Phase 9 inbound is now end-to-end on the fake (proposals + sessions + requests).
+  Remaining: AirGap inbound (9.5), QR pairing (9.6), `personal_sign`/typed-data, and the real
+  `reown_walletkit` (9.2, deferred behind native-build blockers). (No Flutter locally — analyze/widget
+  tests verified via CI.)
+- Refs: this commit; `lib/src/wallet_flow_controller.dart`, `lib/src/wallet_flow_screen.dart`,
+  `lib/src/wallet_flow_screen_connections.dart`, `test/wallet_connect_controller_test.dart`,
+  `test/wallet_connect_screen_test.dart`, version files, `docs/development-plan.md`.
+
 ## 2026-06-15 — Phase 9 / chunk 9.4b: Connections screen — branch main — done
 - Plan: build the Connections screen on top of the 9.4a controller seam, on the fake. New
   `WalletFlowStage.connections` + a presentational stage + a dashboard entry. Keep `personal_sign`/

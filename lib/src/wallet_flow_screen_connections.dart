@@ -10,10 +10,13 @@ class _ConnectionsStage extends StatefulWidget {
     required this.isAvailable,
     required this.sessions,
     required this.pendingProposal,
+    required this.pendingRequest,
     required this.walletAddress,
     required this.onPair,
     required this.onApprove,
     required this.onReject,
+    required this.onApproveRequest,
+    required this.onRejectRequest,
     required this.onDisconnect,
     required this.onBack,
   });
@@ -21,10 +24,13 @@ class _ConnectionsStage extends StatefulWidget {
   final bool isAvailable;
   final List<WalletConnectSession> sessions;
   final WalletConnectSessionProposal? pendingProposal;
+  final WalletConnectRequest? pendingRequest;
   final String? walletAddress;
   final Future<void> Function({required String uri}) onPair;
   final Future<void> Function() onApprove;
   final Future<void> Function() onReject;
+  final Future<void> Function() onApproveRequest;
+  final Future<void> Function() onRejectRequest;
   final Future<void> Function(String topic) onDisconnect;
   final VoidCallback onBack;
 
@@ -53,6 +59,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final proposal = widget.pendingProposal;
+    final request = widget.pendingRequest;
     final sessions = widget.sessions;
 
     return Column(
@@ -98,6 +105,14 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
             proposal: proposal,
             onApprove: widget.walletAddress == null ? null : widget.onApprove,
             onReject: widget.onReject,
+          ),
+        ],
+        if (request != null) ...[
+          const SizedBox(height: 24),
+          _RequestCard(
+            request: request,
+            onApprove: widget.onApproveRequest,
+            onReject: widget.onRejectRequest,
           ),
         ],
         const SizedBox(height: 24),
@@ -183,6 +198,68 @@ class _ProposalCard extends StatelessWidget {
               OutlinedButton(
                 onPressed: onReject,
                 child: const Text('Отклонить'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RequestCard extends StatelessWidget {
+  const _RequestCard({
+    required this.request,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  final WalletConnectRequest request;
+  final Future<void> Function() onApprove;
+  final Future<void> Function() onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tx = request.params.isNotEmpty && request.params.first is Map
+        ? (request.params.first! as Map).cast<String, Object?>()
+        : const <String, Object?>{};
+    final to = tx['to']?.toString();
+    final value = tx['value']?.toString();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.tertiaryContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Входящий запрос на подпись',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text('Метод: ${request.method}'),
+          Text('Сеть: ${request.chainId}'),
+          if (to != null) Text('Получатель: $to'),
+          if (value != null) Text('Сумма (wei): $value'),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              FilledButton(
+                onPressed: onApprove,
+                child: const Text('Одобрить и подписать'),
+              ),
+              OutlinedButton(
+                onPressed: onReject,
+                child: const Text('Отклонить запрос'),
               ),
             ],
           ),

@@ -16,6 +16,7 @@ import 'key_storage/secure_key_value_store.dart';
 import 'transactions/hardened_transaction_service.dart';
 import 'transactions/transaction_service.dart';
 import 'transactions/transaction_tracker.dart';
+import 'walletconnect/wallet_connect_inbound.dart';
 import 'walletconnect/wallet_connect_service.dart';
 
 // The wallet state machine + every domain action live in a widget-free
@@ -76,6 +77,9 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       store: widget.store,
       biometricAuthGateway: widget.biometricAuthGateway,
       walletConnectService: widget.walletConnectService,
+      transactionService: widget.transactionService,
+      transactionBroadcaster: widget.transactionBroadcaster,
+      nonceProvider: widget.nonceProvider,
     )..addListener(_onControllerChanged);
     _controller.loadInitialState();
   }
@@ -242,10 +246,13 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           isAvailable: controller.isWalletConnectAvailable,
           sessions: controller.walletConnectSessions,
           pendingProposal: controller.pendingProposal,
+          pendingRequest: controller.pendingRequest,
           walletAddress: controller.summary?.address,
           onPair: controller.pairWalletConnect,
           onApprove: controller.approvePendingProposal,
           onReject: controller.rejectPendingProposal,
+          onApproveRequest: controller.approvePendingRequest,
+          onRejectRequest: controller.rejectPendingRequest,
           onDisconnect: (topic) =>
               controller.disconnectWalletConnectSession(topic: topic),
           onBack: controller.closeConnections,

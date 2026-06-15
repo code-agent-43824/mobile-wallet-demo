@@ -15,7 +15,16 @@ class WalletFlowController extends ChangeNotifier {
     required BiometricAuthGateway biometricAuthGateway,
     WalletConnectService walletConnectService =
         const UnavailableWalletConnectService(),
-  }) : _walletConnectService = walletConnectService {
+    TransactionService? transactionService,
+    TransactionBroadcaster? transactionBroadcaster,
+    NonceProvider? nonceProvider,
+  }) : _walletConnectService = walletConnectService,
+       _transactionService =
+           transactionService ??
+           const HardenedTransactionServiceImplementation(),
+       _transactionBroadcaster =
+           transactionBroadcaster ?? PublicRpcTransactionBroadcaster(),
+       _nonceProvider = nonceProvider ?? PublicRpcNonceProvider() {
     _vault = PhoneSecureVault(
       store: store,
       biometricAuth: biometricAuthGateway,
@@ -62,6 +71,10 @@ class WalletFlowController extends ChangeNotifier {
       _walletConnectSessions = sessions;
       _notify();
     });
+    _walletConnectRequestSub = _walletConnectService.requests.listen((request) {
+      _pendingRequest = request;
+      _notify();
+    });
     unawaited(_walletConnectService.init());
   }
 
@@ -69,10 +82,14 @@ class WalletFlowController extends ChangeNotifier {
   late final ExternalDeviceDemoBackend _externalDeviceBackend;
   late final WalletBackendRegistry _backendRegistry;
   final WalletConnectService _walletConnectService;
+  final TransactionService _transactionService;
+  final TransactionBroadcaster _transactionBroadcaster;
+  final NonceProvider _nonceProvider;
   late final StreamSubscription<WalletConnectSessionProposal>
   _walletConnectProposalSub;
   late final StreamSubscription<List<WalletConnectSession>>
   _walletConnectSessionsSub;
+  late final StreamSubscription<WalletConnectRequest> _walletConnectRequestSub;
 
   /// Stateless signing authorizer used by the unlocked send flow.
   final WalletOperationAuthorizer walletOperationAuthorizer =
@@ -86,6 +103,7 @@ class WalletFlowController extends ChangeNotifier {
   String? _pendingBiometricPin;
   String? _selectedBackendId;
   WalletConnectSessionProposal? _pendingProposal;
+  WalletConnectRequest? _pendingRequest;
   List<WalletConnectSession> _walletConnectSessions =
       const <WalletConnectSession>[];
   ExternalDeviceDemoRuntimeState? _externalRuntimeState;
@@ -127,6 +145,9 @@ class WalletFlowController extends ChangeNotifier {
   /// The incoming session proposal awaiting approve/reject, if any.
   WalletConnectSessionProposal? get pendingProposal => _pendingProposal;
 
+  /// The incoming signing request awaiting approve/reject, if any.
+  WalletConnectRequest? get pendingRequest => _pendingRequest;
+
   KeyStorageBackend get activeBackend {
     final selectedBackendId = _selectedBackendId;
     if (selectedBackendId != null) {
@@ -152,6 +173,7 @@ class WalletFlowController extends ChangeNotifier {
     _disposed = true;
     unawaited(_walletConnectProposalSub.cancel());
     unawaited(_walletConnectSessionsSub.cancel());
+    unawaited(_walletConnectRequestSub.cancel());
     super.dispose();
   }
 
@@ -449,6 +471,64 @@ class WalletFlowController extends ChangeNotifier {
       await _walletConnectService.disconnect(topic: topic);
       _walletConnectSessions = _walletConnectService.activeSessions;
     });
+  }
+
+  /// Approves [pendingRequest]: signs it with the active backend and responds to
+  /// the dApp via the inbound coordinator (broadcast for `eth_sendTransaction`,
+  /// signed-tx hex for `eth_signTransaction`). The wallet is already unlocked in
+  /// this flow, so signing reuses the in-memory material (no per-request prompt).
+  Future<void> approvePendingRequest() async {
+    await _runGuarded(() async {
+      final request = _pendingRequest;
+      if (request == null) {
+        return;
+      }
+      final signer = _activeTransactionSigner();
+      final coordinator = WalletConnectInboundCoordinator(
+        service: _walletConnectService,
+        transactionService: _transactionService,
+        broadcaster: _transactionBroadcaster,
+        nonceProvider: _nonceProvider,
+      );
+      await coordinator.handleRequest(request: request, signer: signer);
+      _pendingRequest = null;
+    });
+  }
+
+  /// Rejects [pendingRequest] with a JSON-RPC error to the dApp.
+  Future<void> rejectPendingRequest() async {
+    await _runGuarded(() async {
+      final request = _pendingRequest;
+      if (request == null) {
+        return;
+      }
+      await _walletConnectService.respondError(
+        request: request,
+        message: 'Запрос отклонён пользователем.',
+      );
+      _pendingRequest = null;
+    });
+  }
+
+  /// Builds a signer for the active (unlocked) backend; throws [VaultFailure]
+  /// when the backend is locked or the material is unavailable.
+  WalletTransactionSigner _activeTransactionSigner() {
+    final backend = activeBackend;
+    if (backend is ExternalDeviceKeyStorageBackend) {
+      return walletOperationAuthorizer
+          .authorizeUnlockedExternalDeviceSigning(
+            backend: backend,
+            walletMaterial: _material,
+          )
+          .signer;
+    }
+    return walletOperationAuthorizer
+        .authorizeUnlockedLocalSigning(
+          backend: backend,
+          walletMaterial: _material,
+          authMethod: _lastUnlockAuthMethod,
+        )
+        .signer;
   }
 
   /// Opens the Connections screen (from the unlocked dashboard).

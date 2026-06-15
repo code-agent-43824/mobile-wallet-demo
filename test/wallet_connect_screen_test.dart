@@ -130,4 +130,49 @@ void main() {
 
     expect(find.text('Подготовка и отправка перевода'), findsOneWidget);
   });
+
+  testWidgets('connections screen: an incoming request can be rejected', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final service = FakeWalletConnectService();
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _FakeBlockchainProvider(),
+        walletConnectService: service,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _createUnlock(tester);
+    await _openConnections(tester);
+
+    service.simulateRequest(
+      topic: 'topic-1',
+      method: 'eth_sendTransaction',
+      chainId: 'eip155:1',
+      params: const <Object?>[
+        <String, Object?>{
+          'from': '0x1111111111111111111111111111111111111111',
+          'to': '0x2222222222222222222222222222222222222222',
+          'value': '0x0',
+          'data': '0x',
+        },
+      ],
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Входящий запрос на подпись'), findsOneWidget);
+    expect(find.text('Метод: eth_sendTransaction'), findsOneWidget);
+
+    final reject = find.text('Отклонить запрос');
+    await tester.ensureVisible(reject);
+    await tester.tap(reject);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Входящий запрос на подпись'), findsNothing);
+    expect(service.respondedErrors, hasLength(1));
+  });
 }
