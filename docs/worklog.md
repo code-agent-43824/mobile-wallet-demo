@@ -18,6 +18,31 @@ Entry template:
 
 ---
 
+## 2026-06-15 — Phase 10 prep: exact NFC/PC-SC reproduction spec (docs only) — branch main — done
+- Plan: owner wants to later reproduce the NFC stack precisely — "what system calls are needed, what is
+  not, no errors / no extra steps / no over-complication". Study how the two Rutoken demos actually access
+  the NFC reader and write a minimal, reproduction-grade spec.
+- Done: rewrote §6 of `docs/nfc-pkcs11-integration-notes.md` into an exact spec. Core finding: **the app
+  never calls the OS NFC APIs directly** — it calls only the Rutoken **PC-SC bridge** (start/stop) + standard
+  **PKCS#11**; the bridge owns Core NFC (iOS) / `NfcAdapter` (Android) and exposes the token as a PC-SC slot,
+  so presence is observed via `C_WaitForSlotEvent`/`CKF_TOKEN_PRESENT`, not OS NFC callbacks. Documented,
+  with literal values: iOS = SPM `swift-rtpcsc-wrapper` (branch master) + `wtpkcs11ecp.xcframework`,
+  entitlement `com.apple.developer.nfc.readersession.formats=[TAG]`, Info.plist `NFCReaderUsageDescription`
+  + `…iso7816.select-identifiers` AIDs (`F0000000005275746F6B656E`="…Rutoken", `A00000039742544659`),
+  `RtPcscWrapper.start()` once + `startNfcExchange/stopNfc` per op + `getNfcCooldown`. Android = gradle
+  `rtpcscbridge`(transitive→NFC perm)/`pkcs11wrapper`/`pkcs11jna`(both non-transitive)/`jna`(aar), arm64-only
+  `libwtpkcs11ecp.so` via jniLibs copy, the two `RtPcscBridge.setAppContext` + `attachToLifecycle(... NFC)`
+  lines in `Application.onCreate`, JNA `Native.load("wtpkcs11ecp")`, lifecycle-bound `C_Initialize`/
+  `C_Finalize` (`CKF_OS_LOCKING_OK`), blocking `C_WaitForSlotEvent` presence loop. Added explicit **Do NOT**
+  lists (iOS: no CoreNFC/`NFCTagReaderSession`/`SCard*`; Android: no `android.permission.NFC`/`uses-feature`
+  /`NfcAdapter`/`enableReaderMode`/`enableForegroundDispatch`/NFC intent-filters/tag polling), the one-tap
+  operation lifecycle (open→present→OpenSession→Login→crypto→Logout→Close→stop→cooldown), and a Flutter
+  mapping (wrap both native stacks behind a platform channel; keep the Ethereum keccak/RLP/recovery math in
+  Dart). Updated the dev-plan Phase 10 pointer. Docs-only; no bump.
+- Next / open: real-device validation in chunk 10.3 (C_Sign r‖s-vs-DER, mnemonic extractability, cooldown
+  timing, SDK delivery). Phase 10 still after Phase 9.
+- Refs: this commit; `docs/nfc-pkcs11-integration-notes.md` §6, `docs/development-plan.md`.
+
 ## 2026-06-14 — Phase 10 prep: augment NFC/PKCS#11 notes from the Rutoken demo wallets (docs only) — branch main — done
 - Plan: the owner supplied the two previously-unreachable owncloud archives — the **official Aktiv-Soft /
   Rutoken demo wallets** (iOS Swift + Android Kotlin). Study them and upgrade `docs/nfc-pkcs11-integration-

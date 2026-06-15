@@ -252,26 +252,140 @@ out of scope for EVM.
 
 ---
 
-## 6. NFC / PC-SC transport (the “tap” model)
+## 6. NFC / PC-SC transport — exact reproduction spec
 
-The token is reached over **PC-SC**, with **NFC** as the reader. This is what
-makes “tap + device PIN” a real second factor.
+> This section is the **precise, minimal** recipe for the NFC stack. The golden
+> rule, verified in both demos: **the app never touches the OS NFC APIs
+> directly.** You call only (a) the Rutoken **PC-SC bridge** start/stop and (b)
+> standard **PKCS#11** functions. The bridge owns Core NFC (iOS) /
+> `NfcAdapter` (Android) and presents the tapped token as a **PC-SC slot**.
 
-- **Session shape** (iOS `CryptoManager.withToken`): start NFC exchange (shows
-  iOS system messages: *wait* → *work* → *stop*) → wait for the token to appear
-  on the NFC reader → wrap as a token → run the operation → `logout()` →
-  `stopNfc()`. The NFC tap **is** the device-session trigger; `C_Login(CKU_USER,
-  devicePin)` is the **device PIN** second factor (distinct from our phone-vault PIN).
-- **iOS:** `RtPcscWrapper` Swift package (`RtReader` filtered by `.nfc`,
-  `startNfcExchange(...)`, `stopNfc(...)`); Core NFC entitlement required. iOS
-  rate-limits NFC — the demo exposes an **NFC cooldown** stream
-  (`getNfcCooldown`) you must respect between sessions.
-- **Android:** `ru.rutoken.rtpcscbridge` + `pkcs11jna` + `pkcs11wrapper`; token
-  presence via **PC-SC slot events** (`token/slotevent/SlotEventProvider`). Native
-  `libwtpkcs11ecp.so` is **arm64-v8a only**; **physical device only** (no emulator).
-- **Practical:** keep each NFC session short (tap windows are brief and
-  rate-limited) — do login + derive + sign within one tap; don’t hold the field
-  open waiting on UI.
+### 6.1 The layer cake (who calls what)
+```
+your app  ──calls──▶  PKCS#11 (wtpkcs11ecp)        ← C_Initialize, C_*Slot*, C_OpenSession,
+   │                      │                            C_Login, C_DeriveKey, C_Sign, C_Finalize
+   │                      ▼
+   └──calls──▶  PC-SC bridge (RtPcsc*)  ──owns──▶  OS NFC reader  ──RF──▶  Rutoken token
+        (start/stop NFC, lifecycle)        (Core NFC / NfcAdapter)
+```
+The bridge registers an NFC reader as a **PC-SC slot**; `wtpkcs11ecp` then talks
+PKCS#11 over it. So token *presence* is observed through PKCS#11
+(`C_WaitForSlotEvent` / `C_GetSlotInfo` → `CKF_TOKEN_PRESENT`), **not** through OS
+NFC callbacks.
+
+### 6.2 iOS — what is required (and nothing more)
+**Dependencies**
+- SPM: `RtPcscWrapper` — `https://github.com/AktivCo/swift-rtpcsc-wrapper` (the
+  demo pins branch `master`). Link the `wtpkcs11ecp.xcframework`; expose its C
+  headers via a bridging header (`#import "wtpkcs11.h"` etc.).
+
+**Capability — entitlement** (`*.entitlements`)
+```xml
+<key>com.apple.developer.nfc.readersession.formats</key>
+<array><string>TAG</string></array>   <!-- Near Field Communication Tag Reading; format TAG (ISO7816), not NDEF -->
+```
+
+**Info.plist — both keys are mandatory**
+```xml
+<key>NFCReaderUsageDescription</key><string>…why we use NFC…</string>
+<key>com.apple.developer.nfc.readersession.iso7816.select-identifiers</key>
+<array>
+  <string>F0000000005275746F6B656E</string>  <!-- 0xF0 00 00 00 00 + "Rutoken" -->
+  <string>A00000039742544659</string>        <!-- second registered Rutoken AID -->
+</array>
+```
+> ⚠️ Core NFC will only connect to an ISO7816 tag whose **AID is in this list**.
+> Omitting/!matching the AIDs is the classic “tag never connects” bug. Copy these
+> two values verbatim (confirm against the SDK for new token models).
+
+**Code — once at startup**
+```swift
+let pcsc = RtPcscWrapper()
+await pcsc.start()                 // discovers RtReader where type == .nfc
+```
+**Code — per operation** (mirror `PcscHelper`/`CryptoManager.withToken`)
+```
+stream = pcsc.startNfcExchange(onReader:, waitMessage:, workMessage:)  // shows the iOS NFC sheet
+for await status in combineLatest(stream, pkcs11.startTokenMonitoring()):
+    when status == .inProgress && token != nil → run PKCS#11 ops, then break
+defer: try await pcsc.stopNfc(onReader:, withMessage:)                 // dismisses the sheet
+```
+Respect `pcsc.getNfcCooldown(...)` between taps — iOS rate-limits NFC sessions.
+
+**Do NOT (iOS):** import `CoreNFC`; create `NFCTagReaderSession` /
+`NFCNDEFReaderSession`; implement `NFCTagReaderSessionDelegate`; call PC-SC
+`SCard*` yourself; manage tag polling/connect. The wrapper does all of it. The
+only NFC UI you provide is the three message strings (wait/work/stop).
+
+### 6.3 Android — what is required (and nothing more)
+**Dependencies** (`app/build.gradle.kts` + `libs.versions.toml`)
+```kotlin
+implementation(libs.rutoken.rtpcscbridge)                       // 1.4.0 — PC-SC over NFC (transitive: rttransport + merged NFC perm)
+implementation(libs.rutoken.pkcs11wrapper) { isTransitive = false } // 4.3.1
+implementation(libs.rutoken.pkcs11jna)     { isTransitive = false } // 4.2.0
+implementation(libs.jna) { artifact { type = "aar" } }          // 5.17.0 (Android aar!)
+// org.bouncycastle:bcpkix-jdk18on for host-side hashing
+ndk { abiFilters += "arm64-v8a" }                               // libwtpkcs11ecp.so is arm64-only
+// + a gradle task to copy external/pkcs11ecp-wt/android-arm64/lib/libwtpkcs11ecp.so → src/main/jniLibs/arm64-v8a/
+```
+
+**Application.onCreate() — the entire NFC enablement is these lines**
+```kotlin
+RtPcscBridge.setAppContext(this)
+RtPcscBridge.getTransportExtension().attachToLifecycle(
+    this, /*foregroundOnly=*/true,
+    InitParameters.Builder().setEnabledTokenInterfaces(TokenInterface.NFC).build()
+)
+// (demo also installs BouncyCastle as provider #1 for host-side crypto)
+```
+**Load native lib + init PKCS#11, bound to the Activity lifecycle**
+```kotlin
+// module:  Pkcs11BaseModule(RtPkcs11Api(RtPkcs11JnaLowLevelApi(Native.load("wtpkcs11ecp", RtPkcs11::class.java), …)), …)
+// launcher: onStart → C_Initialize(CKF_OS_LOCKING_OK); onStop (not config-change) → C_Finalize
+// MainActivity is a FragmentActivity (for androidx biometric) and: lifecycle.addObserver(pkcs11Launcher)
+```
+Token presence: a background loop on `Dispatchers.IO` calling blocking
+`module.waitForSlotEvent(false)` (= `C_WaitForSlotEvent`) →
+`Pkcs11SlotInfo.isTokenPresent`.
+
+**Do NOT (Android):** declare `android.permission.NFC` or
+`<uses-feature android:name="android.hardware.nfc">` in *your* manifest — they
+come from the bridge’s merged manifest. Do not use `NfcAdapter`,
+`enableReaderMode`, `enableForegroundDispatch`, or NFC `<intent-filter>`
+(`NDEF/TECH/TAG_DISCOVERED`). Do not poll for tags. (The demo manifest in fact
+only *removes* the unused `BLUETOOTH*` / `USE_SPI` transport perms via
+`tools:node="remove"`; it adds nothing NFC-specific.)
+
+### 6.4 The one operation lifecycle (both platforms)
+Keep each tap short — open, do everything, close. Don’t hold the RF field while
+waiting on UI; gather inputs (PIN, tx) *before* the tap.
+```
+[once] init PC-SC bridge + load & C_Initialize PKCS#11
+1. start NFC session (iOS: shows sheet; Android: arms reader)
+2. wait for token present  (C_WaitForSlotEvent / C_GetSlotInfo & CKF_TOKEN_PRESENT)
+3. C_OpenSession(slot, CKF_SERIAL_SESSION|CKF_RW_SESSION)
+4. C_Login(CKU_USER, devicePin)              ← the device-PIN second factor
+5. crypto: generate / import / C_DeriveKey / C_Sign     (§5)
+6. C_Logout ; C_CloseSession
+7. stop NFC session
+8. honor NFC cooldown before the next tap (iOS)
+[on background/exit] C_Finalize
+```
+
+### 6.5 What this means for our Flutter app
+There is no Dart PKCS#11/PC-SC. Reproducing the stack = **wrap the two native
+stacks behind a platform channel / FFI**, one thin per-platform module each
+exposing the same op set (probe / readAddress / sign), and keep all of §6.2–§6.4
+*inside* those modules:
+- **iOS module** (Swift): bundle `RtPcscWrapper` + `wtpkcs11ecp.xcframework`,
+  set the entitlement + Info.plist keys above, port `PcscHelper`/`Pkcs11Helper`/
+  the `withToken` flow.
+- **Android module** (Kotlin): the gradle deps + jniLibs copy above, the
+  `RtPcscBridge` init in `Application`, the JNA module load + lifecycle-bound
+  `C_Initialize`/`C_Finalize`, the `C_WaitForSlotEvent` presence loop.
+- Dart side: a real `ExternalDevicePkcs11Adapter` that calls the channel; the
+  Ethereum keccak/RLP/recovery-id math (§7) stays in Dart. Per-platform NFC
+  config (entitlement/AIDs vs. gradle/jniLibs) is the bulk of chunk 10.0/10.3.
 
 ---
 
