@@ -2,6 +2,9 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        // reown's native Android libs (yttrium / walletconnect_pay) are published
+        // on JitPack, not the standard repos (Phase 9 chunk 9.2).
+        maven { url = uri("https://jitpack.io") }
     }
 }
 

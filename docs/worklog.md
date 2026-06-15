@@ -18,6 +18,24 @@ Entry template:
 
 ---
 
+## 2026-06-15 — Phase 9 / chunk 9.2b-i: reown toolchain fixes (re-add dep) — branch main — in progress
+- Plan: owner chose to finish 9.2 carefully (has an Android phone + Mac/iPhone for dogfooding). Apply the
+  two toolchain fixes the 9.2a probe identified, re-add `reown_walletkit`, and get CI green on all 4
+  platforms before writing any integration (9.2b-ii). Still no behaviour change — the fake/`Unavailable`
+  service stays the default; this is build/config only.
+- Done: (1) **iOS** — `dependency_overrides: connectivity_plus: 7.0.0`. The probe pinned the failure to
+  `connectivity_plus 7.1.1` using `NWPath.isUltraConstrained` (too-new SDK symbol). Verified from source
+  that **7.0.0 is clean** of that symbol and sits within `reown_core`'s `connectivity_plus >=6.1.3 <8.0.0`
+  (same 7.x Dart API), so the override is safe. (2) **Android** — added `maven { url =
+  uri("https://jitpack.io") }` to `android/build.gradle.kts` `allprojects.repositories` so Gradle can fetch
+  reown's native `yttrium`/`walletconnect_pay` libs (the `com.github.reown-com.*` JitPack coordinates that
+  weren't found). (3) re-added `reown_walletkit: ^1.4.0`. No app-version bump (build/config only).
+- Next / open: CI probe again — expect Validate ✅, Windows ✅ (unchanged), and now **iOS + Android green**.
+  If green → 9.2b-ii: real `ReownWalletConnectService` behind `WalletConnectService` + `WC_PROJECT_ID` init +
+  DI (fake stays for tests), then owner dogfoods on a device. If iOS still red, the fallback is bumping the
+  CI Xcode (setup-xcode). No Flutter locally → CI is the verifier.
+- Refs: this commit; `pubspec.yaml`, `android/build.gradle.kts`.
+
 ## 2026-06-15 — Phase 9 / chunk 9.2a: probe — add reown_walletkit dep only — branch main — probed, reverted (blocked)
 - **Probe result (CI run 27568514582):** Validate ✅ (pub get **resolved** reown + 58 transitive deps with
   our pins — web3dart 3 migration paid off; analyze + tests pass). **Windows x64 ✅** — reown is excluded

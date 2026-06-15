@@ -47,10 +47,11 @@ dependencies:
   file_selector: ^1.0.0
   image: ^4.0.0
   zxing2: ^0.2.0
-  # reown_walletkit (real WalletConnect SDK, chunk 9.2) is NOT added yet — the
-  # 9.2a probe (worklog) showed it needs CI-toolchain fixes first: iOS Xcode (a
-  # transitive connectivity_plus uses a too-new SDK symbol) + an Android JitPack
-  # Maven repo for reown's `yttrium` native libs. Pending an owner decision.
+  # Real WalletConnect v2 wallet SDK (Phase 9 chunk 9.2). Needs two toolchain
+  # fixes (both applied): the `connectivity_plus` override below + the JitPack
+  # Maven repo in android/build.gradle.kts (reown's `yttrium` native libs).
+  # Android/iOS only; excluded cleanly on Windows.
+  reown_walletkit: ^1.4.0
 
 # web3dart 3.x needs pointycastle ^4, but bip32/bip39 (latest 1.0.6, 5 yrs old)
 # over-constrain it to ^3. They only use pointycastle's stable digest/HMAC/EC
@@ -59,6 +60,10 @@ dependencies:
 # 0xf39Fd6…266 in test/phone_secure_vault_test.dart).
 dependency_overrides:
   pointycastle: ^4.0.0
+  # reown pulls connectivity_plus; 7.1.x's iOS/macOS code uses
+  # NWPath.isUltraConstrained (a too-new SDK symbol the CI Xcode lacks). Pin to
+  # the clean 7.0.0 — within reown_core's >=6.1.3 <8.0.0, same 7.x Dart API.
+  connectivity_plus: 7.0.0
 
 dev_dependencies:
   flutter_test:
