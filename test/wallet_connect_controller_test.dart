@@ -105,4 +105,18 @@ void main() {
     controller.dispose();
     await service.dispose();
   });
+
+  test('openConnections / closeConnections toggle the stage', () async {
+    final service = FakeWalletConnectService();
+    final controller = await buildUnlocked(service);
+
+    controller.openConnections();
+    expect(controller.stage, WalletFlowStage.connections);
+
+    controller.closeConnections();
+    expect(controller.stage, WalletFlowStage.unlocked);
+
+    controller.dispose();
+    await service.dispose();
+  });
 }

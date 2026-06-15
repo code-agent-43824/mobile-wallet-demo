@@ -62,6 +62,8 @@ class _Header extends StatelessWidget {
         return 'Кошелёк инициализирован, но заблокирован. Дальше доступ в приложение идёт через PIN, а при включённой биометрии — ещё и через быстрый biometric unlock.';
       case WalletFlowStage.unlocked:
         return 'Onboarding/auth shell готов. Теперь поверх него строим первый действительно полезный read-only wallet слой: баланс, токены, история и локальный кэш.';
+      case WalletFlowStage.connections:
+        return 'Подключения WalletConnect: dApp подключается к этому кошельку, присылает запросы на подпись, а кошелёк одобряет их и подписывает локальным vault. Пока работает поверх фейкового сервиса — реальный реле/SDK подключим позже.';
     }
   }
 }

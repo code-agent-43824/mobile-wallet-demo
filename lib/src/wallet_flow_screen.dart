@@ -26,6 +26,7 @@ part 'wallet_flow_controller.dart';
 part 'wallet_flow_screen_widgets.dart';
 part 'wallet_flow_screen_onboarding.dart';
 part 'wallet_flow_screen_unlocked.dart';
+part 'wallet_flow_screen_connections.dart';
 
 enum WalletFlowStage {
   loading,
@@ -36,6 +37,7 @@ enum WalletFlowStage {
   biometricPrompt,
   locked,
   unlocked,
+  connections,
 }
 
 class WalletFlowScreen extends StatefulWidget {
@@ -233,6 +235,20 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           onRefreshExternalRuntimeState: controller.isExternalBackendSelected
               ? controller.refreshExternalRuntimeState
               : null,
+          onOpenConnections: controller.openConnections,
+        );
+      case WalletFlowStage.connections:
+        return _ConnectionsStage(
+          isAvailable: controller.isWalletConnectAvailable,
+          sessions: controller.walletConnectSessions,
+          pendingProposal: controller.pendingProposal,
+          walletAddress: controller.summary?.address,
+          onPair: controller.pairWalletConnect,
+          onApprove: controller.approvePendingProposal,
+          onReject: controller.rejectPendingProposal,
+          onDisconnect: (topic) =>
+              controller.disconnectWalletConnectSession(topic: topic),
+          onBack: controller.closeConnections,
         );
     }
   }

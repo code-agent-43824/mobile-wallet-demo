@@ -451,6 +451,20 @@ class WalletFlowController extends ChangeNotifier {
     });
   }
 
+  /// Opens the Connections screen (from the unlocked dashboard).
+  void openConnections() {
+    _errorMessage = null;
+    _stage = WalletFlowStage.connections;
+    _notify();
+  }
+
+  /// Returns from the Connections screen to the unlocked dashboard.
+  void closeConnections() {
+    _errorMessage = null;
+    _stage = WalletFlowStage.unlocked;
+    _notify();
+  }
+
   void lockWallet() {
     activeBackend.lock();
     if (activeBackend is ExternalDeviceDemoBackend) {

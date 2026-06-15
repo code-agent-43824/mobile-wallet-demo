@@ -22,6 +22,7 @@ class _UnlockedStage extends StatefulWidget {
     required this.onPingExternalDevice,
     required this.onReadExternalAddress,
     required this.onRefreshExternalRuntimeState,
+    required this.onOpenConnections,
   });
 
   final BlockchainProvider blockchainProvider;
@@ -44,6 +45,7 @@ class _UnlockedStage extends StatefulWidget {
   final Future<void> Function()? onPingExternalDevice;
   final Future<void> Function()? onReadExternalAddress;
   final Future<void> Function()? onRefreshExternalRuntimeState;
+  final VoidCallback onOpenConnections;
 
   @override
   State<_UnlockedStage> createState() => _UnlockedStageState();
@@ -302,6 +304,11 @@ class _UnlockedStageState extends State<_UnlockedStage> {
               onPressed: widget.onLock,
               icon: const Icon(Icons.lock_outline),
               label: const Text('Заблокировать снова'),
+            ),
+            OutlinedButton.icon(
+              onPressed: widget.onOpenConnections,
+              icon: const Icon(Icons.hub_outlined),
+              label: const Text('Подключения (WalletConnect)'),
             ),
             if (widget.onDisconnectExternalSession != null)
               OutlinedButton.icon(

@@ -18,6 +18,30 @@ Entry template:
 
 ---
 
+## 2026-06-15 — Phase 9 / chunk 9.4b: Connections screen — branch main — done
+- Plan: build the Connections screen on top of the 9.4a controller seam, on the fake. New
+  `WalletFlowStage.connections` + a presentational stage + a dashboard entry. Keep `personal_sign`/
+  incoming-request approval sheet out (that's 9.4c).
+- Done: new part file `wallet_flow_screen_connections.dart` — `_ConnectionsStage` (status chips
+  available/sessions-count, "new connection" `wc:` URI `TextField` + Подключить, the session-proposal
+  approval card `_ProposalCard` with Одобрить/Отклонить, active-session list `_SessionCard` with Отключить,
+  "Назад к кошельку"). Added `WalletFlowStage.connections` (enum + `_buildStageBody` case + `_Header`
+  description), controller `openConnections`/`closeConnections`, and an "Подключения (WalletConnect)" entry
+  button in `_UnlockedStage` (new `onOpenConnections`). Tests: controller nav test (open/close) in
+  `wallet_connect_controller_test.dart`; widget test `wallet_connect_screen_test.dart` drives the full
+  tree on `FakeWalletConnectService` — create→unlock→open connections→pair→proposal→approve→session→
+  disconnect, and a back-to-dashboard case. **Version bump v1.19.0+30 → v1.20.0+31** (visible feature):
+  pubspec, `app_version.dart`, `widget_test.dart` assertion, README, development-plan stopping point +
+  release sequence. `dart format` clean.
+- Next / open: **9.4c** — incoming-request approval sheet: subscribe the controller to
+  `WalletConnectService.requests`, show a request sheet, drive `WalletConnectInboundCoordinator`
+  (sign → broadcast/respond) on approval. Then AirGap inbound (9.5) + QR pairing (9.6). Real
+  `reown_walletkit` (9.2) still deferred. (No Flutter locally — analyze/widget tests verified via CI.)
+- Refs: this commit; `lib/src/wallet_flow_screen_connections.dart`, `lib/src/wallet_flow_screen.dart`,
+  `lib/src/wallet_flow_controller.dart`, `lib/src/wallet_flow_screen_widgets.dart`,
+  `lib/src/wallet_flow_screen_unlocked.dart`, `test/wallet_connect_screen_test.dart`,
+  `test/wallet_connect_controller_test.dart`, version files, `docs/development-plan.md`.
+
 ## 2026-06-15 — Phase 9 / chunk 9.4a: wire WalletConnectService into the controller — branch main — done
 - Plan: first sub-step of 9.4 (Connections screen) on the fake. Keep it UI-free and fully unit-tested:
   inject the `WalletConnectService` seam through the DI chain and give `WalletFlowController` the WC state +
