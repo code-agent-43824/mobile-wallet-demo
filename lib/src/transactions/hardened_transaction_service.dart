@@ -137,6 +137,17 @@ class HardenedTransactionServiceImplementation
   }
 
   @override
+  String signDigest({
+    required WalletMaterial walletMaterial,
+    required Uint8List digest,
+  }) {
+    return const LocalTransactionService().signDigest(
+      walletMaterial: walletMaterial,
+      digest: digest,
+    );
+  }
+
+  @override
   SignedTransfer assembleSignedTransfer({
     required PreparedTransfer preparedTransfer,
     required Uint8List rawSignedTransaction,

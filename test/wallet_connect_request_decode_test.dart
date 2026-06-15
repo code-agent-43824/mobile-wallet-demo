@@ -100,4 +100,32 @@ void main() {
       throwsA(isA<WalletConnectCodecException>()),
     );
   });
+
+  test('isTypedDataMethod recognises eth_signTypedData_v4 / _v3', () {
+    expect(codec.isTypedDataMethod('eth_signTypedData_v4'), isTrue);
+    expect(codec.isTypedDataMethod('eth_signTypedData_v3'), isTrue);
+    expect(codec.isTypedDataMethod('personal_sign'), isFalse);
+  });
+
+  test('decodeTypedDataRequest parses both a Map and a JSON string', () {
+    final fromMap = codec.decodeTypedDataRequest(<Object?>[
+      '0xAbc',
+      <String, dynamic>{'primaryType': 'Msg'},
+    ]);
+    expect(fromMap.address, '0xAbc');
+    expect(fromMap.typedData['primaryType'], 'Msg');
+
+    final fromString = codec.decodeTypedDataRequest(<Object?>[
+      '0xAbc',
+      '{"primaryType":"Msg"}',
+    ]);
+    expect(fromString.typedData['primaryType'], 'Msg');
+  });
+
+  test('decodeTypedDataRequest throws without an address', () {
+    expect(
+      () => codec.decodeTypedDataRequest(const <Object?>['{}']),
+      throwsA(isA<WalletConnectCodecException>()),
+    );
+  });
 }

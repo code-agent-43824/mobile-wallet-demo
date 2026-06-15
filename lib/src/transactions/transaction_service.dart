@@ -216,6 +216,14 @@ abstract interface class TransactionService {
     required Uint8List message,
   });
 
+  /// Signs a precomputed 32-byte [digest] with raw secp256k1 — no extra hashing
+  /// or EIP-191 prefix. Used for EIP-712 typed data (the digest is built by
+  /// `Eip712Encoder`). Returns the 65-byte `r‖s‖v` signature as `0x` hex.
+  String signDigest({
+    required WalletMaterial walletMaterial,
+    required Uint8List digest,
+  });
+
   /// Assembles a [SignedTransfer] from raw signed-transaction bytes without
   /// re-running local signing — the seam the wallet-side WC v2 / AirGap flow
   /// uses to wrap an already-signed transaction. The transaction hash is
@@ -497,6 +505,30 @@ class LocalTransactionService implements TransactionService {
     final credentials = EthPrivateKey.fromHex(walletMaterial.privateKeyHex);
     final signature = credentials.signPersonalMessageToUint8List(message);
     return bytesToHex(signature, include0x: true);
+  }
+
+  @override
+  String signDigest({
+    required WalletMaterial walletMaterial,
+    required Uint8List digest,
+  }) {
+    final privateKey = EthPrivateKey.fromHex(
+      walletMaterial.privateKeyHex,
+    ).privateKey;
+    final signature = sign(digest, privateKey);
+    final out = Uint8List(65);
+    _writeUint256(out, 0, signature.r);
+    _writeUint256(out, 32, signature.s);
+    out[64] = signature.v;
+    return bytesToHex(out, include0x: true);
+  }
+
+  void _writeUint256(Uint8List out, int offset, BigInt value) {
+    var v = value;
+    for (var i = 31; i >= 0; i--) {
+      out[offset + i] = (v & BigInt.from(0xff)).toInt();
+      v = v >> 8;
+    }
   }
 
   @override

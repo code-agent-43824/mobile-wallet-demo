@@ -333,4 +333,48 @@ void main() {
     controller.dispose();
     await service.dispose();
   });
+
+  test(
+    'approve incoming eth_signTypedData_v4 responds with a signature',
+    () async {
+      final service = FakeWalletConnectService();
+      final controller = await buildUnlocked(
+        service,
+        transactionService: const LocalTransactionService(),
+      );
+
+      service.simulateRequest(
+        topic: 'topic-1',
+        method: 'eth_signTypedData_v4',
+        chainId: 'eip155:1',
+        params: <Object?>[
+          controller.summary!.address,
+          <String, dynamic>{
+            'types': <String, dynamic>{
+              'EIP712Domain': <dynamic>[
+                <String, String>{'name': 'name', 'type': 'string'},
+              ],
+              'Msg': <dynamic>[
+                <String, String>{'name': 'contents', 'type': 'string'},
+              ],
+            },
+            'primaryType': 'Msg',
+            'domain': <String, dynamic>{'name': 'Demo'},
+            'message': <String, dynamic>{'contents': 'gm'},
+          },
+        ],
+      );
+      await pumpEventQueue();
+      expect(controller.pendingRequest, isNotNull);
+
+      await controller.approvePendingRequest();
+
+      expect(controller.pendingRequest, isNull);
+      expect(service.respondedErrors, isEmpty);
+      expect(service.respondedResults.single.result, startsWith('0x'));
+
+      controller.dispose();
+      await service.dispose();
+    },
+  );
 }

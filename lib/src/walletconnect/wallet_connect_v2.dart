@@ -75,6 +75,19 @@ class WalletConnectMessageRequest {
   final String displayText;
 }
 
+/// A decoded `eth_signTypedData_v4` / `_v3` request: which account should sign
+/// and the parsed EIP-712 typed-data object ({types, primaryType, domain,
+/// message}). The EIP-712 hashing lives in `eip712.dart`.
+class WalletConnectTypedDataRequest {
+  const WalletConnectTypedDataRequest({
+    required this.address,
+    required this.typedData,
+  });
+
+  final String address;
+  final Map<String, dynamic> typedData;
+}
+
 /// Maps the app's prepared transfer to/from the WalletConnect v2 wire format.
 /// This is the WC v2 mapping contract reused by the Phase 9 wallet-side flow;
 /// here it is pure serialization (no relay/SDK).
@@ -85,6 +98,8 @@ class WalletConnectV2RequestCodec {
   static const String sendTransactionMethod = 'eth_sendTransaction';
   static const String personalSignMethod = 'personal_sign';
   static const String ethSignMethod = 'eth_sign';
+  static const String signTypedDataV4Method = 'eth_signTypedData_v4';
+  static const String signTypedDataV3Method = 'eth_signTypedData_v3';
 
   /// Whether [method] is a transaction request this codec can decode.
   bool isTransactionMethod(String method) =>
@@ -93,6 +108,47 @@ class WalletConnectV2RequestCodec {
   /// Whether [method] is an EIP-191 message-signing request.
   bool isMessageSignMethod(String method) =>
       method == personalSignMethod || method == ethSignMethod;
+
+  /// Whether [method] is an EIP-712 typed-data request (v3/v4 JSON shape).
+  bool isTypedDataMethod(String method) =>
+      method == signTypedDataV4Method || method == signTypedDataV3Method;
+
+  /// Decodes an `eth_signTypedData_v4` / `_v3` request (`[address, typedData]`),
+  /// where `typedData` is the EIP-712 object as a JSON string or a Map.
+  WalletConnectTypedDataRequest decodeTypedDataRequest(List<Object?> params) {
+    if (params.length < 2) {
+      throw const WalletConnectCodecException(
+        'Запрос eth_signTypedData требует [address, typedData].',
+      );
+    }
+    final address = params[0];
+    if (address is! String || address.isEmpty) {
+      throw const WalletConnectCodecException(
+        'В запросе на подпись typed data отсутствует адрес.',
+      );
+    }
+    final raw = params[1];
+    final Map<String, dynamic> typedData;
+    if (raw is String) {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        throw const WalletConnectCodecException(
+          'typed data: ожидался JSON-объект.',
+        );
+      }
+      typedData = decoded.cast<String, dynamic>();
+    } else if (raw is Map) {
+      typedData = raw.cast<String, dynamic>();
+    } else {
+      throw const WalletConnectCodecException(
+        'typed data: ожидался JSON-объект или строка.',
+      );
+    }
+    return WalletConnectTypedDataRequest(
+      address: address,
+      typedData: typedData,
+    );
+  }
 
   /// Decodes a `personal_sign` (`[message, address]`) or `eth_sign`
   /// (`[address, message]`) request. The message param is hex (`0x…`) bytes or

@@ -1,6 +1,7 @@
 import '../auth/wallet_operation_auth.dart';
 import '../blockchain/network_config.dart';
 import '../transactions/transaction_service.dart';
+import 'eip712.dart';
 import 'wallet_connect_service.dart';
 import 'wallet_connect_v2.dart';
 
@@ -42,6 +43,11 @@ class WalletConnectInboundCoordinator {
     try {
       if (_codec.isMessageSignMethod(request.method)) {
         await _handleMessageSign(request: request, signer: signer);
+        return;
+      }
+
+      if (_codec.isTypedDataMethod(request.method)) {
+        await _handleTypedDataSign(request: request, signer: signer);
         return;
       }
 
@@ -132,6 +138,30 @@ class WalletConnectInboundCoordinator {
     final signatureHex = await signer.signPersonalMessage(
       transactionService: _txService,
       message: message.message,
+    );
+    await _service.respondResult(request: request, result: signatureHex);
+  }
+
+  /// `eth_signTypedData_v4` / `_v3`: decode → verify the account → build the
+  /// EIP-712 digest → sign it raw → respond with the 65-byte signature. Chain
+  /// scoping is carried by the typed data's own `domain`, so no network lookup.
+  Future<void> _handleTypedDataSign({
+    required WalletConnectRequest request,
+    required WalletTransactionSigner signer,
+  }) async {
+    final typed = _codec.decodeTypedDataRequest(request.params);
+    if (typed.address.toLowerCase() != signer.address.toLowerCase()) {
+      await _service.respondError(
+        request: request,
+        message: 'Запрос адресован другому аккаунту (${typed.address}).',
+      );
+      return;
+    }
+
+    final digest = const Eip712Encoder().encode(typed.typedData);
+    final signatureHex = await signer.signDigest(
+      transactionService: _txService,
+      digest: digest,
     );
     await _service.respondResult(request: request, result: signatureHex);
   }

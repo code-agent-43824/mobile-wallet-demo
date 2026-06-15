@@ -31,6 +31,20 @@ Map<String, Object?> _txObject({String? from}) {
   };
 }
 
+final Map<String, dynamic> _simpleTypedData = <String, dynamic>{
+  'types': <String, dynamic>{
+    'EIP712Domain': <dynamic>[
+      <String, String>{'name': 'name', 'type': 'string'},
+    ],
+    'Msg': <dynamic>[
+      <String, String>{'name': 'contents', 'type': 'string'},
+    ],
+  },
+  'primaryType': 'Msg',
+  'domain': <String, dynamic>{'name': 'Demo'},
+  'message': <String, dynamic>{'contents': 'gm'},
+};
+
 class _FakeBroadcaster implements TransactionBroadcaster {
   @override
   Future<SubmittedTransfer> submit({
@@ -127,9 +141,45 @@ void main() {
     final service = FakeWalletConnectService();
     final request = service.simulateRequest(
       topic: 'topic-1',
-      method: 'eth_signTypedData_v4',
+      method: 'wallet_switchEthereumChain',
       chainId: 'eip155:1',
-      params: const <Object?>[_walletAddress, '{}'],
+      params: const <Object?>[
+        <String, Object?>{'chainId': '0x1'},
+      ],
+    );
+
+    await _coordinator(
+      service,
+    ).handleRequest(request: request, signer: _signer);
+
+    expect(service.respondedResults, isEmpty);
+    expect(service.respondedErrors.single.id, request.id);
+  });
+
+  test('eth_signTypedData_v4 signs the typed data for this account', () async {
+    final service = FakeWalletConnectService();
+    final request = service.simulateRequest(
+      topic: 'topic-1',
+      method: 'eth_signTypedData_v4',
+      params: <Object?>[_walletAddress, _simpleTypedData],
+    );
+
+    await _coordinator(
+      service,
+    ).handleRequest(request: request, signer: _signer);
+
+    expect(service.respondedErrors, isEmpty);
+    final result = service.respondedResults.single.result;
+    expect(result, startsWith('0x'));
+    expect(result.length, 132); // 65-byte r‖s‖v signature
+  });
+
+  test('rejects eth_signTypedData_v4 for another account', () async {
+    final service = FakeWalletConnectService();
+    final request = service.simulateRequest(
+      topic: 'topic-1',
+      method: 'eth_signTypedData_v4',
+      params: <Object?>['0xother', _simpleTypedData],
     );
 
     await _coordinator(

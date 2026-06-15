@@ -18,6 +18,35 @@ Entry template:
 
 ---
 
+## 2026-06-15 — Phase 9 / chunk 9.8: EIP-712 typed-data signing — branch main — done
+- Plan: add `eth_signTypedData_v4`/`_v3`. The hard part is the precise EIP-712 hashing; the sign is then raw
+  secp256k1 over the digest. To do it safely without a local run, validate the encoder against **reference
+  test vectors** generated from a real EIP-712 impl (Python `eth-account`).
+- Done: new pure-Dart `walletconnect/eip712.dart` — `Eip712Encoder.encode(typedData)` → the 32-byte
+  `keccak256(0x1901 ‖ domainSeparator ‖ hashStruct(message))` digest, with `encodeType` (primary + deps
+  sorted), `hashStruct`/`encodeData`, and `encodeValue` covering structs, arrays (v4), string/bytes (keccak),
+  bytesN, address, bool, uint/int (two's complement). `TransactionService.signDigest({walletMaterial,
+  digest})` signs a raw 32-byte digest via web3dart top-level `sign` (low-s, v=27/28) → 65-byte r‖s‖v hex
+  (forwarded by Hardened); `WalletTransactionSigner.signDigest` delegates. Codec: `signTypedDataV4/V3Method`,
+  `isTypedDataMethod`, `decodeTypedDataRequest` (`[address, typedData]`, JSON string or Map) →
+  `WalletConnectTypedDataRequest`. `WalletConnectInboundCoordinator` gets a typed-data branch (verify
+  account → encode → signDigest → respond; chain scoping lives in the typed data's own domain). Request card
+  shows `primaryType @ domain`. **Generated ground-truth vectors with `eth-account`** for the canonical
+  "Ether Mail" example (cow key): digest `0xbe609aee…30957bd2`, signature `0x4355c47d…915621c` (v=28) —
+  asserted exactly in `eip712_test.dart` (web3dart's `sign` canonicalises s, so it matches). Also: codec
+  decode tests, coordinator routing tests (valid + wrong-account), controller approve wiring; switched the
+  inbound "unsupported method" test to `wallet_switchEthereumChain` (since v4 is now supported). **Version
+  bump v1.25.0+36 → v1.26.0+37.** `dart format` clean.
+- Result: **wallet-side inbound signing is feature-complete on the fake** — tx + message + typed-data, over
+  WalletConnect + AirGap, with file-QR input.
+- Next / open: live camera `mobile_scanner` (no Windows) and the real `reown_walletkit` (9.2) — both need
+  device/native work. No Flutter locally → CI is the verifier.
+- Refs: this commit; `lib/src/walletconnect/eip712.dart`, `wallet_connect_v2.dart`,
+  `wallet_connect_inbound.dart`, `transactions/transaction_service.dart`, `hardened_transaction_service.dart`,
+  `auth/wallet_operation_auth.dart`, `wallet_flow_screen_connections.dart`, `test/eip712_test.dart`,
+  `test/wallet_connect_inbound_test.dart`, `test/wallet_connect_request_decode_test.dart`,
+  `test/wallet_connect_controller_test.dart`, version files, `docs/development-plan.md`.
+
 ## 2026-06-15 — build(deps): migrate web3dart 2.7 → 3.x (unblocks reown 9.2) — branch main — in progress
 - Plan: bump `web3dart: ^2.7.3` → `^3.0.1` (latest is 3.0.2) as an isolated step before adding
   `reown_walletkit` (9.2), which floors `web3dart ^3.0.1`. Doing it alone de-risks: any breakage surfaces

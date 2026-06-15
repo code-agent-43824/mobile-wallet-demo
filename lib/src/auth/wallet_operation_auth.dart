@@ -21,6 +21,13 @@ abstract interface class WalletTransactionSigner {
     required TransactionService transactionService,
     required Uint8List message,
   });
+
+  /// Signs a precomputed 32-byte [digest] (e.g. an EIP-712 typed-data hash) with
+  /// raw secp256k1; returns the 65-byte signature as a `0x`-prefixed hex string.
+  Future<String> signDigest({
+    required TransactionService transactionService,
+    required Uint8List digest,
+  });
 }
 
 class AuthorizedWalletOperation {
@@ -79,6 +86,17 @@ abstract class WalletMaterialTransactionSigner
     return transactionService.signPersonalMessage(
       walletMaterial: walletMaterial,
       message: message,
+    );
+  }
+
+  @override
+  Future<String> signDigest({
+    required TransactionService transactionService,
+    required Uint8List digest,
+  }) async {
+    return transactionService.signDigest(
+      walletMaterial: walletMaterial,
+      digest: digest,
     );
   }
 }
