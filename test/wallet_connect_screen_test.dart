@@ -204,29 +204,30 @@ void main() {
     expect(find.text('Expected a "airgap-tx:..." payload.'), findsOneWidget);
   });
 
-  testWidgets('connections screen: scanning fills the wc: URI field', (
-    WidgetTester tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(1200, 1800));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+  testWidgets(
+    'connections screen: loading a QR from file fills the wc: field',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(
-      MobileWalletDemoApp(
-        store: InMemorySecureKeyValueStore(),
-        blockchainProvider: _FakeBlockchainProvider(),
-        walletConnectService: FakeWalletConnectService(),
-        qrScanner: FakeQrScanner(nextResult: 'wc:scanned@2'),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await _createUnlock(tester);
-    await _openConnections(tester);
+      await tester.pumpWidget(
+        MobileWalletDemoApp(
+          store: InMemorySecureKeyValueStore(),
+          blockchainProvider: _FakeBlockchainProvider(),
+          walletConnectService: FakeWalletConnectService(),
+          qrScanner: FakeQrScanner(nextResult: 'wc:scanned@2'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _createUnlock(tester);
+      await _openConnections(tester);
 
-    final scan = find.text('Сканировать wc: URI');
-    await tester.ensureVisible(scan);
-    await tester.tap(scan);
-    await tester.pumpAndSettle();
+      final load = find.text('Загрузить wc: из файла');
+      await tester.ensureVisible(load);
+      await tester.tap(load);
+      await tester.pumpAndSettle();
 
-    expect(find.text('wc:scanned@2'), findsOneWidget);
-  });
+      expect(find.text('wc:scanned@2'), findsOneWidget);
+    },
+  );
 }

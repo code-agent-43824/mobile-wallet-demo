@@ -4,6 +4,7 @@ import 'app_version.dart';
 import 'auth/biometric_auth.dart';
 import 'blockchain/blockchain_provider.dart';
 import 'key_storage/secure_key_value_store.dart';
+import 'qr/file_qr_scanner.dart';
 import 'qr/qr_scanner.dart';
 import 'transactions/transaction_service.dart';
 import 'transactions/hardened_transaction_service.dart';
@@ -88,7 +89,7 @@ class MobileWalletDemoApp extends StatelessWidget {
             _biometricAuthGateway ?? defaultBiometricAuthGateway(),
         walletConnectService:
             _walletConnectService ?? const UnavailableWalletConnectService(),
-        qrScanner: _qrScanner ?? const UnavailableQrScanner(),
+        qrScanner: _qrScanner ?? FileQrScanner(),
       ),
     );
   }

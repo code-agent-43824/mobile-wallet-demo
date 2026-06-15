@@ -142,8 +142,11 @@ class WalletFlowController extends ChangeNotifier {
   /// Whether a relay-backed WalletConnect client is configured and usable.
   bool get isWalletConnectAvailable => _walletConnectService.isAvailable;
 
-  /// Whether a camera/QR scanner is wired (the scan affordance is shown).
-  bool get isQrScannerAvailable => _qrScanner.isAvailable;
+  /// Whether live camera QR scanning is wired (the camera affordance is shown).
+  bool get isQrCameraAvailable => _qrScanner.isCameraScanAvailable;
+
+  /// Whether loading a QR from an image file is available (all platforms).
+  bool get isQrFileLoadAvailable => _qrScanner.isFileLoadAvailable;
 
   /// Active WalletConnect sessions (wallet-side view).
   List<WalletConnectSession> get walletConnectSessions =>
@@ -562,12 +565,18 @@ class WalletFlowController extends ChangeNotifier {
     _notify();
   }
 
-  /// Opens the QR scanner and returns the decoded text (null when cancelled or
-  /// unavailable). Surfaces a clear message via [errorMessage] when scanning is
-  /// not available, so the screen can keep paste as the fallback.
-  Future<String?> scanQrCode({String title = ''}) async {
+  /// Scans a QR with the camera; returns the decoded text or null. Surfaces a
+  /// clear message via [errorMessage] on failure (paste stays as the fallback).
+  Future<String?> scanQrWithCamera({String title = ''}) =>
+      _runQr(() => _qrScanner.scanWithCamera(title: title));
+
+  /// Loads a QR from a picked image file (works on every platform, incl.
+  /// Windows); returns the decoded text or null.
+  Future<String?> loadQrFromFile() => _runQr(_qrScanner.loadFromFile);
+
+  Future<String?> _runQr(Future<String?> Function() action) async {
     try {
-      final result = await _qrScanner.scan(title: title);
+      final result = await action();
       _errorMessage = null;
       _notify();
       return result;

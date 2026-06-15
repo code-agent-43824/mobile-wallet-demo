@@ -18,6 +18,32 @@ Entry template:
 
 ---
 
+## 2026-06-15 — Phase 9 / 9.6 (real QR load from a file, all platforms) — branch main — done
+- Plan (user ask): load a QR from a **file** on every platform — the only option on Windows (camera
+  plugins/`mobile_scanner` don't support it). Keep the camera deferred. Next chunk = `personal_sign`/typed-data.
+- Done: the `QrScanner` seam now has **two sources** — `isCameraScanAvailable`/`scanWithCamera` (deferred)
+  vs `isFileLoadAvailable`/`loadFromFile` (all platforms). New `qr/file_qr_scanner.dart`: `ZxingQrImageDecoder`
+  (pure Dart — `image` decodes the picked image, `zxing2` reads the QR; runs on Windows) + `FileQrScanner`
+  (picks via `file_selector`, injectable `pickImageBytes` for tests) — now the **production default** in
+  `MobileWalletDemoApp`. Controller: `isQrCameraAvailable`/`isQrFileLoadAvailable` + `scanQrWithCamera`/
+  `loadQrFromFile` (shared `_runQr`). Connections screen: "Загрузить … из файла" buttons (shown on all
+  platforms) + camera buttons (gated, hidden for now) that fill the `wc:`/`airgap-tx:` fields. New deps:
+  `file_selector ^1`, `image ^4`, `zxing2 ^0.2` (file_selector supports Windows; image/zxing2 are pure
+  Dart). Tests: committed PNG fixture `test/fixtures/qr_wc_uri.png` (encodes `wc:9.6demo@2?relay=irn`) →
+  `file_qr_scanner_test.dart` exercises the **real** image+zxing2 decode end-to-end + FileQrScanner
+  wiring (cancel/no-QR/camera-deferred); updated `qr_scanner_test`, controller `loadQrFromFile`, and the
+  widget "load from file fills the wc: field". **Version bump v1.23.0+34 → v1.24.0+35.** `dart format` clean.
+- Risk note: 3 new deps + native `file_selector` (incl. Windows) can't be built/`pub get`-verified locally
+  (no Flutter SDK here) — relying on CI (validate + all 4 platform builds). `pubspec.lock` is committed but
+  CI's `flutter pub get` isn't frozen, so it regenerates the lock with the new deps.
+- Next / open: **`personal_sign`/typed-data** (message-signing, on the fake — no new native risk). Then the
+  live camera scanner (`mobile_scanner`, needs a Windows fallback) and the real `reown_walletkit` (9.2).
+- Refs: this commit; `lib/src/qr/qr_scanner.dart`, `lib/src/qr/file_qr_scanner.dart`, `lib/src/app.dart`,
+  `lib/src/wallet_flow_controller.dart`, `lib/src/wallet_flow_screen.dart`,
+  `lib/src/wallet_flow_screen_connections.dart`, `pubspec.yaml`, `test/file_qr_scanner_test.dart`,
+  `test/fixtures/qr_wc_uri.png`, `test/qr_scanner_test.dart`, `test/wallet_connect_controller_test.dart`,
+  `test/wallet_connect_screen_test.dart`, version files, `docs/development-plan.md`.
+
 ## 2026-06-15 — Phase 9 / chunk 9.6: QR scanner seam + scan entry points + sheet polish — branch main — done
 - Plan: 9.6 = QR scan for WC pairing + AirGap + request-sheet polish. The real camera (`mobile_scanner`)
   can't ship now — it has **no Windows support** (a CI build target) and needs per-platform camera

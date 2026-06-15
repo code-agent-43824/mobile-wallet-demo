@@ -276,15 +276,15 @@ void main() {
     await service.dispose();
   });
 
-  test('scanQrCode returns the scanned value', () async {
+  test('loadQrFromFile returns the decoded value', () async {
     final service = FakeWalletConnectService();
     final controller = await buildUnlocked(
       service,
       qrScanner: FakeQrScanner(nextResult: 'wc:scanned@2'),
     );
 
-    expect(controller.isQrScannerAvailable, isTrue);
-    final result = await controller.scanQrCode(title: 'wc');
+    expect(controller.isQrFileLoadAvailable, isTrue);
+    final result = await controller.loadQrFromFile();
 
     expect(result, 'wc:scanned@2');
     expect(controller.errorMessage, isNull);
@@ -293,20 +293,18 @@ void main() {
     await service.dispose();
   });
 
-  test(
-    'scanQrCode surfaces an error when the scanner is unavailable',
-    () async {
-      final service = FakeWalletConnectService();
-      final controller = await buildUnlocked(service);
+  test('QR load surfaces an error when unavailable', () async {
+    final service = FakeWalletConnectService();
+    final controller = await buildUnlocked(service);
 
-      expect(controller.isQrScannerAvailable, isFalse);
-      final result = await controller.scanQrCode();
+    expect(controller.isQrFileLoadAvailable, isFalse);
+    expect(controller.isQrCameraAvailable, isFalse);
+    final result = await controller.loadQrFromFile();
 
-      expect(result, isNull);
-      expect(controller.errorMessage, isNotNull);
+    expect(result, isNull);
+    expect(controller.errorMessage, isNotNull);
 
-      controller.dispose();
-      await service.dispose();
-    },
-  );
+    controller.dispose();
+    await service.dispose();
+  });
 }

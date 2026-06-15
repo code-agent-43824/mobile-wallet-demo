@@ -13,8 +13,10 @@ class _ConnectionsStage extends StatefulWidget {
     required this.pendingRequest,
     required this.airGapResponsePayload,
     required this.walletAddress,
-    required this.isQrAvailable,
-    required this.onScanQr,
+    required this.isQrCameraAvailable,
+    required this.isQrFileLoadAvailable,
+    required this.onScanQrCamera,
+    required this.onLoadQrFromFile,
     required this.onPair,
     required this.onApprove,
     required this.onReject,
@@ -32,8 +34,10 @@ class _ConnectionsStage extends StatefulWidget {
   final WalletConnectRequest? pendingRequest;
   final String? airGapResponsePayload;
   final String? walletAddress;
-  final bool isQrAvailable;
-  final Future<String?> Function({String title}) onScanQr;
+  final bool isQrCameraAvailable;
+  final bool isQrFileLoadAvailable;
+  final Future<String?> Function({String title}) onScanQrCamera;
+  final Future<String?> Function() onLoadQrFromFile;
   final Future<void> Function({required String uri}) onPair;
   final Future<void> Function() onApprove;
   final Future<void> Function() onReject;
@@ -75,8 +79,11 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
     await widget.onSignAirGap(payload);
   }
 
-  Future<void> _scanInto(TextEditingController controller, String title) async {
-    final value = await widget.onScanQr(title: title);
+  Future<void> _fillFrom(
+    TextEditingController controller,
+    Future<String?> Function() source,
+  ) async {
+    final value = await source();
     if (value != null && mounted) {
       setState(() => controller.text = value);
     }
@@ -131,11 +138,21 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
               icon: const Icon(Icons.link),
               label: const Text('Подключить'),
             ),
-            if (widget.isQrAvailable)
+            if (widget.isQrFileLoadAvailable)
               OutlinedButton.icon(
-                onPressed: () => _scanInto(_uriController, 'wc: URI'),
+                onPressed: () =>
+                    _fillFrom(_uriController, widget.onLoadQrFromFile),
+                icon: const Icon(Icons.image_outlined),
+                label: const Text('Загрузить wc: из файла'),
+              ),
+            if (widget.isQrCameraAvailable)
+              OutlinedButton.icon(
+                onPressed: () => _fillFrom(
+                  _uriController,
+                  () => widget.onScanQrCamera(title: 'wc: URI'),
+                ),
                 icon: const Icon(Icons.qr_code_scanner),
-                label: const Text('Сканировать wc: URI'),
+                label: const Text('Сканировать wc: камерой'),
               ),
           ],
         ),
@@ -202,11 +219,21 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
               icon: const Icon(Icons.qr_code_2),
               label: const Text('Подписать офлайн'),
             ),
-            if (widget.isQrAvailable)
+            if (widget.isQrFileLoadAvailable)
               OutlinedButton.icon(
-                onPressed: () => _scanInto(_airGapController, 'airgap-tx'),
+                onPressed: () =>
+                    _fillFrom(_airGapController, widget.onLoadQrFromFile),
+                icon: const Icon(Icons.image_outlined),
+                label: const Text('Загрузить airgap-tx из файла'),
+              ),
+            if (widget.isQrCameraAvailable)
+              OutlinedButton.icon(
+                onPressed: () => _fillFrom(
+                  _airGapController,
+                  () => widget.onScanQrCamera(title: 'airgap-tx'),
+                ),
                 icon: const Icon(Icons.qr_code_scanner),
-                label: const Text('Сканировать airgap-tx'),
+                label: const Text('Сканировать airgap-tx камерой'),
               ),
           ],
         ),

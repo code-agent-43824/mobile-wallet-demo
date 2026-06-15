@@ -1,19 +1,29 @@
-/// Injectable seam for scanning a QR code into a text payload — a WalletConnect
-/// `wc:` pairing URI or an AirGap `airgap-tx:` request.
+/// Injectable seam for obtaining a QR payload — a WalletConnect `wc:` pairing
+/// URI or an AirGap `airgap-tx:` request — from one of two sources:
 ///
-/// The real camera-backed implementation (`mobile_scanner`) is **deferred**: it
-/// does not support all of our target platforms (notably Windows x64, a CI build
-/// target) and needs per-platform camera permissions. [UnavailableQrScanner] is
-/// the shippable default (the screen hides the scan affordance and keeps the
-/// paste field); [FakeQrScanner] drives tests/DI. This mirrors how the real
-/// `WalletConnectService` is deferred behind its seam.
+/// - **camera scan** (`scanWithCamera`): live camera; not available on every
+///   platform (notably Windows x64, a CI build target) so it stays deferred for
+///   now (see the docs in `file_qr_scanner.dart`);
+/// - **file load** (`loadFromFile`): decode a QR from a picked image file; works
+///   on **every** platform and is the only option on Windows.
+///
+/// [FileQrScanner] (in `file_qr_scanner.dart`) is the production default;
+/// [UnavailableQrScanner] is the inert fallback and [FakeQrScanner] drives tests.
 abstract interface class QrScanner {
-  /// Whether a real scanner is wired and usable on this platform/build.
-  bool get isAvailable;
+  /// Whether live camera scanning is wired on this platform/build.
+  bool get isCameraScanAvailable;
 
-  /// Opens the scanner and resolves with the decoded text, or null when the
-  /// user cancels. Throws [QrScannerException] when scanning is unavailable.
-  Future<String?> scan({String title});
+  /// Whether loading a QR from an image file is available (all platforms).
+  bool get isFileLoadAvailable;
+
+  /// Opens the camera scanner; resolves with the decoded text or null when
+  /// cancelled. Throws [QrScannerException] when camera scanning is unavailable.
+  Future<String?> scanWithCamera({String title});
+
+  /// Picks an image file and decodes the QR in it; resolves with the decoded
+  /// text or null when the user cancels. Throws [QrScannerException] when file
+  /// loading is unavailable or the image holds no readable QR.
+  Future<String?> loadFromFile();
 }
 
 class QrScannerException implements Exception {
@@ -25,40 +35,60 @@ class QrScannerException implements Exception {
   String toString() => 'QrScannerException: $message';
 }
 
-/// Default production [QrScanner] until the camera impl lands: reports
-/// unavailable and refuses to scan, so the UI shows paste-only instead of a
-/// dead camera button.
+/// Inert [QrScanner]: no camera, no file load. Used as an explicit "disabled"
+/// option and in tests that don't exercise scanning.
 class UnavailableQrScanner implements QrScanner {
   const UnavailableQrScanner();
 
-  static const String _message =
-      'Сканер QR недоступен в этой сборке (камера подключится позже).';
+  static const String _message = 'Сканер QR недоступен в этой сборке.';
 
   @override
-  bool get isAvailable => false;
+  bool get isCameraScanAvailable => false;
 
   @override
-  Future<String?> scan({String title = ''}) async {
+  bool get isFileLoadAvailable => false;
+
+  @override
+  Future<String?> scanWithCamera({String title = ''}) async {
+    throw const QrScannerException(_message);
+  }
+
+  @override
+  Future<String?> loadFromFile() async {
     throw const QrScannerException(_message);
   }
 }
 
-/// In-memory [QrScanner] for tests/DI: returns [nextResult] (null = cancelled)
-/// and records the [scannedTitles] it was asked to scan.
+/// In-memory [QrScanner] for tests/DI: both sources resolve with [nextResult]
+/// (null = cancelled) and each call is recorded in [events].
 class FakeQrScanner implements QrScanner {
-  FakeQrScanner({this.nextResult});
+  FakeQrScanner({
+    this.nextResult,
+    this.cameraAvailable = true,
+    this.fileLoadAvailable = true,
+  });
 
-  /// The value the next [scan] returns; null simulates a cancelled scan.
+  /// The value the next call returns; null simulates a cancelled pick/scan.
   String? nextResult;
-
-  final List<String> scannedTitles = <String>[];
-
-  @override
-  bool get isAvailable => true;
+  bool cameraAvailable;
+  bool fileLoadAvailable;
+  final List<String> events = <String>[];
 
   @override
-  Future<String?> scan({String title = ''}) async {
-    scannedTitles.add(title);
+  bool get isCameraScanAvailable => cameraAvailable;
+
+  @override
+  bool get isFileLoadAvailable => fileLoadAvailable;
+
+  @override
+  Future<String?> scanWithCamera({String title = ''}) async {
+    events.add('camera:$title');
+    return nextResult;
+  }
+
+  @override
+  Future<String?> loadFromFile() async {
+    events.add('file');
     return nextResult;
   }
 }
