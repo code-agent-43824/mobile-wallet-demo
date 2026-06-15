@@ -19,30 +19,31 @@ class ZxingQrImageDecoder implements QrImageDecoder {
 
   @override
   String? decode(Uint8List imageBytes) {
-    final image = img.decodeImage(imageBytes);
-    if (image == null) {
-      return null;
-    }
-
-    final pixels = Int32List(image.width * image.height);
-    var i = 0;
-    for (var y = 0; y < image.height; y++) {
-      for (var x = 0; x < image.width; x++) {
-        final p = image.getPixel(x, y);
-        pixels[i++] =
-            (p.a.toInt() << 24) |
-            (p.r.toInt() << 16) |
-            (p.g.toInt() << 8) |
-            p.b.toInt();
-      }
-    }
-
-    final source = RGBLuminanceSource(image.width, image.height, pixels);
-    final bitmap = BinaryBitmap(HybridBinarizer(source));
     try {
+      final image = img.decodeImage(imageBytes);
+      if (image == null) {
+        return null;
+      }
+
+      final pixels = Int32List(image.width * image.height);
+      var i = 0;
+      for (var y = 0; y < image.height; y++) {
+        for (var x = 0; x < image.width; x++) {
+          final p = image.getPixel(x, y);
+          pixels[i++] =
+              (p.a.toInt() << 24) |
+              (p.r.toInt() << 16) |
+              (p.g.toInt() << 8) |
+              p.b.toInt();
+        }
+      }
+
+      final source = RGBLuminanceSource(image.width, image.height, pixels);
+      final bitmap = BinaryBitmap(HybridBinarizer(source));
       return QRCodeReader().decode(bitmap).text;
     } catch (_) {
-      // NotFound / Format / Checksum — treat any decode failure as "no QR".
+      // `decodeImage` can throw on a non-image/truncated file, and zxing2 throws
+      // NotFound/Format/Checksum when there's no readable QR — all "no QR".
       return null;
     }
   }
