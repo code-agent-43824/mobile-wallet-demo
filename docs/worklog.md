@@ -18,6 +18,26 @@ Entry template:
 
 ---
 
+## 2026-06-15 — Phase 9 / chunk 9.2a: probe — add reown_walletkit dep only — branch main — in progress
+- Plan ("осторожно"): wire the real `reown_walletkit` in the smallest, lowest-blast-radius steps. **9.2a =
+  add the dependency ALONE** (no Dart usage; the fake/`Unavailable` service stays the default → zero
+  behaviour change) and watch CI on all 4 platforms. Flutter compiles a plugin's native code as soon as
+  it's in pubspec, so this isolates the real unknown — *does reown even build on our toolchain?* — from the
+  integration code (9.2b). With web3dart now on 3.x, the old pub conflict is gone.
+- Context/risk: `reown_walletkit` 1.4.0 → `reown_core ^1.3.8` / `reown_sign ^1.3.9` (these carry web3dart
+  ^3.0.1, now satisfied). pub.dev lists **platform support: Android, iOS only** (no Windows/macOS/web/Linux).
+  Our CI builds Windows x64, so the risks are: (a) pub resolution vs our pinned deps (pointycastle 4
+  override, wallet, http, uuid…); (b) the **iOS pods/Xcode** build (the historical `NWPath.isUltraConstrained`
+  blocker — may be gone with current Xcode); (c) the **Windows** build (reown should be excluded cleanly as
+  unsupported, but a transitive native plugin could still break it). If Windows breaks merely from the dep,
+  the options are: drop Windows from CI (reown is mobile-only and WC is a mobile-wallet feature) or
+  platform-gate — a product call to surface to the owner.
+- Done: added `reown_walletkit: ^1.4.0` to pubspec (no code). Status: in progress pending the CI probe.
+- Next / open: read the CI result. Green → proceed to 9.2b (`ReownWalletConnectService` behind the
+  interface + `WC_PROJECT_ID` init + DI). Red → capture the exact failure and decide (pin/gate/drop-Windows/
+  revert) with the owner. Real pairing with a live dApp still needs device dogfooding (owner).
+- Refs: this commit; `pubspec.yaml`.
+
 ## 2026-06-15 — Phase 9 / chunk 9.8: EIP-712 typed-data signing — branch main — done
 - Plan: add `eth_signTypedData_v4`/`_v3`. The hard part is the precise EIP-712 hashing; the sign is then raw
   secp256k1 over the digest. To do it safely without a local run, validate the encoder against **reference
