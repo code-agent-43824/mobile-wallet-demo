@@ -39,7 +39,7 @@ dependencies:
   convert: ^3.1.2
   cryptography: ^2.7.0
   flutter_secure_storage: ^9.2.4
-  web3dart: ^2.7.3
+  web3dart: ^3.0.1
   local_auth: ^2.3.0
   file_selector: ^1.0.0
   image: ^4.0.0

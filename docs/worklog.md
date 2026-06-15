@@ -18,6 +18,28 @@ Entry template:
 
 ---
 
+## 2026-06-15 — build(deps): migrate web3dart 2.7 → 3.x (unblocks reown 9.2) — branch main — in progress
+- Plan: bump `web3dart: ^2.7.3` → `^3.0.1` (latest is 3.0.2) as an isolated step before adding
+  `reown_walletkit` (9.2), which floors `web3dart ^3.0.1`. Doing it alone de-risks: any breakage surfaces
+  on its own, not tangled with the SDK.
+- Why we were on 2.x: no deliberate reason — `web3dart ^2.7.3` was simply the current stable when the
+  crypto/signing foundation was first added (commit 0dcb792, "phone secure vault foundation"). The 2→3 bump
+  was *deferred* (not chosen) when reown first surfaced the conflict (worklog 07e5b1a): we picked the older
+  reown 1.3.8 over "a risky web3dart 2→3 major bump", then reverted reown entirely for iOS/Windows reasons.
+  So 2.x was inertia + stability, never a hard requirement.
+- Scope check: all our web3dart usage is **core** API (verified present in 3.0.2 docs): `signTransactionRaw`,
+  `prependTransactionType`, `Transaction`/`.copyWith`/`.isEIP1559`, `EthPrivateKey.fromHex`/
+  `signPersonalMessageToUint8List`, `EthereumAddress.fromHex`/`.hexEip55`/`.addressBytes`, `EtherAmount`,
+  and `crypto.dart` (`bytesToHex`/`hexToBytes`/`keccak256`). 3.0.0 only "cleaned up deprecated
+  methods/classes" — none of which we use → expecting a near-no-op code change. Main risk is transitive
+  resolution (pointycastle/cryptography vs bip32/bip39). No app-version bump (no user-facing change; the
+  existing signing tests are the behavior safety net).
+- Done: pubspec bump. (Code unchanged pending CI.)
+- Next / open: watch CI — `flutter pub get` resolution first, then analyze + the signing tests (which assert
+  the EIP-1559 `0x02` output and personal_sign length, so any signing-behavior change is caught). Fix
+  surgically if anything breaks; then proceed to reown 9.2. No Flutter locally → CI is the verifier.
+- Refs: this commit; `pubspec.yaml`.
+
 ## 2026-06-15 — Phase 9 / chunk 9.7: message signing (personal_sign / eth_sign) — branch main — done
 - Plan (user: "следующим шагом делаем personal_sign/typed-data"): add EIP-191 message signing on the fake.
   Scope to `personal_sign` + `eth_sign` (tractable via web3dart); **defer `eth_signTypedData_v4` (EIP-712)**
