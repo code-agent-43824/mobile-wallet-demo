@@ -4,6 +4,11 @@ import 'package:mobile_wallet_demo/src/qr/camera_qr_scanner.dart';
 import 'package:mobile_wallet_demo/src/qr/qr_scanner.dart';
 
 void main() {
+  // GlobalKey.currentState reads WidgetsBinding.instance; initialise the test
+  // binding so the unmounted-navigator path behaves like production (runApp
+  // always initialises the binding).
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('CameraQrScanner', () {
     test('reports camera available and mirrors the file delegate', () {
       final scanner = CameraQrScanner(
