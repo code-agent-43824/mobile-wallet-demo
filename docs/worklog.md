@@ -18,6 +18,21 @@ Entry template:
 
 ---
 
+## 2026-06-15 — Phase 9 / chunk 9.9a: probe — add mobile_scanner dep only — branch main — planned
+- Plan: the camera is the remaining QR input source (file-load already ships via `FileQrScanner`; camera is
+  declared unavailable today). Before writing the `CameraQrScanner` + scanner-screen widget + NavigatorKey +
+  camera permissions + DI wiring, run the same isolation probe that paid off for reown (9.2a): add
+  `mobile_scanner: ^7.2.0` to `pubspec.yaml` **alone** (no code — Flutter still compiles a plugin's native
+  code from the pubspec), push, and poll CI on all 4 platforms. mobile_scanner declares android/ios/macos/web
+  only (NOT windows/linux), and its native iOS pods are the risk (cf. connectivity_plus's too-new SDK symbol).
+  This isolates "does it build everywhere?" from the integration code. Build/config only — no version bump.
+- Done: …
+- Next / open: if green → 9.9b: `CameraQrScanner` over `mobile_scanner` (camera on Android/iOS; falls back to
+  the file decoder), scanner route via a global NavigatorKey, iOS `NSCameraUsageDescription` + Android
+  `CAMERA` permission, DI swap of the default `QrScanner`. If iOS pods fail like connectivity_plus, pin/adjust
+  the version or bump CI Xcode, then revert the probe to keep `main` green.
+- Refs: this commit; `pubspec.yaml`.
+
 ## 2026-06-15 — Phase 9 / chunk 9.2b-ii: real ReownWalletConnectService — branch main — done (code-complete; pending device dogfood)
 - Plan: with reown building green (9.2b-i), implement the real service over `reown_walletkit` 1.4.0 behind
   the existing `WalletConnectService` interface, mapped from the package source (not guessed), and DI-select

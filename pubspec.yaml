@@ -52,6 +52,10 @@ dependencies:
   # Maven repo in android/build.gradle.kts (reown's `yttrium` native libs).
   # Android/iOS only; excluded cleanly on Windows.
   reown_walletkit: ^1.4.0
+  # Camera QR scanning (Phase 9 chunk 9.9). Declares android/ios/macos/web only —
+  # excluded on Windows (where file-load QR is the only path). Added dep-only first
+  # (chunk 9.9a probe) to verify native iOS/Android builds before wiring the camera.
+  mobile_scanner: ^7.2.0
 
 # web3dart 3.x needs pointycastle ^4, but bip32/bip39 (latest 1.0.6, 5 yrs old)
 # over-constrain it to ^3. They only use pointycastle's stable digest/HMAC/EC
