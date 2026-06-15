@@ -39,10 +39,23 @@ Entry template:
   newer version, so the fix is `dependency_overrides: pointycastle: ^4.0.0` — bip32/bip39 only use stable
   pointycastle digest/HMAC/EC APIs, and the deterministic derivation test (`phone_secure_vault_test.dart`:
   known mnemonic → `0xf39Fd6…266`) guards that the override doesn't change HD derivation. No app code change.
-- Next / open: re-watch CI — resolution should pass now; then analyze + signing/derivation tests confirm
-  behavior. If the derivation test fails under pointycastle 4, fall back (alt bip packages / pin web3dart).
-  Then proceed to reown 9.2. No Flutter locally → CI is the verifier.
-- Refs: this commit; `pubspec.yaml` (web3dart ^3.0.1 + pointycastle override).
+- Then (run 27566077256) pub get **resolved**, but `flutter analyze` exposed the **real** web3dart 3.0
+  breaking changes the changelog hid ("refactor and cleanup deprecated methods/classes"). Downloaded the
+  3.0.2 + `wallet` 0.0.18 sources from pub and grepped them for ground truth. The API moves + our fixes:
+  • `package:web3dart/crypto.dart` **removed** — the helpers (`bytesToHex`/`hexToBytes`/`keccak256`) are now
+    `part`s of the main lib → import `package:web3dart/web3dart.dart` (used `show` for the crypto-only files).
+  • `EthereumAddress` / `EtherAmount` **moved to `package:wallet`** (web3dart 3 imports it but no longer
+    re-exports) → added `wallet: ^0.0.18` dep + `import 'package:wallet/wallet.dart' show EthereumAddress,
+    EtherAmount;` in `transaction_service.dart`. (`fromHex`, `EtherAmount.inWei`/`.zero()` unchanged.)
+  • `EthereumAddress.hexEip55` **removed** → `.eip55With0x` (checksummed + 0x; matches our test's `0xf39Fd6…266`).
+  • `EthereumAddress.addressBytes` **removed** → `.value` (the base `Address.value` Uint8List).
+  6 files touched (4 imports + 2 renames) + pubspec. No logic change.
+- Done: web3dart ^3.0.1 + `wallet` ^0.0.18 + `pointycastle` override; API migration above. Status: in
+  progress pending CI (resolution ✓ already; expecting analyze + signing/derivation tests to pass now).
+- Next / open: confirm CI green (esp. the derivation test under pointycastle 4 and the signing tests under
+  web3dart 3), then proceed to reown 9.2. No Flutter locally → CI is the verifier.
+- Refs: this commit; `pubspec.yaml`, `transaction_service.dart`, `phone_secure_vault.dart`,
+  `airgap_inbound.dart`, `airgap_signing.dart`, `wallet_connect_v2.dart`.
 
 ## 2026-06-15 — Phase 9 / chunk 9.7: message signing (personal_sign / eth_sign) — branch main — done
 - Plan (user: "следующим шагом делаем personal_sign/typed-data"): add EIP-191 message signing on the fake.

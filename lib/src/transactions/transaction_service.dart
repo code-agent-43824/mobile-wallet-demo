@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:web3dart/crypto.dart';
+import 'package:wallet/wallet.dart' show EthereumAddress, EtherAmount;
 import 'package:web3dart/web3dart.dart' hide TransactionReceipt;
 
 import '../blockchain/blockchain_provider.dart';
@@ -566,8 +566,7 @@ class LocalTransactionService implements TransactionService {
     required BigInt amountUnits,
   }) {
     final selector = hexToBytes('a9059cbb');
-    final paddedAddress = Uint8List(32)
-      ..setRange(12, 32, recipient.addressBytes);
+    final paddedAddress = Uint8List(32)..setRange(12, 32, recipient.value);
     final paddedAmount = _bigIntToFixedBytes(amountUnits, 32);
 
     return Uint8List.fromList(<int>[

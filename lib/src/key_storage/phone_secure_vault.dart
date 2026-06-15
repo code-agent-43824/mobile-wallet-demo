@@ -450,7 +450,7 @@ class PhoneSecureVault implements KeyStorageBackend {
     final credentials = EthPrivateKey.fromHex(privateKeyHex);
 
     return WalletMaterial(
-      address: credentials.address.hexEip55,
+      address: credentials.address.eip55With0x,
       mnemonic: mnemonic,
       privateKeyHex: privateKeyHex,
     );

@@ -40,6 +40,9 @@ dependencies:
   cryptography: ^2.7.0
   flutter_secure_storage: ^9.2.4
   web3dart: ^3.0.1
+  # web3dart 3.x moved EthereumAddress/EtherAmount into the `wallet` package and
+  # no longer re-exports them, so we depend on it directly for those types.
+  wallet: ^0.0.18
   local_auth: ^2.3.0
   file_selector: ^1.0.0
   image: ^4.0.0

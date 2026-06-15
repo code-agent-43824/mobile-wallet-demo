@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:web3dart/crypto.dart';
+import 'package:web3dart/web3dart.dart' show hexToBytes;
 
 import '../auth/wallet_operation_auth.dart';
 import '../blockchain/network_config.dart';

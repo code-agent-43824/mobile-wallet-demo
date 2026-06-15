@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:web3dart/crypto.dart';
+import 'package:web3dart/web3dart.dart' show bytesToHex, hexToBytes;
 
 import '../transactions/transaction_service.dart';
 
