@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'airgap/airgap_inbound.dart';
+import 'airgap/airgap_signing.dart';
 import 'auth/biometric_auth.dart';
 import 'auth/wallet_operation_auth.dart';
 import 'blockchain/blockchain_provider.dart';
@@ -247,12 +249,15 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           sessions: controller.walletConnectSessions,
           pendingProposal: controller.pendingProposal,
           pendingRequest: controller.pendingRequest,
+          airGapResponsePayload: controller.airGapResponsePayload,
           walletAddress: controller.summary?.address,
           onPair: controller.pairWalletConnect,
           onApprove: controller.approvePendingProposal,
           onReject: controller.rejectPendingProposal,
           onApproveRequest: controller.approvePendingRequest,
           onRejectRequest: controller.rejectPendingRequest,
+          onSignAirGap: controller.signAirGapRequest,
+          onClearAirGap: controller.clearAirGapResponse,
           onDisconnect: (topic) =>
               controller.disconnectWalletConnectSession(topic: topic),
           onBack: controller.closeConnections,

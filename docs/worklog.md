@@ -18,6 +18,29 @@ Entry template:
 
 ---
 
+## 2026-06-15 — Phase 9 / chunk 9.5: AirGap inbound — branch main — done
+- Plan: wallet-side AirGap inbound on the existing `AirGapPayloadCodec`, mirroring the WC inbound shape.
+  Decode an `airgap-tx:` request → sign with the active backend → encode the `airgap-sig:` response.
+  Paste-based (camera/`mobile_scanner` deferred to the QR chunk).
+- Done: `airgap/airgap_inbound.dart` — `AirGapInboundCoordinator.signRequestPayload({requestPayload,
+  transactionService, signer})`: `decodeRequest` → guards (unsupported chain / from≠wallet → `AirGapPayloadException`)
+  → `prepareInboundTransaction` (reuses the 9.3 seam) → `signer.signPreparedTransfer` (nonce from the request)
+  → `encodeResponse`. Offline by definition: no nonce lookup, no broadcast. Controller: `signAirGapRequest`
+  (builds the active signer, runs the coordinator, stores `airGapResponsePayload`) + `clearAirGapResponse`;
+  `_runGuarded` now also surfaces `AirGapPayloadException`. UI: a Connections-screen "AirGap (офлайн-подпись)"
+  section — `airgap-tx:` field + «Подписать офлайн» → `airgap-sig:` response in a `_SummaryTile` + «Очистить
+  ответ». Tests: `airgap_inbound_test.dart` (sign happy → `0x02` + requestId; wrong-account / bad chain /
+  malformed throw), controller AirGap happy+malformed in `wallet_connect_controller_test.dart`, widget
+  malformed-payload error in `wallet_connect_screen_test.dart`. **Version bump v1.21.0+32 → v1.22.0+33** (5
+  sync points). `dart format` clean.
+- Next / open: camera QR (scan via `mobile_scanner`) for WC pairing + AirGap request/response (9.6), the
+  incoming-request-sheet polish, `personal_sign`/typed-data, and the real `reown_walletkit` (9.2, deferred
+  behind native-build blockers). (No Flutter locally — analyze/tests verified via CI.)
+- Refs: this commit; `lib/src/airgap/airgap_inbound.dart`, `lib/src/wallet_flow_controller.dart`,
+  `lib/src/wallet_flow_screen.dart`, `lib/src/wallet_flow_screen_connections.dart`,
+  `test/airgap_inbound_test.dart`, `test/wallet_connect_controller_test.dart`,
+  `test/wallet_connect_screen_test.dart`, version files, `docs/development-plan.md`.
+
 ## 2026-06-15 — Phase 9 / chunk 9.4c: incoming-request approval sheet — branch main — done
 - Plan: connect the already-tested 9.3 `WalletConnectInboundCoordinator` to the UI. Controller subscribes
   to `WalletConnectService.requests`, the Connections screen shows a request card, approve drives the

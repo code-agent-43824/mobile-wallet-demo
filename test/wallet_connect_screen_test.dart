@@ -175,4 +175,31 @@ void main() {
     expect(find.text('Входящий запрос на подпись'), findsNothing);
     expect(service.respondedErrors, hasLength(1));
   });
+
+  testWidgets('connections screen: a malformed AirGap payload shows an error', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _FakeBlockchainProvider(),
+        walletConnectService: FakeWalletConnectService(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _createUnlock(tester);
+    await _openConnections(tester);
+
+    // The AirGap payload field is the second TextField (after the wc: URI one).
+    await tester.enterText(find.byType(TextField).at(1), 'not-a-valid-payload');
+    final sign = find.text('Подписать офлайн');
+    await tester.ensureVisible(sign);
+    await tester.tap(sign);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Expected a "airgap-tx:..." payload.'), findsOneWidget);
+  });
 }

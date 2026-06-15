@@ -104,6 +104,7 @@ class WalletFlowController extends ChangeNotifier {
   String? _selectedBackendId;
   WalletConnectSessionProposal? _pendingProposal;
   WalletConnectRequest? _pendingRequest;
+  String? _airGapResponsePayload;
   List<WalletConnectSession> _walletConnectSessions =
       const <WalletConnectSession>[];
   ExternalDeviceDemoRuntimeState? _externalRuntimeState;
@@ -147,6 +148,9 @@ class WalletFlowController extends ChangeNotifier {
 
   /// The incoming signing request awaiting approve/reject, if any.
   WalletConnectRequest? get pendingRequest => _pendingRequest;
+
+  /// The most recent AirGap `airgap-sig:` response payload, if any.
+  String? get airGapResponsePayload => _airGapResponsePayload;
 
   KeyStorageBackend get activeBackend {
     final selectedBackendId = _selectedBackendId;
@@ -531,6 +535,27 @@ class WalletFlowController extends ChangeNotifier {
         .signer;
   }
 
+  /// Signs an offline AirGap `airgap-tx:` request payload with the active
+  /// backend and stores the `airgap-sig:` response in [airGapResponsePayload].
+  Future<void> signAirGapRequest(String payload) async {
+    await _runGuarded(() async {
+      final signer = _activeTransactionSigner();
+      _airGapResponsePayload = await const AirGapInboundCoordinator()
+          .signRequestPayload(
+            requestPayload: payload,
+            transactionService: _transactionService,
+            signer: signer,
+          );
+    });
+  }
+
+  /// Clears the displayed AirGap response.
+  void clearAirGapResponse() {
+    _airGapResponsePayload = null;
+    _errorMessage = null;
+    _notify();
+  }
+
   /// Opens the Connections screen (from the unlocked dashboard).
   void openConnections() {
     _errorMessage = null;
@@ -571,6 +596,9 @@ class WalletFlowController extends ChangeNotifier {
       _errorMessage = error.message;
       _notify();
     } on WalletConnectServiceException catch (error) {
+      _errorMessage = error.message;
+      _notify();
+    } on AirGapPayloadException catch (error) {
       _errorMessage = error.message;
       _notify();
     }

@@ -11,12 +11,15 @@ class _ConnectionsStage extends StatefulWidget {
     required this.sessions,
     required this.pendingProposal,
     required this.pendingRequest,
+    required this.airGapResponsePayload,
     required this.walletAddress,
     required this.onPair,
     required this.onApprove,
     required this.onReject,
     required this.onApproveRequest,
     required this.onRejectRequest,
+    required this.onSignAirGap,
+    required this.onClearAirGap,
     required this.onDisconnect,
     required this.onBack,
   });
@@ -25,12 +28,15 @@ class _ConnectionsStage extends StatefulWidget {
   final List<WalletConnectSession> sessions;
   final WalletConnectSessionProposal? pendingProposal;
   final WalletConnectRequest? pendingRequest;
+  final String? airGapResponsePayload;
   final String? walletAddress;
   final Future<void> Function({required String uri}) onPair;
   final Future<void> Function() onApprove;
   final Future<void> Function() onReject;
   final Future<void> Function() onApproveRequest;
   final Future<void> Function() onRejectRequest;
+  final Future<void> Function(String payload) onSignAirGap;
+  final VoidCallback onClearAirGap;
   final Future<void> Function(String topic) onDisconnect;
   final VoidCallback onBack;
 
@@ -40,10 +46,12 @@ class _ConnectionsStage extends StatefulWidget {
 
 class _ConnectionsStageState extends State<_ConnectionsStage> {
   final TextEditingController _uriController = TextEditingController();
+  final TextEditingController _airGapController = TextEditingController();
 
   @override
   void dispose() {
     _uriController.dispose();
+    _airGapController.dispose();
     super.dispose();
   }
 
@@ -55,11 +63,20 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
     await widget.onPair(uri: uri);
   }
 
+  Future<void> _signAirGap() async {
+    final payload = _airGapController.text.trim();
+    if (payload.isEmpty) {
+      return;
+    }
+    await widget.onSignAirGap(payload);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final proposal = widget.pendingProposal;
     final request = widget.pendingRequest;
+    final airGapResponse = widget.airGapResponsePayload;
     final sessions = widget.sessions;
 
     return Column(
@@ -135,6 +152,42 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
               ),
             ),
           ),
+        const SizedBox(height: 24),
+        const _SectionTitle('AirGap (офлайн-подпись)'),
+        const SizedBox(height: 8),
+        const Text(
+          'Вставьте airgap-tx: запрос (из QR офлайн-устройства), подпишите '
+          'офлайн и верните airgap-sig: ответ.',
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _airGapController,
+          minLines: 1,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'airgap-tx: запрос',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed: _signAirGap,
+          icon: const Icon(Icons.qr_code_2),
+          label: const Text('Подписать офлайн'),
+        ),
+        if (airGapResponse != null) ...[
+          const SizedBox(height: 12),
+          _SummaryTile(
+            label: 'airgap-sig ответ (покажите/отсканируйте обратно)',
+            value: airGapResponse,
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: widget.onClearAirGap,
+            icon: const Icon(Icons.clear),
+            label: const Text('Очистить ответ'),
+          ),
+        ],
         const SizedBox(height: 24),
         OutlinedButton.icon(
           onPressed: widget.onBack,

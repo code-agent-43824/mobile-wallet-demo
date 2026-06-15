@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile_wallet_demo/src/airgap/airgap_signing.dart';
 import 'package:mobile_wallet_demo/src/auth/biometric_auth.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
@@ -215,6 +216,58 @@ void main() {
     expect(controller.pendingRequest, isNull);
     expect(service.respondedResults, isEmpty);
     expect(service.respondedErrors.single.id, request.id);
+
+    controller.dispose();
+    await service.dispose();
+  });
+
+  test('signs an AirGap request payload from this account', () async {
+    final service = FakeWalletConnectService();
+    final controller = await buildUnlocked(
+      service,
+      transactionService: const LocalTransactionService(),
+    );
+    final payload = const AirGapPayloadCodec().encodeRequest(
+      AirGapSigningRequest(
+        requestId: 'req-air',
+        chainId: 'eip155:1',
+        fromAddress: controller.summary!.address,
+        toAddress: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
+        valueWeiHex: '0x2386f26fc10000',
+        dataHex: '0x',
+        nonce: 1,
+        gasLimit: 21000,
+        maxFeePerGasWeiHex: '0x77359400',
+        maxPriorityFeePerGasWeiHex: '0x3b9aca00',
+      ),
+    );
+
+    await controller.signAirGapRequest(payload);
+
+    expect(controller.errorMessage, isNull);
+    final responsePayload = controller.airGapResponsePayload;
+    expect(responsePayload, isNotNull);
+    final response = const AirGapPayloadCodec().decodeResponse(
+      responsePayload!,
+    );
+    expect(response.requestId, 'req-air');
+    expect(response.rawSignedTransactionHex, startsWith('0x02'));
+
+    controller.clearAirGapResponse();
+    expect(controller.airGapResponsePayload, isNull);
+
+    controller.dispose();
+    await service.dispose();
+  });
+
+  test('a malformed AirGap payload surfaces an error', () async {
+    final service = FakeWalletConnectService();
+    final controller = await buildUnlocked(service);
+
+    await controller.signAirGapRequest('garbage');
+
+    expect(controller.airGapResponsePayload, isNull);
+    expect(controller.errorMessage, isNotNull);
 
     controller.dispose();
     await service.dispose();
