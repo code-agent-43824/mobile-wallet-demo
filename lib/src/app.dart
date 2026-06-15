@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import 'app_version.dart';
@@ -9,8 +11,20 @@ import 'qr/qr_scanner.dart';
 import 'transactions/transaction_service.dart';
 import 'transactions/hardened_transaction_service.dart';
 import 'wallet_flow_screen.dart';
+import 'walletconnect/reown_wallet_connect_service.dart';
 import 'walletconnect/wallet_connect_service.dart';
+import 'walletconnect/wc_config.dart';
 import 'widgets/version_banner.dart';
+
+/// The production [WalletConnectService]: the real reown impl on mobile when a
+/// `WC_PROJECT_ID` is configured (reown is Android/iOS only), otherwise the
+/// inert [UnavailableWalletConnectService]. Tests inject [FakeWalletConnectService].
+WalletConnectService _defaultWalletConnectService() {
+  if (isWalletConnectConfigured && (Platform.isAndroid || Platform.isIOS)) {
+    return ReownWalletConnectService();
+  }
+  return const UnavailableWalletConnectService();
+}
 
 class MobileWalletDemoApp extends StatelessWidget {
   const MobileWalletDemoApp({
@@ -88,7 +102,7 @@ class MobileWalletDemoApp extends StatelessWidget {
         biometricAuthGateway:
             _biometricAuthGateway ?? defaultBiometricAuthGateway(),
         walletConnectService:
-            _walletConnectService ?? const UnavailableWalletConnectService(),
+            _walletConnectService ?? _defaultWalletConnectService(),
         qrScanner: _qrScanner ?? FileQrScanner(),
       ),
     );

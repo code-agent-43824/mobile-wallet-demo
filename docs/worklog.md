@@ -18,7 +18,34 @@ Entry template:
 
 ---
 
-## 2026-06-15 — Phase 9 / chunk 9.2b-i: reown toolchain fixes (re-add dep) — branch main — in progress
+## 2026-06-15 — Phase 9 / chunk 9.2b-ii: real ReownWalletConnectService — branch main — done (code-complete; pending device dogfood)
+- Plan: with reown building green (9.2b-i), implement the real service over `reown_walletkit` 1.4.0 behind
+  the existing `WalletConnectService` interface, mapped from the package source (not guessed), and DI-select
+  it on mobile when configured. Fake stays for tests.
+- Done: `walletconnect/reown_wallet_connect_service.dart` — `ReownWalletConnectService`:
+  `init` → `ReownWalletKit.createInstance(projectId: wcProjectId, metadata)`, subscribes reown's `Event<T>`
+  callbacks (`onSessionProposal`/`onSessionRequest`/`onSessionConnect`/`onSessionDelete`) and bridges them to
+  our broadcast streams; `pair(uri)`; `approveSession` builds the reown `Map<String,Namespace>` from the
+  kept original `ProposalData` (chains/methods/events + our CAIP-10 accounts per namespace) → maps the
+  returned `SessionData`; `rejectSession`/`disconnect` via `ReownSignError`; `respondResult`/`respondError`
+  via `JsonRpcResponse`/`JsonRpcError`; `activeSessions`/`sessionsChanges` from `getActiveSessions()`. Mapping
+  helpers: `ProposalData`/`SessionData`/`SessionRequestEvent` → our `WalletConnectSessionProposal`/`Session`/
+  `Request`; `PairingMetadata` → `WalletConnectPeer`. `init` swallows relay/connect failures (stays inert)
+  so the controller's `unawaited(init())` can't crash. DI (`app.dart`): `_defaultWalletConnectService()` =
+  reown on `Platform.isAndroid||isIOS` when `isWalletConnectConfigured`, else `Unavailable` (so desktop +
+  `flutter test` host get `Unavailable` — reown never instantiated; existing tests unaffected; the
+  connections widget tests still inject the fake). **Version bump v1.26.0+37 → v1.27.0+38.**
+- No reown unit tests — it needs a live relay; the fake + inbound-coordinator tests cover the flows, and
+  `flutter analyze` type-checks our usage against reown's real API (the main CI gate here). Real pairing is
+  the owner's dogfood (has Android phone + Mac/iPhone).
+- Next / open: CI green check (analyze must accept the reown API usage). Then **owner dogfooding**: build,
+  install the APK / run the iOS sim, open a test dApp (e.g. on Sepolia), scan the `wc:` pairing QR (load from
+  file works today; camera is the remaining `mobile_scanner` chunk), approve the session, sign a tx/message/
+  typed-data, confirm the dApp accepts it. Report any runtime mismatch (namespace/respond shape) for a fix.
+- Refs: this commit; `lib/src/walletconnect/reown_wallet_connect_service.dart`, `lib/src/app.dart`,
+  version files, `docs/development-plan.md`.
+
+## 2026-06-15 — Phase 9 / chunk 9.2b-i: reown toolchain fixes (re-add dep) — branch main — done (CI green on all 4 platforms)
 - Plan: owner chose to finish 9.2 carefully (has an Android phone + Mac/iPhone for dogfooding). Apply the
   two toolchain fixes the 9.2a probe identified, re-add `reown_walletkit`, and get CI green on all 4
   platforms before writing any integration (9.2b-ii). Still no behaviour change — the fake/`Unavailable`
