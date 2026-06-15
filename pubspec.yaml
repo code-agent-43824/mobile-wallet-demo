@@ -47,10 +47,10 @@ dependencies:
   file_selector: ^1.0.0
   image: ^4.0.0
   zxing2: ^0.2.0
-  # Real WalletConnect v2 wallet SDK (Phase 9 chunk 9.2). Android/iOS only — see
-  # the worklog: this 9.2a step adds the dep alone to probe whether it builds on
-  # all CI platforms (esp. Windows x64) before wiring the real service.
-  reown_walletkit: ^1.4.0
+  # reown_walletkit (real WalletConnect SDK, chunk 9.2) is NOT added yet — the
+  # 9.2a probe (worklog) showed it needs CI-toolchain fixes first: iOS Xcode (a
+  # transitive connectivity_plus uses a too-new SDK symbol) + an Android JitPack
+  # Maven repo for reown's `yttrium` native libs. Pending an owner decision.
 
 # web3dart 3.x needs pointycastle ^4, but bip32/bip39 (latest 1.0.6, 5 yrs old)
 # over-constrain it to ^3. They only use pointycastle's stable digest/HMAC/EC

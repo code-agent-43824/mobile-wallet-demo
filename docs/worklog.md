@@ -18,25 +18,25 @@ Entry template:
 
 ---
 
-## 2026-06-15 — Phase 9 / chunk 9.2a: probe — add reown_walletkit dep only — branch main — in progress
-- Plan ("осторожно"): wire the real `reown_walletkit` in the smallest, lowest-blast-radius steps. **9.2a =
-  add the dependency ALONE** (no Dart usage; the fake/`Unavailable` service stays the default → zero
-  behaviour change) and watch CI on all 4 platforms. Flutter compiles a plugin's native code as soon as
-  it's in pubspec, so this isolates the real unknown — *does reown even build on our toolchain?* — from the
-  integration code (9.2b). With web3dart now on 3.x, the old pub conflict is gone.
-- Context/risk: `reown_walletkit` 1.4.0 → `reown_core ^1.3.8` / `reown_sign ^1.3.9` (these carry web3dart
-  ^3.0.1, now satisfied). pub.dev lists **platform support: Android, iOS only** (no Windows/macOS/web/Linux).
-  Our CI builds Windows x64, so the risks are: (a) pub resolution vs our pinned deps (pointycastle 4
-  override, wallet, http, uuid…); (b) the **iOS pods/Xcode** build (the historical `NWPath.isUltraConstrained`
-  blocker — may be gone with current Xcode); (c) the **Windows** build (reown should be excluded cleanly as
-  unsupported, but a transitive native plugin could still break it). If Windows breaks merely from the dep,
-  the options are: drop Windows from CI (reown is mobile-only and WC is a mobile-wallet feature) or
-  platform-gate — a product call to surface to the owner.
-- Done: added `reown_walletkit: ^1.4.0` to pubspec (no code). Status: in progress pending the CI probe.
-- Next / open: read the CI result. Green → proceed to 9.2b (`ReownWalletConnectService` behind the
-  interface + `WC_PROJECT_ID` init + DI). Red → capture the exact failure and decide (pin/gate/drop-Windows/
-  revert) with the owner. Real pairing with a live dApp still needs device dogfooding (owner).
-- Refs: this commit; `pubspec.yaml`.
+## 2026-06-15 — Phase 9 / chunk 9.2a: probe — add reown_walletkit dep only — branch main — probed, reverted (blocked)
+- **Probe result (CI run 27568514582):** Validate ✅ (pub get **resolved** reown + 58 transitive deps with
+  our pins — web3dart 3 migration paid off; analyze + tests pass). **Windows x64 ✅** — reown is excluded
+  cleanly as unsupported, so Windows is NOT a blocker (no need to drop it). **iOS ❌** and **Android ❌**:
+  - iOS (device + simulator): `connectivity_plus 7.1.1` (pulled by reown_core/sign) Swift error
+    `Value of type 'NWPath' has no member 'isUltraConstrained'` — a very-new iOS SDK symbol the CI
+    `macos-latest` Xcode lacks. Fix options: select a newer Xcode on the macOS runner (if one with the
+    symbol is available), or `dependency_overrides` `connectivity_plus` to a version that compiles on the
+    current Xcode (must stay compatible with reown's usage).
+  - Android: `Could not find com.github.reown-com.yttrium:yttrium-wcpay:0.10.14` during
+    `mergeReleaseNativeLibs` — reown's native Android libs (`yttrium`, via `walletconnect_pay`) live on a
+    non-standard Maven repo. The `com.github.*` group = **JitPack**; fix = add `maven { url
+    'https://jitpack.io' }` to `android/` repositories (a supply-chain decision to flag).
+- Reverted the dep to keep `main` green (the probe was exactly to learn this without committing to a broken
+  state). No code was written against reown.
+- Decision needed from owner before 9.2b: (1) OK to add the JitPack Maven repo for Android? (2) iOS — bump
+  CI Xcode vs pin `connectivity_plus`? (3) reown only truly validates with **device dogfooding** on a live
+  dApp — owner has a phone/Mac? Until then 9.2b would be code-complete-but-unverified.
+- Refs: this commit (revert); probe commit d13bbd8; `pubspec.yaml`, `docs/worklog.md`.
 
 ## 2026-06-15 — Phase 9 / chunk 9.8: EIP-712 typed-data signing — branch main — done
 - Plan: add `eth_signTypedData_v4`/`_v3`. The hard part is the precise EIP-712 hashing; the sign is then raw
