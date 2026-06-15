@@ -34,11 +34,15 @@ Entry template:
   methods/classes" — none of which we use → expecting a near-no-op code change. Main risk is transitive
   resolution (pointycastle/cryptography vs bip32/bip39). No app-version bump (no user-facing change; the
   existing signing tests are the behavior safety net).
-- Done: pubspec bump. (Code unchanged pending CI.)
-- Next / open: watch CI — `flutter pub get` resolution first, then analyze + the signing tests (which assert
-  the EIP-1559 `0x02` output and personal_sign length, so any signing-behavior change is caught). Fix
-  surgically if anything breaks; then proceed to reown 9.2. No Flutter locally → CI is the verifier.
-- Refs: this commit; `pubspec.yaml`.
+- Done: pubspec bump (run 27565907870). CI's `flutter pub get` surfaced the predicted transitive conflict:
+  `bip39 1.0.6` (latest, 5 yrs old) → `pointycastle ^3`, but `web3dart 3` → `pointycastle ^4`. bip39 has no
+  newer version, so the fix is `dependency_overrides: pointycastle: ^4.0.0` — bip32/bip39 only use stable
+  pointycastle digest/HMAC/EC APIs, and the deterministic derivation test (`phone_secure_vault_test.dart`:
+  known mnemonic → `0xf39Fd6…266`) guards that the override doesn't change HD derivation. No app code change.
+- Next / open: re-watch CI — resolution should pass now; then analyze + signing/derivation tests confirm
+  behavior. If the derivation test fails under pointycastle 4, fall back (alt bip packages / pin web3dart).
+  Then proceed to reown 9.2. No Flutter locally → CI is the verifier.
+- Refs: this commit; `pubspec.yaml` (web3dart ^3.0.1 + pointycastle override).
 
 ## 2026-06-15 — Phase 9 / chunk 9.7: message signing (personal_sign / eth_sign) — branch main — done
 - Plan (user: "следующим шагом делаем personal_sign/typed-data"): add EIP-191 message signing on the fake.
