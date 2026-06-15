@@ -7,6 +7,7 @@ import 'key_storage/secure_key_value_store.dart';
 import 'transactions/transaction_service.dart';
 import 'transactions/hardened_transaction_service.dart';
 import 'wallet_flow_screen.dart';
+import 'walletconnect/wallet_connect_service.dart';
 import 'widgets/version_banner.dart';
 
 class MobileWalletDemoApp extends StatelessWidget {
@@ -19,13 +20,15 @@ class MobileWalletDemoApp extends StatelessWidget {
     NonceProvider? nonceProvider,
     JsonRpcTransport? trackingTransport,
     BiometricAuthGateway? biometricAuthGateway,
+    WalletConnectService? walletConnectService,
   }) : _store = store,
        _blockchainProvider = blockchainProvider,
        _transactionService = transactionService,
        _transactionBroadcaster = transactionBroadcaster,
        _nonceProvider = nonceProvider,
        _trackingTransport = trackingTransport,
-       _biometricAuthGateway = biometricAuthGateway;
+       _biometricAuthGateway = biometricAuthGateway,
+       _walletConnectService = walletConnectService;
 
   final SecureKeyValueStore? _store;
   final BlockchainProvider? _blockchainProvider;
@@ -34,6 +37,7 @@ class MobileWalletDemoApp extends StatelessWidget {
   final NonceProvider? _nonceProvider;
   final JsonRpcTransport? _trackingTransport;
   final BiometricAuthGateway? _biometricAuthGateway;
+  final WalletConnectService? _walletConnectService;
 
   @override
   Widget build(BuildContext context) {
@@ -78,6 +82,8 @@ class MobileWalletDemoApp extends StatelessWidget {
         trackingTransport: _trackingTransport ?? HttpJsonRpcTransport(),
         biometricAuthGateway:
             _biometricAuthGateway ?? defaultBiometricAuthGateway(),
+        walletConnectService:
+            _walletConnectService ?? const UnavailableWalletConnectService(),
       ),
     );
   }

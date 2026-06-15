@@ -18,6 +18,30 @@ Entry template:
 
 ---
 
+## 2026-06-15 — Phase 9 / chunk 9.4a: wire WalletConnectService into the controller — branch main — done
+- Plan: first sub-step of 9.4 (Connections screen) on the fake. Keep it UI-free and fully unit-tested:
+  inject the `WalletConnectService` seam through the DI chain and give `WalletFlowController` the WC state +
+  action API the screen (9.4b) will call. Defer the `WalletFlowStage.connections` enum + screen widget to
+  9.4b (adding the enum forces a non-exhaustive-switch case, i.e. UI — out of scope here).
+- Done: DI — `MobileWalletDemoApp` takes a nullable `walletConnectService` (default
+  `const UnavailableWalletConnectService()`), passes it to `WalletFlowScreen` (new required field) →
+  `WalletFlowController` (optional, same default, so existing tests/`buildController` still compile). The
+  controller now subscribes to `sessionProposals` + `sessionsChanges` in its ctor (seeds from
+  `activeSessions`, `unawaited(init())`), cancels both subs in `dispose`, and exposes
+  `isWalletConnectAvailable` / `walletConnectSessions` / `pendingProposal` + actions `pairWalletConnect` /
+  `approvePendingProposal` (binds CAIP-10 `chain:address` from the unlocked summary) / `rejectPendingProposal`
+  / `disconnectWalletConnectSession`. `_runGuarded` now also surfaces `WalletConnectServiceException` as
+  `errorMessage`. New `test/wallet_connect_controller_test.dart` drives it on `FakeWalletConnectService`:
+  default→unavailable, pair→pending proposal, approve→session w/ bound account + disconnect→empty, reject→
+  cleared, invalid URI→error. No version bump (internal seam; UI lands in 9.4b). `dart format` clean.
+- Next / open: **9.4b** — `WalletFlowStage.connections` + the Connections screen (status banner, sessions
+  list → details → disconnect, "new connection" URI paste, proposal approval sheet) + dashboard entry, and
+  wire the incoming-request approval sheet to `WalletConnectInboundCoordinator`. Real `reown_walletkit` (9.2)
+  still deferred. (Could not run `flutter analyze`/`flutter test` locally — no Flutter SDK in this env, only
+  standalone Dart for `dart format`; relying on CI for analyze/test.)
+- Refs: this commit; `lib/src/app.dart`, `lib/src/wallet_flow_screen.dart`, `lib/src/wallet_flow_controller.dart`,
+  `test/wallet_connect_controller_test.dart`, `docs/development-plan.md`.
+
 ## 2026-06-15 — Phase 10 prep: exact NFC/PC-SC reproduction spec (docs only) — branch main — done
 - Plan: owner wants to later reproduce the NFC stack precisely — "what system calls are needed, what is
   not, no errors / no extra steps / no over-complication". Study how the two Rutoken demos actually access

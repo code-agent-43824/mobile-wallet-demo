@@ -16,6 +16,7 @@ import 'key_storage/secure_key_value_store.dart';
 import 'transactions/hardened_transaction_service.dart';
 import 'transactions/transaction_service.dart';
 import 'transactions/transaction_tracker.dart';
+import 'walletconnect/wallet_connect_service.dart';
 
 // The wallet state machine + every domain action live in a widget-free
 // WalletFlowController; the presentational widgets for each WalletFlowStage live
@@ -46,6 +47,7 @@ class WalletFlowScreen extends StatefulWidget {
     required this.nonceProvider,
     required this.trackingTransport,
     required this.biometricAuthGateway,
+    required this.walletConnectService,
     super.key,
   });
 
@@ -56,6 +58,7 @@ class WalletFlowScreen extends StatefulWidget {
   final NonceProvider nonceProvider;
   final JsonRpcTransport trackingTransport;
   final BiometricAuthGateway biometricAuthGateway;
+  final WalletConnectService walletConnectService;
 
   @override
   State<WalletFlowScreen> createState() => _WalletFlowScreenState();
@@ -70,6 +73,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
     _controller = WalletFlowController(
       store: widget.store,
       biometricAuthGateway: widget.biometricAuthGateway,
+      walletConnectService: widget.walletConnectService,
     )..addListener(_onControllerChanged);
     _controller.loadInitialState();
   }

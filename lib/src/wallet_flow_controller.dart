@@ -13,7 +13,9 @@ class WalletFlowController extends ChangeNotifier {
   WalletFlowController({
     required SecureKeyValueStore store,
     required BiometricAuthGateway biometricAuthGateway,
-  }) {
+    WalletConnectService walletConnectService =
+        const UnavailableWalletConnectService(),
+  }) : _walletConnectService = walletConnectService {
     _vault = PhoneSecureVault(
       store: store,
       biometricAuth: biometricAuthGateway,
@@ -46,11 +48,31 @@ class WalletFlowController extends ChangeNotifier {
         ),
       ],
     );
+
+    _walletConnectSessions = _walletConnectService.activeSessions;
+    _walletConnectProposalSub = _walletConnectService.sessionProposals.listen((
+      proposal,
+    ) {
+      _pendingProposal = proposal;
+      _notify();
+    });
+    _walletConnectSessionsSub = _walletConnectService.sessionsChanges.listen((
+      sessions,
+    ) {
+      _walletConnectSessions = sessions;
+      _notify();
+    });
+    unawaited(_walletConnectService.init());
   }
 
   late final PhoneSecureVault _vault;
   late final ExternalDeviceDemoBackend _externalDeviceBackend;
   late final WalletBackendRegistry _backendRegistry;
+  final WalletConnectService _walletConnectService;
+  late final StreamSubscription<WalletConnectSessionProposal>
+  _walletConnectProposalSub;
+  late final StreamSubscription<List<WalletConnectSession>>
+  _walletConnectSessionsSub;
 
   /// Stateless signing authorizer used by the unlocked send flow.
   final WalletOperationAuthorizer walletOperationAuthorizer =
@@ -63,6 +85,9 @@ class WalletFlowController extends ChangeNotifier {
   String? _errorMessage;
   String? _pendingBiometricPin;
   String? _selectedBackendId;
+  WalletConnectSessionProposal? _pendingProposal;
+  List<WalletConnectSession> _walletConnectSessions =
+      const <WalletConnectSession>[];
   ExternalDeviceDemoRuntimeState? _externalRuntimeState;
   WalletAuthMethod _lastUnlockAuthMethod = WalletAuthMethod.pin;
   bool _biometricsEnabled = false;
@@ -92,6 +117,16 @@ class WalletFlowController extends ChangeNotifier {
   bool get canUnlockWithBiometrics =>
       _biometricsEnabled && _biometricsAvailable;
 
+  /// Whether a relay-backed WalletConnect client is configured and usable.
+  bool get isWalletConnectAvailable => _walletConnectService.isAvailable;
+
+  /// Active WalletConnect sessions (wallet-side view).
+  List<WalletConnectSession> get walletConnectSessions =>
+      _walletConnectSessions;
+
+  /// The incoming session proposal awaiting approve/reject, if any.
+  WalletConnectSessionProposal? get pendingProposal => _pendingProposal;
+
   KeyStorageBackend get activeBackend {
     final selectedBackendId = _selectedBackendId;
     if (selectedBackendId != null) {
@@ -115,6 +150,8 @@ class WalletFlowController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    unawaited(_walletConnectProposalSub.cancel());
+    unawaited(_walletConnectSessionsSub.cancel());
     super.dispose();
   }
 
@@ -365,6 +402,55 @@ class WalletFlowController extends ChangeNotifier {
     });
   }
 
+  /// Pairs with a dApp from a `wc:` URI; a proposal arrives via the proposals
+  /// stream and surfaces as [pendingProposal].
+  Future<void> pairWalletConnect({required String uri}) async {
+    await _runGuarded(() async {
+      await _walletConnectService.pair(uri: uri);
+    });
+  }
+
+  /// Approves [pendingProposal], binding this wallet's account (CAIP-10) across
+  /// each requested chain. No-op when there is no pending proposal or no wallet.
+  Future<void> approvePendingProposal() async {
+    await _runGuarded(() async {
+      final proposal = _pendingProposal;
+      final address = _summary?.address;
+      if (proposal == null || address == null) {
+        return;
+      }
+      final accounts = proposal.requiredChains
+          .map((chain) => '$chain:$address')
+          .toList();
+      await _walletConnectService.approveSession(
+        proposal: proposal,
+        accounts: accounts,
+      );
+      _pendingProposal = null;
+      _walletConnectSessions = _walletConnectService.activeSessions;
+    });
+  }
+
+  /// Rejects [pendingProposal] and clears it.
+  Future<void> rejectPendingProposal() async {
+    await _runGuarded(() async {
+      final proposal = _pendingProposal;
+      if (proposal == null) {
+        return;
+      }
+      await _walletConnectService.rejectSession(proposal: proposal);
+      _pendingProposal = null;
+    });
+  }
+
+  /// Disconnects an active WalletConnect session by [topic].
+  Future<void> disconnectWalletConnectSession({required String topic}) async {
+    await _runGuarded(() async {
+      await _walletConnectService.disconnect(topic: topic);
+      _walletConnectSessions = _walletConnectService.activeSessions;
+    });
+  }
+
   void lockWallet() {
     activeBackend.lock();
     if (activeBackend is ExternalDeviceDemoBackend) {
@@ -388,6 +474,9 @@ class WalletFlowController extends ChangeNotifier {
       _errorMessage = null;
       _notify();
     } on VaultFailure catch (error) {
+      _errorMessage = error.message;
+      _notify();
+    } on WalletConnectServiceException catch (error) {
       _errorMessage = error.message;
       _notify();
     }

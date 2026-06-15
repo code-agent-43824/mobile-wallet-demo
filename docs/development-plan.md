@@ -275,7 +275,7 @@ Both surface through a dedicated **Connections screen** (status, active sessions
 
 This corrects the Phase 8 role: Phase 8 modelled the *outbound* direction (the app requesting a signature from an external signer). The product is wallet-side, so **9.0** removes that and **9.1+** build the inbound integration, reusing the Phase 8 codecs.
 
-Status: ⏳ In progress (chunks 9.0–9.1 done, v1.18; next 9.2).
+Status: ⏳ In progress (option A — build on the fake, defer the real SDK). 9.0–9.1 done (v1.18); 9.3 done on the fake; **9.4a** done (DI + controller WC seam); next **9.4b** (Connections screen). 9.2 (real `reown_walletkit`) deferred behind native-build blockers.
 
 ### Two axes (do not conflate)
 - **Transport axis (this phase):** how a signing request *arrives* — WalletConnect (online relay) or AirGap (offline QR). The wallet still signs with whatever custody backend is active.
@@ -299,8 +299,9 @@ Status: ⏳ In progress (chunks 9.0–9.1 done, v1.18; next 9.2).
 - **9.0** — *cleanup*: remove the inverted Phase 8 **outbound** code (transport/session/registry/connectors + "Подписать через"); keep the codecs (`WalletConnectV2RequestCodec`, `AirGapPayloadCodec`) and `assembleSignedTransfer`. No new feature; tests trimmed to the codecs. ✅ done (v1.17)
 - **9.1** — `WalletConnectService` interface + inbound models (`WalletConnectPeer` / `…SessionProposal` / `…Session` / `…Request`) + `FakeWalletConnectService` + `UnavailableWalletConnectService` (shippable default) + unit tests. Pure Dart, no SDK. ✅ done (v1.18). *(The `reown_walletkit` dep + `WC_PROJECT_ID` config + DI wiring moved to 9.2, where the real impl consumes them.)*
 - **9.2** — real SDK impl (`ReownWalletConnectService`) behind the interface: init, pair, proposal approve/reject, session list + streams, disconnect. Adds the `reown_walletkit` dep + `WC_PROJECT_ID` config + DI wiring into `MobileWalletDemoApp` (init on startup).
-- **9.3** — incoming request → vault signing: WC method parsing (inverse codec), the approval flow, `respond`; broadcast for `eth_sendTransaction`.
-- **9.4** — Connections screen: status + sessions list + details + disconnect + "new connection" (URI paste); navigation entry from the unlocked dashboard.
+- **9.3** — incoming request → vault signing: WC method parsing (inverse codec), the request→sign→respond flow, broadcast for `eth_sendTransaction`. ✅ done on the fake (`WalletConnectV2RequestCodec.decodeTransactionRequest`, `TransactionService.prepareInboundTransaction`, `WalletConnectInboundCoordinator`); the user-facing approval sheet is folded into 9.4b.
+- **9.4a** — DI + controller seam: inject `WalletConnectService` through `MobileWalletDemoApp` → `WalletFlowScreen` → `WalletFlowController` (default `UnavailableWalletConnectService`); the controller subscribes to the proposal/session streams and exposes `isWalletConnectAvailable` / `walletConnectSessions` / `pendingProposal` + actions `pairWalletConnect` / `approvePendingProposal` / `rejectPendingProposal` / `disconnectWalletConnectSession`; controller tests on the fake. ✅ done (no UI yet).
+- **9.4b** — Connections screen: a `WalletFlowStage.connections` + screen (status banner, sessions list → details → disconnect, "new connection" URI paste, the session-proposal approval sheet) + a navigation entry from the unlocked dashboard; wire the incoming-request approval sheet to `WalletConnectInboundCoordinator`.
 - **9.5** — AirGap inbound: scan request QR → approve → sign → response QR (camera via `mobile_scanner`), reusing the approval sheet.
 - **9.6** — QR scan for WalletConnect pairing + incoming-request sheet polish.
 - **9.7** — tests (service via the fake, request→sign mapping, screen widget tests) + docs sync + version bumps.
@@ -309,8 +310,8 @@ Status: ⏳ In progress (chunks 9.0–9.1 done, v1.18; next 9.2).
 - [x] 9.0 cleanup (remove outbound, keep codecs)
 - [x] `WalletConnectService` abstraction + `FakeWalletConnectService` (+ `UnavailableWalletConnectService` default; real-impl DI deferred to 9.2)
 - [ ] real `reown_walletkit` implementation (init / pair / sessions / disconnect)
-- [ ] incoming-request → vault signing + approval flow + `respond`
-- [ ] Connections screen (status / details / disconnect / new connection)
+- [x] incoming-request → vault signing + `respond` (logic on the fake: `WalletConnectInboundCoordinator`; approval-sheet UI in 9.4b)
+- [~] Connections screen (9.4a DI + controller WC seam ✅; 9.4b screen UI pending)
 - [ ] AirGap inbound (scan request → sign → response QR)
 - [ ] QR-code pairing for WalletConnect
 - [ ] tests + docs
