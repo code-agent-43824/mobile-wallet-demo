@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:web3dart/crypto.dart';
@@ -59,6 +60,21 @@ class WalletConnectTransactionRequest {
   final BigInt? maxPriorityFeePerGasWei;
 }
 
+/// A decoded `personal_sign` / `eth_sign` request: which account should sign,
+/// the raw message bytes to sign (the EIP-191 prefix is added by the signer),
+/// and a best-effort human-readable rendering for the approval UI.
+class WalletConnectMessageRequest {
+  const WalletConnectMessageRequest({
+    required this.address,
+    required this.message,
+    required this.displayText,
+  });
+
+  final String address;
+  final Uint8List message;
+  final String displayText;
+}
+
 /// Maps the app's prepared transfer to/from the WalletConnect v2 wire format.
 /// This is the WC v2 mapping contract reused by the Phase 9 wallet-side flow;
 /// here it is pure serialization (no relay/SDK).
@@ -67,10 +83,74 @@ class WalletConnectV2RequestCodec {
 
   static const String signTransactionMethod = 'eth_signTransaction';
   static const String sendTransactionMethod = 'eth_sendTransaction';
+  static const String personalSignMethod = 'personal_sign';
+  static const String ethSignMethod = 'eth_sign';
 
   /// Whether [method] is a transaction request this codec can decode.
   bool isTransactionMethod(String method) =>
       method == signTransactionMethod || method == sendTransactionMethod;
+
+  /// Whether [method] is an EIP-191 message-signing request.
+  bool isMessageSignMethod(String method) =>
+      method == personalSignMethod || method == ethSignMethod;
+
+  /// Decodes a `personal_sign` (`[message, address]`) or `eth_sign`
+  /// (`[address, message]`) request. The message param is hex (`0x…`) bytes or
+  /// a plain UTF-8 string.
+  WalletConnectMessageRequest decodeMessageRequest(
+    String method,
+    List<Object?> params,
+  ) {
+    if (params.length < 2) {
+      throw const WalletConnectCodecException(
+        'Запрос на подпись сообщения должен содержать сообщение и адрес.',
+      );
+    }
+    final Object? messageParam;
+    final Object? addressParam;
+    if (method == personalSignMethod) {
+      messageParam = params[0];
+      addressParam = params[1];
+    } else {
+      addressParam = params[0];
+      messageParam = params[1];
+    }
+    if (addressParam is! String || addressParam.isEmpty) {
+      throw const WalletConnectCodecException(
+        'В запросе на подпись отсутствует адрес.',
+      );
+    }
+    if (messageParam is! String) {
+      throw const WalletConnectCodecException(
+        'В запросе на подпись отсутствует сообщение.',
+      );
+    }
+    final bytes = _messageBytes(messageParam);
+    return WalletConnectMessageRequest(
+      address: addressParam,
+      message: bytes,
+      displayText: _messageDisplay(messageParam, bytes),
+    );
+  }
+
+  Uint8List _messageBytes(String message) {
+    if (message.startsWith('0x')) {
+      final hex = message.substring(2);
+      return hex.isEmpty ? Uint8List(0) : Uint8List.fromList(hexToBytes(hex));
+    }
+    return Uint8List.fromList(utf8.encode(message));
+  }
+
+  String _messageDisplay(String raw, Uint8List bytes) {
+    if (!raw.startsWith('0x')) {
+      return raw;
+    }
+    try {
+      return utf8.decode(bytes);
+    } catch (_) {
+      return raw; // non-UTF8 payload: show the hex
+    }
+  }
 
   WalletConnectRpcRequest encodeSignTransaction({
     required PreparedTransfer preparedTransfer,

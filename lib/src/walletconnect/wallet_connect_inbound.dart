@@ -40,6 +40,11 @@ class WalletConnectInboundCoordinator {
     required WalletTransactionSigner signer,
   }) async {
     try {
+      if (_codec.isMessageSignMethod(request.method)) {
+        await _handleMessageSign(request: request, signer: signer);
+        return;
+      }
+
       if (!_codec.isTransactionMethod(request.method)) {
         await _service.respondError(
           request: request,
@@ -106,6 +111,29 @@ class WalletConnectInboundCoordinator {
     } catch (error) {
       await _service.respondError(request: request, message: error.toString());
     }
+  }
+
+  /// `personal_sign` / `eth_sign`: decode → verify the account → sign the
+  /// message (EIP-191) → respond with the 65-byte signature hex. Chain-agnostic,
+  /// so there is no network/nonce/broadcast here.
+  Future<void> _handleMessageSign({
+    required WalletConnectRequest request,
+    required WalletTransactionSigner signer,
+  }) async {
+    final message = _codec.decodeMessageRequest(request.method, request.params);
+    if (message.address.toLowerCase() != signer.address.toLowerCase()) {
+      await _service.respondError(
+        request: request,
+        message: 'Запрос адресован другому аккаунту (${message.address}).',
+      );
+      return;
+    }
+
+    final signatureHex = await signer.signPersonalMessage(
+      transactionService: _txService,
+      message: message.message,
+    );
+    await _service.respondResult(request: request, result: signatureHex);
   }
 
   /// Maps a CAIP-2 chain id (e.g. `eip155:1`) to a supported [EvmNetwork], or

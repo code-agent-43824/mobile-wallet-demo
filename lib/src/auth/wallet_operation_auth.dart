@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../key_storage/key_storage_backend.dart';
 import '../transactions/transaction_service.dart';
 
@@ -11,6 +13,13 @@ abstract interface class WalletTransactionSigner {
     required TransactionService transactionService,
     required PreparedTransfer preparedTransfer,
     required int nonce,
+  });
+
+  /// Signs an EIP-191 personal message (`personal_sign` / `eth_sign`); returns
+  /// the 65-byte signature as a `0x`-prefixed hex string.
+  Future<String> signPersonalMessage({
+    required TransactionService transactionService,
+    required Uint8List message,
   });
 }
 
@@ -59,6 +68,17 @@ abstract class WalletMaterialTransactionSigner
       preparedTransfer: preparedTransfer,
       walletMaterial: walletMaterial,
       nonce: nonce,
+    );
+  }
+
+  @override
+  Future<String> signPersonalMessage({
+    required TransactionService transactionService,
+    required Uint8List message,
+  }) async {
+    return transactionService.signPersonalMessage(
+      walletMaterial: walletMaterial,
+      message: message,
     );
   }
 }

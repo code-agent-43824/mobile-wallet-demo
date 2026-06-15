@@ -207,6 +207,15 @@ abstract interface class TransactionService {
     required int nonce,
   });
 
+  /// Signs an arbitrary message with the EIP-191 personal-sign scheme
+  /// (`personal_sign` / `eth_sign`) — the wallet prepends
+  /// `"\x19Ethereum Signed Message:\n<len>"` before hashing. Returns the
+  /// 65-byte `r‖s‖v` signature as a `0x`-prefixed hex string.
+  String signPersonalMessage({
+    required WalletMaterial walletMaterial,
+    required Uint8List message,
+  });
+
   /// Assembles a [SignedTransfer] from raw signed-transaction bytes without
   /// re-running local signing — the seam the wallet-side WC v2 / AirGap flow
   /// uses to wrap an already-signed transaction. The transaction hash is
@@ -478,6 +487,16 @@ class LocalTransactionService implements TransactionService {
       signingNote:
           'Транзакция локально подписана. Для этой операции PIN нужен только один раз на весь high-level signing flow.',
     );
+  }
+
+  @override
+  String signPersonalMessage({
+    required WalletMaterial walletMaterial,
+    required Uint8List message,
+  }) {
+    final credentials = EthPrivateKey.fromHex(walletMaterial.privateKeyHex);
+    final signature = credentials.signPersonalMessageToUint8List(message);
+    return bytesToHex(signature, include0x: true);
   }
 
   @override

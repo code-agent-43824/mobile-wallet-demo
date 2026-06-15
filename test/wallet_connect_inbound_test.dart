@@ -127,9 +127,60 @@ void main() {
     final service = FakeWalletConnectService();
     final request = service.simulateRequest(
       topic: 'topic-1',
-      method: 'personal_sign',
+      method: 'eth_signTypedData_v4',
       chainId: 'eip155:1',
-      params: const <Object?>['0xdeadbeef', _walletAddress],
+      params: const <Object?>[_walletAddress, '{}'],
+    );
+
+    await _coordinator(
+      service,
+    ).handleRequest(request: request, signer: _signer);
+
+    expect(service.respondedResults, isEmpty);
+    expect(service.respondedErrors.single.id, request.id);
+  });
+
+  test('personal_sign signs the message for this account', () async {
+    final service = FakeWalletConnectService();
+    final request = service.simulateRequest(
+      topic: 'topic-1',
+      method: 'personal_sign',
+      // 0x48656c6c6f = "Hello"
+      params: const <Object?>['0x48656c6c6f', _walletAddress],
+    );
+
+    await _coordinator(
+      service,
+    ).handleRequest(request: request, signer: _signer);
+
+    expect(service.respondedErrors, isEmpty);
+    final result = service.respondedResults.single.result;
+    expect(result, startsWith('0x'));
+    expect(result.length, 132); // 65-byte r‖s‖v signature
+  });
+
+  test('eth_sign signs with the [address, message] param order', () async {
+    final service = FakeWalletConnectService();
+    final request = service.simulateRequest(
+      topic: 'topic-1',
+      method: 'eth_sign',
+      params: const <Object?>[_walletAddress, '0x48656c6c6f'],
+    );
+
+    await _coordinator(
+      service,
+    ).handleRequest(request: request, signer: _signer);
+
+    expect(service.respondedErrors, isEmpty);
+    expect(service.respondedResults.single.result, startsWith('0x'));
+  });
+
+  test('rejects a personal_sign for another account', () async {
+    final service = FakeWalletConnectService();
+    final request = service.simulateRequest(
+      topic: 'topic-1',
+      method: 'personal_sign',
+      params: const <Object?>['0x48656c6c6f', '0xother'],
     );
 
     await _coordinator(

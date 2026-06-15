@@ -126,6 +126,17 @@ class HardenedTransactionServiceImplementation
   }
 
   @override
+  String signPersonalMessage({
+    required WalletMaterial walletMaterial,
+    required Uint8List message,
+  }) {
+    return const LocalTransactionService().signPersonalMessage(
+      walletMaterial: walletMaterial,
+      message: message,
+    );
+  }
+
+  @override
   SignedTransfer assembleSignedTransfer({
     required PreparedTransfer preparedTransfer,
     required Uint8List rawSignedTransaction,

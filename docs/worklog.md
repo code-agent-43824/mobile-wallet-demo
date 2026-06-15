@@ -18,6 +18,33 @@ Entry template:
 
 ---
 
+## 2026-06-15 — Phase 9 / chunk 9.7: message signing (personal_sign / eth_sign) — branch main — done
+- Plan (user: "следующим шагом делаем personal_sign/typed-data"): add EIP-191 message signing on the fake.
+  Scope to `personal_sign` + `eth_sign` (tractable via web3dart); **defer `eth_signTypedData_v4` (EIP-712)**
+  — its struct hashing is intricate and high-risk to implement blind (no local run, needs byte-exact
+  vectors), so it gets its own focused chunk.
+- Done: `WalletConnectV2RequestCodec` — `personalSignMethod`/`ethSignMethod`, `isMessageSignMethod`,
+  `decodeMessageRequest(method, params)` → `WalletConnectMessageRequest{address, message bytes, displayText}`
+  (handles `personal_sign` `[message,address]` vs `eth_sign` `[address,message]`; message is `0x…` hex or
+  utf8; best-effort utf8 display). `TransactionService.signPersonalMessage({walletMaterial, message})` →
+  `EthPrivateKey.signPersonalMessageToUint8List` → 0x 65-byte hex (impl in `LocalTransactionService`,
+  forwarded by `HardenedTransactionServiceImplementation`); `WalletTransactionSigner.signPersonalMessage`
+  (delegates with the signer's material). `WalletConnectInboundCoordinator.handleRequest` gains a message
+  branch (chain-agnostic: verify account → sign → respond the signature; no nonce/broadcast). Request card
+  renders the decoded «Сообщение». Tests: codec decode (personal_sign hex+utf8 / eth_sign order / missing
+  fields), coordinator (personal_sign signs → 132-char sig, eth_sign order, wrong-account → error, and the
+  "unsupported method" test switched to `eth_signTypedData_v4`), controller approve personal_sign → signature.
+  **Version bump v1.24.0+35 → v1.25.0+36.** `dart format` clean.
+- Next / open: `eth_signTypedData`/`_v4` (EIP-712 — needs a verified typed-data hasher), the live camera
+  scanner (`mobile_scanner`), and the real `reown_walletkit` (9.2). (No Flutter locally — analyze/tests
+  verified via CI.)
+- Refs: this commit; `lib/src/walletconnect/wallet_connect_v2.dart`, `lib/src/walletconnect/wallet_connect_inbound.dart`,
+  `lib/src/transactions/transaction_service.dart`, `lib/src/transactions/hardened_transaction_service.dart`,
+  `lib/src/auth/wallet_operation_auth.dart`, `lib/src/wallet_flow_screen.dart`,
+  `lib/src/wallet_flow_screen_connections.dart`, `test/wallet_connect_request_decode_test.dart`,
+  `test/wallet_connect_inbound_test.dart`, `test/wallet_connect_controller_test.dart`, version files,
+  `docs/development-plan.md`.
+
 ## 2026-06-15 — Phase 9 / 9.6 (real QR load from a file, all platforms) — branch main — done
 - Plan (user ask): load a QR from a **file** on every platform — the only option on Windows (camera
   plugins/`mobile_scanner` don't support it). Keep the camera deferred. Next chunk = `personal_sign`/typed-data.

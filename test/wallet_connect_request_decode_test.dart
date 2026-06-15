@@ -61,4 +61,43 @@ void main() {
       throwsA(isA<WalletConnectCodecException>()),
     );
   });
+
+  test('isMessageSignMethod recognises personal_sign / eth_sign', () {
+    expect(codec.isMessageSignMethod('personal_sign'), isTrue);
+    expect(codec.isMessageSignMethod('eth_sign'), isTrue);
+    expect(codec.isMessageSignMethod('eth_sendTransaction'), isFalse);
+  });
+
+  test('decodes personal_sign ([message, address]) with hex + utf8', () {
+    // 0x48656c6c6f = "Hello"
+    final request = codec.decodeMessageRequest('personal_sign', const <Object?>[
+      '0x48656c6c6f',
+      '0xAbc',
+    ]);
+
+    expect(request.address, '0xAbc');
+    expect(request.displayText, 'Hello');
+    expect(
+      request.message,
+      Uint8List.fromList(<int>[0x48, 0x65, 0x6c, 0x6c, 0x6f]),
+    );
+  });
+
+  test('decodes eth_sign with the [address, message] param order', () {
+    final request = codec.decodeMessageRequest('eth_sign', const <Object?>[
+      '0xAbc',
+      'plain text',
+    ]);
+
+    expect(request.address, '0xAbc');
+    expect(request.displayText, 'plain text');
+  });
+
+  test('throws when a message request is missing its address/message', () {
+    expect(
+      () =>
+          codec.decodeMessageRequest('personal_sign', const <Object?>['0x00']),
+      throwsA(isA<WalletConnectCodecException>()),
+    );
+  });
 }

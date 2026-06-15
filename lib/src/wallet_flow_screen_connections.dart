@@ -333,6 +333,21 @@ class _RequestCard extends StatelessWidget {
   final Future<void> Function() onApprove;
   final Future<void> Function() onReject;
 
+  /// Best-effort decoded text for `personal_sign` / `eth_sign`; null otherwise.
+  String? _messageText() {
+    const codec = WalletConnectV2RequestCodec();
+    if (!codec.isMessageSignMethod(request.method)) {
+      return null;
+    }
+    try {
+      return codec
+          .decodeMessageRequest(request.method, request.params)
+          .displayText;
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -342,6 +357,7 @@ class _RequestCard extends StatelessWidget {
     final from = tx['from']?.toString();
     final to = tx['to']?.toString();
     final value = tx['value']?.toString();
+    final message = _messageText();
 
     return Container(
       width: double.infinity,
@@ -365,6 +381,7 @@ class _RequestCard extends StatelessWidget {
           if (from != null) Text('Отправитель: $from'),
           if (to != null) Text('Получатель: $to'),
           if (value != null) Text('Сумма (wei): $value'),
+          if (message != null) Text('Сообщение: $message'),
           const SizedBox(height: 12),
           Wrap(
             spacing: 12,

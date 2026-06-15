@@ -21,6 +21,7 @@ import 'transactions/transaction_service.dart';
 import 'transactions/transaction_tracker.dart';
 import 'walletconnect/wallet_connect_inbound.dart';
 import 'walletconnect/wallet_connect_service.dart';
+import 'walletconnect/wallet_connect_v2.dart';
 
 // The wallet state machine + every domain action live in a widget-free
 // WalletFlowController; the presentational widgets for each WalletFlowStage live
