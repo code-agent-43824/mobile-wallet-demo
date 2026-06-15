@@ -43,7 +43,7 @@ void main() {
       );
 
       await expectLater(
-        scanner.scanWithCamera(title: 'wc: URI'),
+        () => scanner.scanWithCamera(title: 'wc: URI'),
         throwsA(isA<QrScannerException>()),
       );
     });
