@@ -3,6 +3,7 @@ import 'package:mobile_wallet_demo/src/airgap/airgap_signing.dart';
 import 'package:mobile_wallet_demo/src/auth/biometric_auth.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
+import 'package:mobile_wallet_demo/src/qr/qr_scanner.dart';
 import 'package:mobile_wallet_demo/src/transactions/transaction_service.dart';
 import 'package:mobile_wallet_demo/src/wallet_flow_screen.dart';
 import 'package:mobile_wallet_demo/src/walletconnect/wallet_connect_service.dart';
@@ -57,6 +58,7 @@ void main() {
     TransactionService? transactionService,
     TransactionBroadcaster? transactionBroadcaster,
     NonceProvider? nonceProvider,
+    QrScanner qrScanner = const UnavailableQrScanner(),
   }) async {
     final controller = WalletFlowController(
       store: InMemorySecureKeyValueStore(),
@@ -65,6 +67,7 @@ void main() {
       transactionService: transactionService,
       transactionBroadcaster: transactionBroadcaster,
       nonceProvider: nonceProvider,
+      qrScanner: qrScanner,
     );
     await controller.loadInitialState();
     controller.goToCreateWallet();
@@ -272,4 +275,38 @@ void main() {
     controller.dispose();
     await service.dispose();
   });
+
+  test('scanQrCode returns the scanned value', () async {
+    final service = FakeWalletConnectService();
+    final controller = await buildUnlocked(
+      service,
+      qrScanner: FakeQrScanner(nextResult: 'wc:scanned@2'),
+    );
+
+    expect(controller.isQrScannerAvailable, isTrue);
+    final result = await controller.scanQrCode(title: 'wc');
+
+    expect(result, 'wc:scanned@2');
+    expect(controller.errorMessage, isNull);
+
+    controller.dispose();
+    await service.dispose();
+  });
+
+  test(
+    'scanQrCode surfaces an error when the scanner is unavailable',
+    () async {
+      final service = FakeWalletConnectService();
+      final controller = await buildUnlocked(service);
+
+      expect(controller.isQrScannerAvailable, isFalse);
+      final result = await controller.scanQrCode();
+
+      expect(result, isNull);
+      expect(controller.errorMessage, isNotNull);
+
+      controller.dispose();
+      await service.dispose();
+    },
+  );
 }

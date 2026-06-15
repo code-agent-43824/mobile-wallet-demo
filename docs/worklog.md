@@ -18,6 +18,31 @@ Entry template:
 
 ---
 
+## 2026-06-15 — Phase 9 / chunk 9.6: QR scanner seam + scan entry points + sheet polish — branch main — done
+- Plan: 9.6 = QR scan for WC pairing + AirGap + request-sheet polish. The real camera (`mobile_scanner`)
+  can't ship now — it has **no Windows support** (a CI build target) and needs per-platform camera
+  permissions, and native builds aren't verifiable locally. So, like the real `reown_walletkit` (9.2):
+  build the **seam + fake + unavailable default** (no new dependency), gate the UI on availability, defer
+  the camera. No QR *rendering* dep either (kept the AirGap response as selectable text).
+- Done: `qr/qr_scanner.dart` — `QrScanner` interface (`isAvailable`, `scan({title})`) +
+  `UnavailableQrScanner` (default; `scan` throws `QrScannerException`) + `FakeQrScanner` (returns
+  `nextResult`, records titles). Injected through `MobileWalletDemoApp` → `WalletFlowScreen` →
+  `WalletFlowController`: `isQrScannerAvailable` + `scanQrCode({title})` (returns the decoded text or null;
+  surfaces the unavailable message via `errorMessage`). Connections screen: gated "Сканировать wc: URI" /
+  "Сканировать airgap-tx" buttons that fill the existing paste fields (hidden when unavailable, so the
+  default build is paste-only — no dead button); request-card polish (added the «Отправитель» line).
+  Tests: `qr_scanner_test.dart` (Unavailable throws / Fake returns+records), controller `scanQrCode`
+  available+unavailable, widget "scan fills the wc: URI field" (injects `FakeQrScanner`). **Version bump
+  v1.22.0+33 → v1.23.0+34** (5 sync points). `dart format` clean.
+- Next / open: real `mobile_scanner` camera (when native platforms are tackled — Windows needs a fallback
+  or platform-gated dep), `personal_sign`/typed-data (message-signing), and the real `reown_walletkit`
+  (9.2). With 9.6, **Phase 9 is feature-complete on the fake** (both inbound transports + scan seam).
+  (No Flutter locally — analyze/tests verified via CI.)
+- Refs: this commit; `lib/src/qr/qr_scanner.dart`, `lib/src/app.dart`, `lib/src/wallet_flow_screen.dart`,
+  `lib/src/wallet_flow_controller.dart`, `lib/src/wallet_flow_screen_connections.dart`,
+  `test/qr_scanner_test.dart`, `test/wallet_connect_controller_test.dart`,
+  `test/wallet_connect_screen_test.dart`, version files, `docs/development-plan.md`.
+
 ## 2026-06-15 — Phase 9 / chunk 9.5: AirGap inbound — branch main — done
 - Plan: wallet-side AirGap inbound on the existing `AirGapPayloadCodec`, mirroring the WC inbound shape.
   Decode an `airgap-tx:` request → sign with the active backend → encode the `airgap-sig:` response.

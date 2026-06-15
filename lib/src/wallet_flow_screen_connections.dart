@@ -13,6 +13,8 @@ class _ConnectionsStage extends StatefulWidget {
     required this.pendingRequest,
     required this.airGapResponsePayload,
     required this.walletAddress,
+    required this.isQrAvailable,
+    required this.onScanQr,
     required this.onPair,
     required this.onApprove,
     required this.onReject,
@@ -30,6 +32,8 @@ class _ConnectionsStage extends StatefulWidget {
   final WalletConnectRequest? pendingRequest;
   final String? airGapResponsePayload;
   final String? walletAddress;
+  final bool isQrAvailable;
+  final Future<String?> Function({String title}) onScanQr;
   final Future<void> Function({required String uri}) onPair;
   final Future<void> Function() onApprove;
   final Future<void> Function() onReject;
@@ -69,6 +73,13 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
       return;
     }
     await widget.onSignAirGap(payload);
+  }
+
+  Future<void> _scanInto(TextEditingController controller, String title) async {
+    final value = await widget.onScanQr(title: title);
+    if (value != null && mounted) {
+      setState(() => controller.text = value);
+    }
   }
 
   @override
@@ -111,10 +122,22 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
           ),
         ),
         const SizedBox(height: 12),
-        FilledButton.icon(
-          onPressed: widget.isAvailable ? _pair : null,
-          icon: const Icon(Icons.link),
-          label: const Text('Подключить'),
+        Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          children: [
+            FilledButton.icon(
+              onPressed: widget.isAvailable ? _pair : null,
+              icon: const Icon(Icons.link),
+              label: const Text('Подключить'),
+            ),
+            if (widget.isQrAvailable)
+              OutlinedButton.icon(
+                onPressed: () => _scanInto(_uriController, 'wc: URI'),
+                icon: const Icon(Icons.qr_code_scanner),
+                label: const Text('Сканировать wc: URI'),
+              ),
+          ],
         ),
         if (proposal != null) ...[
           const SizedBox(height: 24),
@@ -170,10 +193,22 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
           ),
         ),
         const SizedBox(height: 12),
-        FilledButton.icon(
-          onPressed: _signAirGap,
-          icon: const Icon(Icons.qr_code_2),
-          label: const Text('Подписать офлайн'),
+        Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          children: [
+            FilledButton.icon(
+              onPressed: _signAirGap,
+              icon: const Icon(Icons.qr_code_2),
+              label: const Text('Подписать офлайн'),
+            ),
+            if (widget.isQrAvailable)
+              OutlinedButton.icon(
+                onPressed: () => _scanInto(_airGapController, 'airgap-tx'),
+                icon: const Icon(Icons.qr_code_scanner),
+                label: const Text('Сканировать airgap-tx'),
+              ),
+          ],
         ),
         if (airGapResponse != null) ...[
           const SizedBox(height: 12),
@@ -277,6 +312,7 @@ class _RequestCard extends StatelessWidget {
     final tx = request.params.isNotEmpty && request.params.first is Map
         ? (request.params.first! as Map).cast<String, Object?>()
         : const <String, Object?>{};
+    final from = tx['from']?.toString();
     final to = tx['to']?.toString();
     final value = tx['value']?.toString();
 
@@ -299,6 +335,7 @@ class _RequestCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text('Метод: ${request.method}'),
           Text('Сеть: ${request.chainId}'),
+          if (from != null) Text('Отправитель: $from'),
           if (to != null) Text('Получатель: $to'),
           if (value != null) Text('Сумма (wei): $value'),
           const SizedBox(height: 12),

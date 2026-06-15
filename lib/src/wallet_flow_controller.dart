@@ -18,7 +18,9 @@ class WalletFlowController extends ChangeNotifier {
     TransactionService? transactionService,
     TransactionBroadcaster? transactionBroadcaster,
     NonceProvider? nonceProvider,
+    QrScanner qrScanner = const UnavailableQrScanner(),
   }) : _walletConnectService = walletConnectService,
+       _qrScanner = qrScanner,
        _transactionService =
            transactionService ??
            const HardenedTransactionServiceImplementation(),
@@ -82,6 +84,7 @@ class WalletFlowController extends ChangeNotifier {
   late final ExternalDeviceDemoBackend _externalDeviceBackend;
   late final WalletBackendRegistry _backendRegistry;
   final WalletConnectService _walletConnectService;
+  final QrScanner _qrScanner;
   final TransactionService _transactionService;
   final TransactionBroadcaster _transactionBroadcaster;
   final NonceProvider _nonceProvider;
@@ -138,6 +141,9 @@ class WalletFlowController extends ChangeNotifier {
 
   /// Whether a relay-backed WalletConnect client is configured and usable.
   bool get isWalletConnectAvailable => _walletConnectService.isAvailable;
+
+  /// Whether a camera/QR scanner is wired (the scan affordance is shown).
+  bool get isQrScannerAvailable => _qrScanner.isAvailable;
 
   /// Active WalletConnect sessions (wallet-side view).
   List<WalletConnectSession> get walletConnectSessions =>
@@ -554,6 +560,22 @@ class WalletFlowController extends ChangeNotifier {
     _airGapResponsePayload = null;
     _errorMessage = null;
     _notify();
+  }
+
+  /// Opens the QR scanner and returns the decoded text (null when cancelled or
+  /// unavailable). Surfaces a clear message via [errorMessage] when scanning is
+  /// not available, so the screen can keep paste as the fallback.
+  Future<String?> scanQrCode({String title = ''}) async {
+    try {
+      final result = await _qrScanner.scan(title: title);
+      _errorMessage = null;
+      _notify();
+      return result;
+    } on QrScannerException catch (error) {
+      _errorMessage = error.message;
+      _notify();
+      return null;
+    }
   }
 
   /// Opens the Connections screen (from the unlocked dashboard).

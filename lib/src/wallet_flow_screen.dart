@@ -15,6 +15,7 @@ import 'key_storage/external_device_pkcs11.dart';
 import 'key_storage/key_storage_backend.dart';
 import 'key_storage/phone_secure_vault.dart';
 import 'key_storage/secure_key_value_store.dart';
+import 'qr/qr_scanner.dart';
 import 'transactions/hardened_transaction_service.dart';
 import 'transactions/transaction_service.dart';
 import 'transactions/transaction_tracker.dart';
@@ -53,6 +54,7 @@ class WalletFlowScreen extends StatefulWidget {
     required this.trackingTransport,
     required this.biometricAuthGateway,
     required this.walletConnectService,
+    required this.qrScanner,
     super.key,
   });
 
@@ -64,6 +66,7 @@ class WalletFlowScreen extends StatefulWidget {
   final JsonRpcTransport trackingTransport;
   final BiometricAuthGateway biometricAuthGateway;
   final WalletConnectService walletConnectService;
+  final QrScanner qrScanner;
 
   @override
   State<WalletFlowScreen> createState() => _WalletFlowScreenState();
@@ -82,6 +85,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       transactionService: widget.transactionService,
       transactionBroadcaster: widget.transactionBroadcaster,
       nonceProvider: widget.nonceProvider,
+      qrScanner: widget.qrScanner,
     )..addListener(_onControllerChanged);
     _controller.loadInitialState();
   }
@@ -251,6 +255,8 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           pendingRequest: controller.pendingRequest,
           airGapResponsePayload: controller.airGapResponsePayload,
           walletAddress: controller.summary?.address,
+          isQrAvailable: controller.isQrScannerAvailable,
+          onScanQr: controller.scanQrCode,
           onPair: controller.pairWalletConnect,
           onApprove: controller.approvePendingProposal,
           onReject: controller.rejectPendingProposal,

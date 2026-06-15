@@ -4,6 +4,7 @@ import 'package:mobile_wallet_demo/src/app.dart';
 import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
+import 'package:mobile_wallet_demo/src/qr/qr_scanner.dart';
 import 'package:mobile_wallet_demo/src/walletconnect/wallet_connect_service.dart';
 
 /// 9.4b: the Connections screen end-to-end through the real widget tree, driven
@@ -201,5 +202,31 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Expected a "airgap-tx:..." payload.'), findsOneWidget);
+  });
+
+  testWidgets('connections screen: scanning fills the wc: URI field', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _FakeBlockchainProvider(),
+        walletConnectService: FakeWalletConnectService(),
+        qrScanner: FakeQrScanner(nextResult: 'wc:scanned@2'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _createUnlock(tester);
+    await _openConnections(tester);
+
+    final scan = find.text('Сканировать wc: URI');
+    await tester.ensureVisible(scan);
+    await tester.tap(scan);
+    await tester.pumpAndSettle();
+
+    expect(find.text('wc:scanned@2'), findsOneWidget);
   });
 }
