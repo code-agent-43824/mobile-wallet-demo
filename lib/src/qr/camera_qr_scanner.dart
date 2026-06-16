@@ -100,44 +100,98 @@ class _CameraScannerScreenState extends State<_CameraScannerScreen> {
         : 'Наведите камеру на QR-код (${widget.title})';
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(title: const Text('Сканирование QR')),
-      body: Stack(
-        children: [
-          MobileScanner(
-            controller: _controller,
-            onDetect: _onDetect,
-            errorBuilder: (context, error) => const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'Не удалось открыть камеру. Проверьте разрешение на доступ к '
-                  'камере или используйте загрузку QR из файла.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 48,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(hint, style: const TextStyle(color: Colors.white)),
-              ),
-            ),
-          ),
-        ],
+      appBar: AppBar(
+        title: const Text('Сканирование QR'),
+        actions: [_TorchButton(controller: _controller)],
       ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          // A centred square scan window: detection is limited to it and the
+          // overlay dims everything around it, so it's clear where to aim.
+          final size = constraints.biggest;
+          final dimension = size.shortestSide * 0.7;
+          final scanWindow = Rect.fromCenter(
+            center: size.center(Offset.zero),
+            width: dimension,
+            height: dimension,
+          );
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              MobileScanner(
+                controller: _controller,
+                onDetect: _onDetect,
+                scanWindow: scanWindow,
+                errorBuilder: (context, error) => const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text(
+                      'Не удалось открыть камеру. Проверьте разрешение на '
+                      'доступ к камере или используйте загрузку QR из файла.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+              ScanWindowOverlay(
+                controller: _controller,
+                scanWindow: scanWindow,
+                borderColor: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                borderWidth: 3,
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 48,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      hint,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// AppBar action that toggles the camera torch, reflecting the live torch state
+/// from the controller. Hidden when the device reports no torch.
+class _TorchButton extends StatelessWidget {
+  const _TorchButton({required this.controller});
+
+  final MobileScannerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<MobileScannerState>(
+      valueListenable: controller,
+      builder: (context, state, child) {
+        if (state.torchState == TorchState.unavailable) {
+          return const SizedBox.shrink();
+        }
+        final on = state.torchState == TorchState.on;
+        return IconButton(
+          icon: Icon(on ? Icons.flash_on : Icons.flash_off),
+          tooltip: on ? 'Выключить фонарик' : 'Включить фонарик',
+          onPressed: () => controller.toggleTorch(),
+        );
+      },
     );
   }
 }
