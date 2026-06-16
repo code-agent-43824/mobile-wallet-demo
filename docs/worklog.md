@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-06-16 — Phase 9 / chunk 9.9c: camera polish + Phase-9 doc reconciliation — branch main — in progress
+## 2026-06-16 — Phase 9 / chunk 9.9c: camera polish + Phase-9 doc reconciliation — branch main — done (CI green on all 4 platforms)
 - Plan: owner asked to polish the camera and confirm/record that Phase 9 is complete. (1) Add a scan-window
   overlay + torch toggle to the camera scanner. (2) Audit Phase 9 vs. the docs and reconcile plan/checklists/
   CLAUDE.md/worklog. (3) Record the owner's 9.2 dogfood result. (4) Surface any remaining small items.
@@ -39,11 +39,13 @@ Entry template:
   snapshot ⏳→✅, Current stopping point, Phase 9 Status, Dependencies, Deliverables checkboxes, chunk 9.9 +
   removed the stale duplicate "9.7 — tests" placeholder, changelog v1.28/v1.29). **Version bump v1.28.0+39 →
   v1.29.0+40.** No test change (the polish lives in the un-headless-testable camera widget).
-- Next / open: CI green check. Then the **only** remaining Phase 9 item is the owner's **transaction** dogfood
-  (test ETH). Optional (out of current scope, flag-only): `wallet_switchEthereumChain`/`addEthereumChain`
-  handling; a queue for >1 concurrent inbound request (today a single `pendingRequest` slot); validating a
-  proposal's required chains against `network_config` before approve.
-- Refs: this commit; `lib/src/qr/camera_qr_scanner.dart`, version files, `CLAUDE.md`, `docs/development-plan.md`.
+- Next / open: CI green (run 27595359921, v1.29.0+40). The **only** remaining Phase 9 item is the owner's
+  **transaction** + **AirGap** dogfood (owner is testing both now and will report separately). The three
+  optional follow-ups (`wallet_switchEthereumChain`/`addEthereumChain`; an inbound-request queue; proposal
+  chain validation before approve) are deferred by owner decision and now recorded in the plan's Phase 9
+  **"Optional follow-ups"** subsection so they aren't lost.
+- Refs: 10dfb86 (code+docs); follow-up docs commit (optional-followups backlog + this status flip);
+  `lib/src/qr/camera_qr_scanner.dart`, version files, `CLAUDE.md`, `docs/development-plan.md`.
 
 ## 2026-06-15 — Phase 9 / chunk 9.9b: live camera QR scan (CameraQrScanner) — branch main — done (CI green on all 4 platforms)
 - Plan: with the 9.9a probe green, write the camera integration against the verified `mobile_scanner` 7.2.0

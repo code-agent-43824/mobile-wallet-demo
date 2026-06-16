@@ -328,6 +328,12 @@ Status: ✅ **Feature-complete (chunks 9.0–9.9).** 9.0–9.1 done (v1.18); 9.3
 - `reown_walletkit` API churn — pin the version.
 - Camera permissions for QR scanning (WC pairing + AirGap) on each platform.
 
+### Optional follow-ups (deferred — not blockers; Phase 9 is feature-complete)
+Owner decision (2026-06-16): finish these later, on demand. Recorded so they aren't lost.
+- **`wallet_switchEthereumChain` / `wallet_addEthereumChain`** — handle a dApp's chain-switch request (today the inbound coordinator returns "method not supported"). Most commonly needed in practice; we currently expose Mainnet + Sepolia.
+- **Inbound request queue** — today the controller holds a single `pendingRequest`; a second concurrent incoming request overwrites the first. Add a queue (or reject-while-busy) for >1 request.
+- **Proposal chain validation before approve** — validate a session proposal's required namespaces/chains against `blockchain/network_config.dart` and warn/reject when a required chain is unsupported (today approval can proceed without it).
+
 ### Non-goals (this phase)
 - non-EVM chains; a full dApp browser; push notifications for background requests; bespoke session persistence beyond what the SDK provides; custody/NFC changes (those are Phase 10).
 
