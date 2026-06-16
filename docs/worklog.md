@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-06-16 — Fix release-only launch crash: JNA stripped by R8 (reown yttrium) — branch main — fix pushed, verifying
+## 2026-06-16 — Fix release-only launch crash: JNA stripped by R8 (reown yttrium) — branch main — done (verified on x86_64/release)
 - Diagnosis (via the on-demand launch-check agent): the app crashes ~1s after launch **only in release** builds.
   Matrix: x86_64/API34 **debug** → launches fine (20s alive); x86_64/API34 **release** → **crashes**. arm64
   emulator can't run on GitHub CI (macOS Apple-Silicon runners report `HVF HV_UNSUPPORTED`, so no acceleration
@@ -37,11 +37,14 @@ Entry template:
   rules.pro` keeps JNA (`com.sun.jna.**` + members), uniffi (`uniffi.**`), and reown (`com.reown.**`/
   `com.walletconnect.**`) verbatim so it stays correct if shrinking is ever re-enabled. Build/config only —
   no app code or version bump.
-- Next / open: **verify on x86_64/release** (the repro config) via the launch-check agent → expect "stayed
-  alive, no crash". Then owner re-installs the release APK on the real phone to confirm. (If it still crashed,
-  the fallback hypothesis was a JNA jar/.so version mismatch — but R8 fits the debug-vs-release evidence.)
-- Refs: this commit; `android/app/build.gradle.kts`, `android/app/proguard-rules.pro`. Repro: CI run
-  27625982920 (x86_64/release, crashed).
+- Verified: x86_64/release now **stays alive 20s, 0 UnsatisfiedLinkError/FATAL** (launch-check CI run
+  27652955892), and `ci.yml` is green on the fix commit (run 27652949575 — release build fine with shrinking
+  off on all platforms). Before-fix repro: run 27625982920 (x86_64/release, crashed).
+- Next / open: owner re-installs the **release** APK on the real phone to confirm (rebuild via
+  `scripts/build.sh apk --release`, or grab the `android-apk` artifact from ci.yml run 27652949575), then
+  continues the transaction + AirGap dogfood.
+- Refs: 7db825d (fix); this commit (verify status). `android/app/build.gradle.kts`,
+  `android/app/proguard-rules.pro`.
 
 ## 2026-06-16 — On-demand Android launch-check workflow (crash diagnostics) — branch main — done
 - Trigger: owner reports the app **crashes ~1s after launch on a real Android phone**. The build chain
