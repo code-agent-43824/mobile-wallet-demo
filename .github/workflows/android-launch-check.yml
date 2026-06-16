@@ -87,7 +87,9 @@ jobs:
           arch: ${{ inputs.arch }}
           target: google_apis
           profile: pixel_6
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back emulated -camera-front emulated
+          # arm64 images on the macOS runner boot slowly — give them headroom.
+          emulator-boot-timeout: 900
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
           script: MODE=${{ inputs.build-mode }} bash scripts/android_launch_check.sh
 
       - name: Upload launch logs
