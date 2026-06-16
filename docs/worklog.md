@@ -18,6 +18,32 @@ Entry template:
 
 ---
 
+## 2026-06-16 — On-demand Android launch-check workflow (crash diagnostics) — branch main — done
+- Trigger: owner reports the app **crashes ~1s after launch on a real Android phone**. The build chain
+  (`ci.yml`) only *builds* the APK and never runs it, so a runtime/startup crash (native init, missing ABI
+  `.so`, a plugin throwing at registration) is invisible to it. Owner asked for a **separate, on-demand**
+  GitHub agent that installs + launches the app and collects logs — explicitly NOT wired into the normal
+  build chain (so it doesn't slow every build).
+- Done: (1) `.github/workflows/android-launch-check.yml` — `workflow_dispatch`-only (manual / API trigger;
+  inputs: `build-mode` debug|profile|release, `api-level`, `ref`). Builds the APK with
+  `--dart-define-from-file=dart_defines.json` (so `WC_PROJECT_ID` is set → the real `ReownWalletConnectService`
+  is instantiated on Android, matching the owner's run), boots an emulator via
+  `reactivecircus/android-emulator-runner` (x86_64, google_apis, KVM), runs the launch check, and uploads
+  `build/launch-logs/**` as an artifact. (2) `scripts/android_launch_check.sh` — installs (`-g`), clears
+  logcat, launches via `monkey`, watches the process + crash buffer for `WATCH_SECONDS` (20), then dumps the
+  full log + **crash buffer** (`adb logcat -b crash`) and prints the FATAL/AndroidRuntime block; exits non-zero
+  if the app never starts or dies. **Also runnable locally against a REAL phone** (the best repro for
+  device/ABI-specific crashes): `flutter build apk --debug …` then `bash scripts/android_launch_check.sh`.
+- Note: third-party `reactivecircus/android-emulator-runner` added (CI-only, diagnostic; not shipped in the
+  app) — flagged like the JitPack decision. No app code or version change (tooling only).
+- Prime crash suspects to look for in the logs (don't pre-fix — read first): reown native init
+  (`ReownWalletConnectService`/`ReownWalletKit.createInstance`, `yttrium` `.so` for the device ABI), or a
+  plugin registration throw. The emulator is x86_64 vs the phone's arm64, so a missing-arm64-`.so` crash may
+  NOT reproduce on the emulator — run the script locally on the phone for that case.
+- Next / open: on owner's go, trigger the workflow (or owner runs the local script on the phone) → read the
+  crash buffer → fix the actual cause. Owner is also checking the iOS simulator.
+- Refs: this commit; `.github/workflows/android-launch-check.yml`, `scripts/android_launch_check.sh`.
+
 ## 2026-06-16 — Phase 9 / chunk 9.9c: camera polish + Phase-9 doc reconciliation — branch main — done (CI green on all 4 platforms)
 - Plan: owner asked to polish the camera and confirm/record that Phase 9 is complete. (1) Add a scan-window
   overlay + torch toggle to the camera scanner. (2) Audit Phase 9 vs. the docs and reconcile plan/checklists/

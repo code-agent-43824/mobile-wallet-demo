@@ -1,0 +1,80 @@
+name: Android launch check
+
+# On-demand ONLY — deliberately NOT triggered by push/PR, so the normal build
+# chain (ci.yml) stays fast. Run it from the Actions tab ("Run workflow"), or
+# via the API, when the app misbehaves on launch. It builds the app, boots an
+# emulator, installs + launches it, and collects logcat + the crash buffer
+# (uploaded as an artifact) so a startup crash is actually visible — ci.yml only
+# *builds* the APK and never runs it.
+on:
+  workflow_dispatch:
+    inputs:
+      build-mode:
+        description: Build mode to install (debug is most informative; release reproduces R8/proguard-only crashes)
+        type: choice
+        options: [debug, profile, release]
+        default: debug
+      api-level:
+        description: Android emulator API level
+        default: '34'
+      ref:
+        description: Git ref (branch or SHA) to check out
+        default: main
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: 3.41.7
+  JAVA_VERSION: '17'
+
+jobs:
+  android-launch:
+    name: Android launch + logcat
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build ${{ inputs.build-mode }} APK
+        run: flutter build apk --${{ inputs.build-mode }} --dart-define-from-file=dart_defines.json
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Launch on emulator + collect logs
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ inputs.api-level }}
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back emulated -camera-front emulated
+          script: MODE=${{ inputs.build-mode }} bash scripts/android_launch_check.sh
+
+      - name: Upload launch logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-launch-logs
+          path: build/launch-logs/**
+          if-no-files-found: warn
