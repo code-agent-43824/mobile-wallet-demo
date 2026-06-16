@@ -18,6 +18,31 @@ Entry template:
 
 ---
 
+## 2026-06-16 — Fix release-only launch crash: JNA stripped by R8 (reown yttrium) — branch main — fix pushed, verifying
+- Diagnosis (via the on-demand launch-check agent): the app crashes ~1s after launch **only in release** builds.
+  Matrix: x86_64/API34 **debug** → launches fine (20s alive); x86_64/API34 **release** → **crashes**. arm64
+  emulator can't run on GitHub CI (macOS Apple-Silicon runners report `HVF HV_UNSUPPORTED`, so no acceleration
+  → emulator never boots) — so reproduction came from x86_64 **release**, not arm64. Static `.so` check ruled
+  out 16 KB-page alignment for arm64 (all arm64-v8a libs ≥ 16 KB; only the unused 32-bit armeabi-v7a variants
+  are 4 KB). Crash buffer:
+  `java.lang.UnsatisfiedLinkError: Can't obtain peer field ID for class com.sun.jna.Pointer`
+  `at com.sun.jna.Native.initIDs / uniffi.yttrium_wcpay.UniffiRustCallStatus.<init>`.
+- Root cause: reown_walletkit's `yttrium`/`walletconnect_pay` bindings use **JNA**; its native
+  `libjnidispatch.so` resolves Java fields (e.g. `com.sun.jna.Pointer.peer`) by name via JNI at init. **R8**
+  (release only — debug has no R8) renamed/stripped them → the native lookup fails on launch. This also
+  reconciles the timeline: the owner's earlier *working* WC dogfood was a **debug** (`flutter run`) build; the
+  crashing one is a **release** APK.
+- Fix: `android/app/build.gradle.kts` release buildType → `isMinifyEnabled = false` + `isShrinkResources =
+  false` (disable R8 shrinking; fine for a demo) and wire `proguard-rules.pro`. New `android/app/proguard-
+  rules.pro` keeps JNA (`com.sun.jna.**` + members), uniffi (`uniffi.**`), and reown (`com.reown.**`/
+  `com.walletconnect.**`) verbatim so it stays correct if shrinking is ever re-enabled. Build/config only —
+  no app code or version bump.
+- Next / open: **verify on x86_64/release** (the repro config) via the launch-check agent → expect "stayed
+  alive, no crash". Then owner re-installs the release APK on the real phone to confirm. (If it still crashed,
+  the fallback hypothesis was a JNA jar/.so version mismatch — but R8 fits the debug-vs-release evidence.)
+- Refs: this commit; `android/app/build.gradle.kts`, `android/app/proguard-rules.pro`. Repro: CI run
+  27625982920 (x86_64/release, crashed).
+
 ## 2026-06-16 — On-demand Android launch-check workflow (crash diagnostics) — branch main — done
 - Trigger: owner reports the app **crashes ~1s after launch on a real Android phone**. The build chain
   (`ci.yml`) only *builds* the APK and never runs it, so a runtime/startup crash (native init, missing ABI

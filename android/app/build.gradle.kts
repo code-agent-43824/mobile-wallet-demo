@@ -35,6 +35,19 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+
+            // reown_walletkit's yttrium bindings talk to native Rust over JNA,
+            // whose libjnidispatch.so resolves Java fields (e.g.
+            // com.sun.jna.Pointer.peer) by name via JNI at init. R8 shrinking
+            // renames/strips them -> UnsatisfiedLinkError ~1s after launch
+            // (release only; debug has no R8). Disable shrinking for this demo;
+            // proguard-rules.pro keeps the JNA/uniffi rules if it's re-enabled.
+            isMinifyEnabled = false
+            isShrinkResources = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }
