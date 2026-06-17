@@ -4,6 +4,7 @@ import 'package:mobile_wallet_demo/src/app.dart';
 import 'package:mobile_wallet_demo/src/auth/biometric_auth.dart';
 import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
+import 'package:mobile_wallet_demo/src/key_storage/phone_secure_vault.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
 import 'package:mobile_wallet_demo/src/transactions/transaction_service.dart';
 
@@ -132,6 +133,12 @@ class _DelayedTrackingTransport implements JsonRpcTransport {
 }
 
 void main() {
+  // Create/unlock run through the real vault; shrink PBKDF2 so the off-isolate
+  // derivation is instant (otherwise it races pumpAndSettle vs the progress
+  // overlay's perpetual spinner). Reset after each test.
+  setUp(() => PhoneSecureVault.debugIterationsOverride = 2);
+  tearDown(() => PhoneSecureVault.debugIterationsOverride = null);
+
   testWidgets('renders onboarding welcome shell for uninitialized wallet', (
     WidgetTester tester,
   ) async {
@@ -147,7 +154,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Mobile Wallet Demo'), findsOneWidget);
-    expect(find.text('v1.29.0+40'), findsOneWidget);
+    expect(find.text('v1.30.0+41'), findsOneWidget);
     expect(find.text('Phone Secure Vault'), findsOneWidget);
     expect(find.text('External NFC demo device'), findsOneWidget);
     expect(find.text('Создать новый кошелёк'), findsOneWidget);

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/app.dart';
 import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
+import 'package:mobile_wallet_demo/src/key_storage/phone_secure_vault.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
 import 'package:mobile_wallet_demo/src/qr/qr_scanner.dart';
 import 'package:mobile_wallet_demo/src/walletconnect/wallet_connect_service.dart';
@@ -55,6 +56,11 @@ Future<void> _openConnections(WidgetTester tester) async {
 }
 
 void main() {
+  // Shrink PBKDF2 so create/unlock's off-isolate derivation is instant and
+  // doesn't race pumpAndSettle against the progress overlay's spinner.
+  setUp(() => PhoneSecureVault.debugIterationsOverride = 2);
+  tearDown(() => PhoneSecureVault.debugIterationsOverride = null);
+
   testWidgets('connections screen: pair, approve, disconnect on the fake', (
     WidgetTester tester,
   ) async {

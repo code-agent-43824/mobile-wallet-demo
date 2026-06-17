@@ -18,6 +18,34 @@ Entry template:
 
 ---
 
+## 2026-06-16 — On-device UX fixes: biometric activity, create/unlock freeze, progress overlay — branch main — done
+- Trigger: owner ran the fixed **release** APK on Android — launches now. Two reported issues + one on-screen
+  error: (1) create-wallet (after PIN) **freezes the UI for several seconds**; (2) a (smaller) freeze on PIN
+  unlock; (3) screenshot showed `Biometric authentication failed: local_auth plugin requires activity to be a
+  FragmentActivity`.
+- Root causes: (1)/(2) `PhoneSecureVault._deriveEncryptionKey` runs **PBKDF2 at 600k iterations on the UI
+  isolate**, blocking the main thread (same op on create and unlock — hence both freezes). (3) `MainActivity`
+  extended `FlutterActivity`; `local_auth`'s BiometricPrompt requires a `FragmentActivity`.
+- Fixes (v1.29.0+40 → **v1.30.0+41**):
+  - **Biometric:** `MainActivity` → `FlutterFragmentActivity` (`android/app/.../MainActivity.kt`).
+  - **Responsiveness:** PBKDF2 moved to a background isolate via `Isolate.run` in `_deriveEncryptionKey`
+    (pure compute, sendable args/result, no platform channels) so the UI thread stays free.
+  - **Progress UI:** `WalletFlowController` gains `busyMessage` + a `_runBusy(message, action)` wrapper around
+    create/import/unlock; `WalletFlowScreen` shows a full-screen `_BusyOverlay` (scrim + spinner + message:
+    «Создаём/Импортируем/Разблокируем кошелёк…») — it animates because the work is off-isolate.
+  - **Tests:** moving PBKDF2 off the UI isolate frees `pumpAndSettle` to race the overlay's perpetual
+    spinner, so widget tests would burn their fake-time budget. Added a test-only
+    `PhoneSecureVault.debugIterationsOverride` (null in prod) set to `2` in `setUp`/`tearDown` of
+    `widget_test.dart` + `wallet_connect_screen_test.dart`, so the off-isolate derivation is instant. Also
+    speeds the suite (was running real 600k per create/unlock).
+- Next / open: verify x86_64/**release** still launches clean (launch-check agent) + `ci.yml` green (tests
+  must pass with the isolate path + overlay + override). Then owner re-tests create/unlock (smooth overlay,
+  no freeze) and biometrics (enable after PIN) on the device.
+- Refs: this commit; `android/app/src/main/kotlin/.../MainActivity.kt`,
+  `lib/src/key_storage/phone_secure_vault.dart`, `lib/src/wallet_flow_controller.dart`,
+  `lib/src/wallet_flow_screen.dart`, `lib/src/wallet_flow_screen_widgets.dart`, version files, the two test
+  files.
+
 ## 2026-06-16 — Fix release-only launch crash: JNA stripped by R8 (reown yttrium) — branch main — done (verified on x86_64/release)
 - Diagnosis (via the on-demand launch-check agent): the app crashes ~1s after launch **only in release** builds.
   Matrix: x86_64/API34 **debug** → launches fine (20s alive); x86_64/API34 **release** → **crashes**. arm64

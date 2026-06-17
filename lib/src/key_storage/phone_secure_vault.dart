@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -31,7 +32,7 @@ class PhoneSecureVault implements KeyStorageBackend {
        _session = session ?? PinUnlockSession(ttl: unlockTtl),
        _maxUnlockAttempts = maxUnlockAttempts,
        _unlockLockout = unlockLockout,
-       _pinIterations = pbkdf2Iterations,
+       _pinIterations = debugIterationsOverride ?? pbkdf2Iterations,
        _now = now ?? _defaultNow,
        _random = random ?? Random.secure() {
     _biometricSecretStore =
@@ -56,6 +57,12 @@ class PhoneSecureVault implements KeyStorageBackend {
   // the failed-attempt lockout below. The at-rest strength is still ultimately
   // bounded by PIN entropy. Injectable so tests can use a cheaper value.
   static const int _defaultPinIterations = 600000;
+
+  /// Test-only override for the PBKDF2 iteration count. Null in production (the
+  /// constructor default / injected value applies). Widget tests set it to a
+  /// tiny value so the off-isolate key derivation finishes immediately and
+  /// doesn't race `pumpAndSettle` against the progress overlay's spinner.
+  static int? debugIterationsOverride;
 
   final SecureKeyValueStore _store;
   final BiometricAuthGateway _biometricAuth;
@@ -422,17 +429,25 @@ class PhoneSecureVault implements KeyStorageBackend {
     required String pin,
     required List<int> salt,
     required int iterations,
-  }) {
-    final pbkdf2 = Pbkdf2(
-      macAlgorithm: Hmac.sha256(),
-      iterations: iterations,
-      bits: 256,
-    );
-
-    return pbkdf2.deriveKey(
-      secretKey: SecretKey(utf8.encode(pin)),
-      nonce: salt,
-    );
+  }) async {
+    // PBKDF2 at the configured (600k) iterations is CPU-heavy and would block
+    // the UI isolate, freezing the screen for seconds on create/unlock. Run it
+    // on a background isolate so the UI stays responsive (a progress overlay can
+    // animate). It's pure computation with sendable args/result and no platform
+    // channels, so it's isolate-safe.
+    final keyBytes = await Isolate.run<List<int>>(() async {
+      final pbkdf2 = Pbkdf2(
+        macAlgorithm: Hmac.sha256(),
+        iterations: iterations,
+        bits: 256,
+      );
+      final key = await pbkdf2.deriveKey(
+        secretKey: SecretKey(utf8.encode(pin)),
+        nonce: salt,
+      );
+      return key.extractBytes();
+    });
+    return SecretKey(keyBytes);
   }
 
   WalletMaterial _deriveWalletMaterial({

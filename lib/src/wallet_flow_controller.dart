@@ -103,6 +103,7 @@ class WalletFlowController extends ChangeNotifier {
   WalletMaterial? _material;
   String? _seedPhraseToShow;
   String? _errorMessage;
+  String? _busyMessage;
   String? _pendingBiometricPin;
   String? _selectedBackendId;
   WalletConnectSessionProposal? _pendingProposal;
@@ -122,6 +123,10 @@ class WalletFlowController extends ChangeNotifier {
   WalletMaterial? get material => _material;
   String? get seedPhraseToShow => _seedPhraseToShow;
   String? get errorMessage => _errorMessage;
+
+  /// Non-null while a long operation (create/import/unlock) runs; the UI shows a
+  /// progress overlay with this message so key derivation isn't a frozen screen.
+  String? get busyMessage => _busyMessage;
   String? get selectedBackendId => _selectedBackendId;
   ExternalDeviceDemoRuntimeState? get externalRuntimeState =>
       _externalRuntimeState;
@@ -263,7 +268,10 @@ class WalletFlowController extends ChangeNotifier {
   }
 
   Future<void> createWallet({required String pin}) async {
-    await _runGuarded(() async {
+    final busy = isExternalBackendSelected
+        ? 'Подключаем устройство…'
+        : 'Создаём кошелёк…';
+    await _runBusy(busy, () async {
       final backend = activeBackend;
       final material = await backend.createWallet(pin: pin);
       _summary = StoredWalletSummary(
@@ -295,7 +303,10 @@ class WalletFlowController extends ChangeNotifier {
     required String mnemonic,
     required String pin,
   }) async {
-    await _runGuarded(() async {
+    final busy = isExternalBackendSelected
+        ? 'Подключаем устройство…'
+        : 'Импортируем кошелёк…';
+    await _runBusy(busy, () async {
       final backend = activeBackend;
       final material = await backend.importWallet(mnemonic: mnemonic, pin: pin);
       _summary = StoredWalletSummary(
@@ -323,7 +334,7 @@ class WalletFlowController extends ChangeNotifier {
   }
 
   Future<void> unlockWallet(String pin) async {
-    await _runGuarded(() async {
+    await _runBusy('Разблокируем кошелёк…', () async {
       _material = await activeBackend.unlock(pin: pin);
       _lastUnlockAuthMethod = activeBackend is ExternalDeviceKeyStorageBackend
           ? WalletAuthMethod.externalDevice
@@ -616,6 +627,21 @@ class WalletFlowController extends ChangeNotifier {
     _pendingBiometricPin = null;
     _stage = WalletFlowStage.locked;
     _notify();
+  }
+
+  /// Runs a long action behind a progress overlay: sets [busyMessage] (UI shows
+  /// the overlay), runs it through [_runGuarded] (error handling + notify), then
+  /// clears the overlay. Pairs with the off-isolate key derivation in the vault
+  /// so the overlay actually animates instead of freezing.
+  Future<void> _runBusy(String message, Future<void> Function() action) async {
+    _busyMessage = message;
+    _notify();
+    try {
+      await _runGuarded(action);
+    } finally {
+      _busyMessage = null;
+      _notify();
+    }
   }
 
   Future<void> _runGuarded(Future<void> Function() action) async {

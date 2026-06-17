@@ -110,38 +110,44 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
     final errorMessage = _controller.errorMessage;
 
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
-              child: Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(28),
-                  side: BorderSide(color: theme.colorScheme.outlineVariant),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(28),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _Header(stage: _controller.stage),
-                      if (errorMessage != null) ...[
-                        const SizedBox(height: 20),
-                        _ErrorBanner(message: errorMessage),
-                      ],
-                      const SizedBox(height: 24),
-                      _buildStageBody(),
-                    ],
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(28),
+                      side: BorderSide(color: theme.colorScheme.outlineVariant),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(28),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _Header(stage: _controller.stage),
+                          if (errorMessage != null) ...[
+                            const SizedBox(height: 20),
+                            _ErrorBanner(message: errorMessage),
+                          ],
+                          const SizedBox(height: 24),
+                          _buildStageBody(),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
+          if (_controller.busyMessage case final String message)
+            _BusyOverlay(message: message),
+        ],
       ),
     );
   }
