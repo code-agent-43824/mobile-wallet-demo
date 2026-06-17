@@ -385,6 +385,28 @@ Status: ✅ done + **device-validated on iOS sim** (v1.32–v1.33): the per-op P
 - **Optional "lock app on open" toggle** — a privacy setting that re-introduces an app-open gate (PIN/biometric to even view), reusing the retained `locked` stage. Off by default. Not built now.
 - **External-device session-management UX** — post-Phase-11 the demo device is locked at rest (no PKCS#11 session), so the dashboard's "ping session" / "read address via PKCS#11" buttons surface a "No active device session" banner until a signing op briefly opens one. Demo-path nicety: either hide those controls until a session exists, or have them open a session on demand. (Phase 10 will revisit the real device lifecycle anyway.)
 
+## Phase 12 — AirGap over EIP-4527 / Keystone BC-UR (MetaMask-compatible signer)
+Goal: make the AirGap path interoperate with **real online wallets** (MetaMask, OneKey, …) instead of the bespoke `airgap-tx:`/`airgap-sig:` format. The app is **always the offline signer** ("QR-based hardware wallet"): the online wallet is watch-only / has internet, builds the unsigned tx and shows a QR; the app scans it, signs offline (phone vault or external NFC device), and shows a signature QR back; the online wallet broadcasts. No app↔wallet link except QR. Owner decision (2026-06-16): MetaMask-compatible; **no app↔app interop**; signer role only.
+
+Protocol: **ERC/EIP-4527** over **BC-UR** (CBOR + bytewords + multipart fountain QR) — the Keystone standard MetaMask adopted. New deps `cbor` + `bc_ur` (both pure Dart). The old custom-format AirGap (chunk 9.5) is **superseded** and gets removed/rewired by this phase.
+
+CDDL keys (from EIP-4527): `eth-sign-request` map = {1: request-id (UUID, CBOR tag 37), 2: sign-data (bytes), 3: data-type (1 legacy-RLP / 2 EIP-712 / 3 raw-bytes=personal_sign/EIP-191 / 4 EIP-2718 typed-tx incl. EIP-1559), 4: chain-id (int, default 1), 5: derivation-path (crypto-keypath, tag 304), 6: address (20 bytes, opt), 7: origin (text, opt)}. `eth-signature` = {1: request-id, 2: signature (65-byte r‖s‖v), 3: origin?}. `crypto-keypath` (tag 304) = {1: components [index,bool,…], 2: source-fingerprint uint32, 3: depth}. `crypto-hdkey` = {3: key-data (33-byte compressed pubkey), 4: chain-code (32), 6: origin (crypto-keypath), 9: name, 10: source}.
+
+Two interactions (app = signer):
+1. **Pairing**: app shows a `crypto-hdkey` / `crypto-account` UR QR (account pubkey/xpub + origin path + master fingerprint) → online wallet adds the account watch-only.
+2. **Signing**: online wallet shows an `eth-sign-request` UR → app decodes, signs by data-type, returns an `eth-signature` UR.
+
+### Chunks
+- **12.1** — deps probe + pure-Dart `Eip4527Codec`: encode/decode `eth-sign-request` / `eth-signature` (+ `crypto-keypath`) over `cbor`+`bc_ur`, **validated against Keystone test vectors** (recorded in the worklog). CI-only, no device.
+- **12.2** — sign path: decode `eth-sign-request` → branch on data-type → sign via the active backend's `WalletTransactionSigner` (reuse `signPreparedTransfer` for tx, `signPersonalMessage` for raw-bytes, `signDigest` for EIP-712) → `eth-signature` UR. Verify the derivation-path/address targets this wallet.
+- **12.3** — account export (pairing): build a `crypto-hdkey`/`crypto-account` UR from the vault's account-level extended pubkey + chain code + master fingerprint (extend `PhoneSecureVault` to expose these).
+- **12.4** — multipart **animated** QR (bc_ur fountain) for large payloads + camera scanning of a UR sequence; rewire the Connections "AirGap" UI (show pairing QR / scan sign-request / show signature QR).
+- **12.5** — remove the superseded custom `AirGapPayloadCodec` / `AirGapInboundCoordinator` (keep only what 12.x reuses); docs + tests + version bumps.
+
+### Validation
+- Codec + sign path: Keystone/EIP-4527 test vectors in CI (no device).
+- End-to-end: owner dogfoods with **MetaMask** (add the app as a QR-based hardware wallet → sign a tx/message → broadcast).
+
 ## Suggested release sequence
 - `v0.3` — architecture skeleton + secure vault foundation
 - `v0.4` — onboarding/auth shell + create/import UI + one-time seed display flow

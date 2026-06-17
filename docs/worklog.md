@@ -18,6 +18,26 @@ Entry template:
 
 ---
 
+## 2026-06-16 — Phase 12 kickoff: AirGap → EIP-4527/BC-UR (MetaMask-compatible) — branch main — in progress (deps probe)
+- Decision (owner): make AirGap interoperate with **MetaMask** (not our bespoke `airgap-tx:` format); the app
+  is **always the offline signer** (QR hardware wallet), no app↔app interop. Protocol = **EIP-4527 over
+  BC-UR** (Keystone standard MetaMask adopted). Plan = Phase 12 in `development-plan.md`.
+- Research done: deps exist and are **pure Dart** — `cbor` 6.5.1 (RFC8949) + `bc_ur` 1.0.0 (UR/bytewords/
+  multipart fountain). `bc_ur` deps only `crypto ^3` (no native, no pin conflict). CDDL integer keys captured
+  in the plan. Build it against test vectors (like EIP-712), CI-validated, device only at the end.
+- **Anchor test vectors** (Keystone `ur-registry-eth` EthSignRequest tests) — for the 12.1 codec tests:
+  - inputs: requestId `9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d`; signData (legacy-tx RLP, hex)
+    `f849808609184e72a00082271094000000000000000000000000000000000000000080a47f74657374320000000000000000000000000000000000000000000000000000006000578080 80`
+    (note: the trailing `808080` is part of it — no spaces); dataType `1` (transaction); chainId `1`;
+    path `M/44'/1'/1'/0/1`; xfp/source-fingerprint `12345678`.
+  - with origin `metamask` → `ur:eth-sign-request/oladtpdagdndcawmgtfrkigrpmndutdnbtkgfssbjnaohdgryagalalnascsgljpnbaelfdibemwaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaelaoxlbjyihjkjyeyaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaehnaehglalalaaxadaaadahtaaddyoeadlecsdwykadykadykaewkadwkaocybgeehfksatisjnihjyhsjnhsjkjetlnndant`
+  - without origin → `ur:eth-sign-request/onadtpdagdndcawmgtfrkigrpmndutdnbtkgfssbjnaohdgryagalalnascsgljpnbaelfdibemwaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaelaoxlbjyihjkjyeyaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaehnaehglalalaaxadaaadahtaaddyoeadlecsdwykadykadykaewkadwkaocybgeehfkswdtklffd`
+  - (Will also pull an `eth-signature` vector + a `crypto-hdkey` vector during 12.1/12.3.)
+- Done so far: added `cbor`+`bc_ur` to pubspec (dep-only probe); wrote the Phase 12 plan + recorded vectors.
+- Next / open: CI probe (deps resolve + build on all 4 platforms — expected clean, pure Dart). Then 12.1
+  `Eip4527Codec` + tests vs the vectors. No version bump (build/config only this step).
+- Refs: this commit; `pubspec.yaml`, `docs/development-plan.md`.
+
 ## 2026-06-16 — Owner dogfood: WalletConnect v2 + per-op PIN verified on iOS sim — branch main — done (docs)
 - Result (owner, iOS simulator, current build): **WalletConnect v2 works well** — connect/disconnect,
   `personal_sign`, and sign/transaction-approve all succeed and the dApp reacts; the earlier "Approve does

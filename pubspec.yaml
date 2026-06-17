@@ -56,6 +56,11 @@ dependencies:
   # excluded on Windows (where file-load QR is the only path). Added dep-only first
   # (chunk 9.9a probe) to verify native iOS/Android builds before wiring the camera.
   mobile_scanner: ^7.2.0
+  # EIP-4527 / Keystone BC-UR AirGap (Phase 12): MetaMask-compatible offline
+  # signer. `cbor` = RFC8949 codec; `bc_ur` = UR / bytewords / multipart fountain
+  # QR. Both pure Dart (no native), so no per-platform build risk.
+  cbor: ^6.5.1
+  bc_ur: ^1.0.0
 
 # web3dart 3.x needs pointycastle ^4, but bip32/bip39 (latest 1.0.6, 5 yrs old)
 # over-constrain it to ^3. They only use pointycastle's stable digest/HMAC/EC
