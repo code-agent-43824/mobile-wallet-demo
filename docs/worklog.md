@@ -38,10 +38,14 @@ Entry template:
     `PhoneSecureVault.debugIterationsOverride` (null in prod) set to `2` in `setUp`/`tearDown` of
     `widget_test.dart` + `wallet_connect_screen_test.dart`, so the off-isolate derivation is instant. Also
     speeds the suite (was running real 600k per create/unlock).
-- Next / open: verify x86_64/**release** still launches clean (launch-check agent) + `ci.yml` green (tests
-  must pass with the isolate path + overlay + override). Then owner re-tests create/unlock (smooth overlay,
-  no freeze) and biometrics (enable after PIN) on the device.
-- Refs: this commit; `android/app/src/main/kotlin/.../MainActivity.kt`,
+- Verified: launch-check x86_64/**release** ✅ (production startup fine with `FlutterFragmentActivity` + the
+  isolate); `ci.yml` **green on all 5 jobs** (run 27670149548). The first `ci.yml` failed 13 create/unlock
+  **widget** tests — moving PBKDF2 off the UI isolate let `pumpAndSettle` exhaust its fake-time budget against
+  the overlay's perpetual spinner before the isolate spawn returned; fixed by running derivation **inline**
+  when `debugIterationsOverride` is set (commit 2e8ecba; production still uses the isolate).
+- Next / open: owner re-tests on device — create/unlock should show a smooth progress overlay (no freeze) and
+  biometrics should enable after PIN.
+- Refs: 71e0ea8 (fixes) + 2e8ecba (inline-in-tests); `android/app/src/main/kotlin/.../MainActivity.kt`,
   `lib/src/key_storage/phone_secure_vault.dart`, `lib/src/wallet_flow_controller.dart`,
   `lib/src/wallet_flow_screen.dart`, `lib/src/wallet_flow_screen_widgets.dart`, version files, the two test
   files.
