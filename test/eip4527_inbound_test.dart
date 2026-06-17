@@ -218,14 +218,23 @@ void main() {
       expect(signature.signature.length, 65);
       // EIP-1559: v is the y-parity, NOT recId+27.
       expect(signature.signature[64], anyOf(0, 1));
+      // Validate via a deterministic (RFC-6979) re-sign of keccak256(signData)
+      // rather than ecRecover (web3dart's ecRecover asserts on this specific
+      // vector). This proves the coordinator signed keccak256(signData) — r‖s
+      // match the raw signDigest of that hash — and remapped v to the y-parity
+      // (raw recId = web3dart's v − 27).
+      final rawHex = await _signer.signDigest(
+        transactionService: _txService,
+        digest: Uint8List.fromList(keccak256(signData)),
+      );
+      final rawNo0x = rawHex.startsWith('0x') ? rawHex.substring(2) : rawHex;
       expect(
-        _recover(
-          digest: Uint8List.fromList(keccak256(signData)),
-          sig: signature.signature,
-          // Re-add 27 to the y-parity for ecrecover.
-          vForRecovery: signature.signature[64] + 27,
-        ),
-        _walletAddress.toLowerCase(),
+        bytesToHex(signature.signature.sublist(0, 64)),
+        rawNo0x.substring(0, 128),
+      );
+      expect(
+        signature.signature[64],
+        int.parse(rawNo0x.substring(128, 130), radix: 16) - 27,
       );
     });
   });
