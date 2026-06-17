@@ -157,7 +157,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Wallet Demo'), findsOneWidget);
-    expect(find.text('v1.32.0+43'), findsOneWidget);
+    expect(find.text('v1.33.0+44'), findsOneWidget);
     expect(find.text('Phone Secure Vault'), findsOneWidget);
     expect(find.text('External NFC demo device'), findsOneWidget);
     expect(find.text('Создать новый кошелёк'), findsOneWidget);

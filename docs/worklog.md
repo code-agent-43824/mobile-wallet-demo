@@ -18,6 +18,29 @@ Entry template:
 
 ---
 
+## 2026-06-16 — Surface silent failures in the controller (WC approve "does nothing") — branch main — done
+- Trigger: owner dogfood (iOS sim, **pre-Phase-11 build**, live WalletConnect test dApp): connect/disconnect +
+  reject all work and the dApp reacts, but **Approve on `personal_sign` / sign-transaction does nothing** —
+  no app change, no dApp reaction.
+- Investigation (no definitive code bug found by inspection): the approve button wiring (old + new), the
+  reown request→`WalletConnectRequest` id/topic mapping, and the reown success-response format are all
+  correct — reown's own tests respond with exactly `JsonRpcResponse(id, result: '0x…')`, matching our
+  `respondResult`; `respondError` (reject) and `respondResult` are symmetric. The coordinator responds on
+  every path. So the runtime cause needs the live relay/device to pin down.
+- Real gap found + fixed: `WalletFlowController._runGuarded` only caught `VaultFailure` /
+  `WalletConnectServiceException` / `AirGapPayloadException`; **any other exception** (an unexpected reown
+  SDK/relay error while signing or responding, or a double-respond) **escaped silently** — which presents
+  exactly as "the button does nothing, no error". Added a **catch-all** that surfaces it as
+  `errorMessage` ("Не удалось выполнить операцию: …"). So if approve still fails on the current build, the
+  real error is now visible on-screen to report. **Bump v1.33.0+44.**
+- Also relevant: Phase 11 (v1.32) already reworked the approve path to **fresh per-op unlock** (auth sheet →
+  unlock → coordinator → respond → lock), which removes the locked-state class of silent failures.
+- Next / open: owner retests the **current** build's Approve on the live dApp; if it still fails, the
+  now-visible error message pinpoints it (likely candidates to then chase: a reown respond exception, or — for
+  `eth_sendTransaction` only — a broadcast/nonce network hang, which a catch-all won't fix and would need a
+  timeout). `personal_sign` is local-only, so a visible error there will be decisive.
+- Refs: this commit; `lib/src/wallet_flow_controller.dart` (`_runGuarded` catch-all), version files.
+
 ## 2026-06-16 — Phase 11: auth per operation, not on app open — branch main — done (CI green)
 - Trigger: owner noticed the PBKDF2 progress screen on **every** wallet access and asked: is the heavy
   derivation needed just to view? And for a card-based key, should the PIN really be asked to view the

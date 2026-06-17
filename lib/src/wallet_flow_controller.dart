@@ -802,6 +802,13 @@ class WalletFlowController extends ChangeNotifier {
     } on AirGapPayloadException catch (error) {
       _errorMessage = error.message;
       _notify();
+    } catch (error) {
+      // Catch-all: any other failure (e.g. an unexpected WalletConnect SDK /
+      // relay error while signing or responding to a request) must surface,
+      // not vanish — otherwise an action like "approve request" looks like the
+      // button does nothing. The message carries the cause for diagnosis.
+      _errorMessage = 'Не удалось выполнить операцию: $error';
+      _notify();
     }
   }
 }
