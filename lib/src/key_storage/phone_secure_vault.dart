@@ -59,9 +59,10 @@ class PhoneSecureVault implements KeyStorageBackend {
   static const int _defaultPinIterations = 600000;
 
   /// Test-only override for the PBKDF2 iteration count. Null in production (the
-  /// constructor default / injected value applies). Widget tests set it to a
-  /// tiny value so the off-isolate key derivation finishes immediately and
-  /// doesn't race `pumpAndSettle` against the progress overlay's spinner.
+  /// constructor default / injected value applies). When set, key derivation
+  /// also runs **inline** (not on a background isolate) — widget tests use a
+  /// tiny value so it finishes immediately and `pumpAndSettle` doesn't time out
+  /// chasing the isolate's spawn latency against the progress overlay's spinner.
   static int? debugIterationsOverride;
 
   final SecureKeyValueStore _store;
@@ -430,12 +431,7 @@ class PhoneSecureVault implements KeyStorageBackend {
     required List<int> salt,
     required int iterations,
   }) async {
-    // PBKDF2 at the configured (600k) iterations is CPU-heavy and would block
-    // the UI isolate, freezing the screen for seconds on create/unlock. Run it
-    // on a background isolate so the UI stays responsive (a progress overlay can
-    // animate). It's pure computation with sendable args/result and no platform
-    // channels, so it's isolate-safe.
-    final keyBytes = await Isolate.run<List<int>>(() async {
+    Future<List<int>> derive() async {
       final pbkdf2 = Pbkdf2(
         macAlgorithm: Hmac.sha256(),
         iterations: iterations,
@@ -446,7 +442,18 @@ class PhoneSecureVault implements KeyStorageBackend {
         nonce: salt,
       );
       return key.extractBytes();
-    });
+    }
+
+    // PBKDF2 at the configured (600k) iterations is CPU-heavy and would block
+    // the UI isolate, freezing create/unlock for seconds. Offload it to a
+    // background isolate so the UI stays responsive (the progress overlay
+    // animates). It's pure computation with sendable args/result and no platform
+    // channels, so it's isolate-safe. In tests ([debugIterationsOverride] set)
+    // run inline instead: the count is tiny, and an isolate's spawn latency
+    // would make `pumpAndSettle` time out against the overlay's spinner.
+    final keyBytes = debugIterationsOverride != null
+        ? await derive()
+        : await Isolate.run(derive);
     return SecretKey(keyBytes);
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/auth/biometric_auth.dart';
+import 'package:mobile_wallet_demo/src/key_storage/phone_secure_vault.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
 import 'package:mobile_wallet_demo/src/wallet_flow_screen.dart';
 
@@ -7,6 +8,11 @@ import 'package:mobile_wallet_demo/src/wallet_flow_screen.dart';
 /// without pumping a widget — the unit-test seam the orchestrator refactor
 /// unlocked.
 void main() {
+  // Shrink PBKDF2 (and run it inline, not on a background isolate) so
+  // create/unlock are instant in tests.
+  setUp(() => PhoneSecureVault.debugIterationsOverride = 2);
+  tearDown(() => PhoneSecureVault.debugIterationsOverride = null);
+
   WalletFlowController buildController() => WalletFlowController(
     store: InMemorySecureKeyValueStore(),
     biometricAuthGateway: const SimulatedBiometricAuthGateway(),
