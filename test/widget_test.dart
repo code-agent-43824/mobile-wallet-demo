@@ -119,7 +119,10 @@ class _DelayedTrackingTransport implements JsonRpcTransport {
     required Uri uri,
     required Map<String, dynamic> payload,
   }) async {
-    await Future<void>.delayed(const Duration(milliseconds: 50));
+    // Large delay so the receipt stays pending across a pumpAndSettle (which
+    // settles the static success/pending UI without advancing this far), letting
+    // the test observe the transient pending state deterministically.
+    await Future<void>.delayed(const Duration(seconds: 4));
     return <String, dynamic>{
       'jsonrpc': '2.0',
       'id': 1,
@@ -520,17 +523,12 @@ void main() {
     await tester.enterText(find.byType(TextField).last, '1234');
     await tester.tap(find.text('Подтвердить'));
 
-    // Observe the transient PENDING state before the 50ms delayed receipt
-    // resolves. A full pumpAndSettle here would advance the fake clock past that
-    // delay and jump straight to Confirmed, hiding the pending message. Instead:
-    // close the sheet's exit animation in one time-jump (the receipt timer is
-    // scheduled later, in the post-sheet submit microtasks, so this jump can't
-    // consume it), then flush the unlock+submit + clear the busy overlay with
-    // zero-duration pumps that don't move the clock toward the 50ms delay.
-    await tester.pump(); // start the sheet pop
-    await tester.pump(const Duration(milliseconds: 300)); // finish exit anim
-    await tester.pump(); // render unlock+submit result (success + pending)
-    await tester.pump(); // settle any trailing setState frame
+    // The auth sheet exit + the (microtask-fast, override=2) unlock+submit + the
+    // busy overlay all settle here. The receipt transport is delayed 4s — far
+    // beyond pumpAndSettle's settling window — and the pending UI has no
+    // animation, so pumpAndSettle settles on the transient PENDING state without
+    // firing the receipt timer.
+    await tester.pumpAndSettle();
 
     expect(find.text('Успешная отправка'), findsOneWidget);
     expect(
@@ -539,8 +537,8 @@ void main() {
     );
     expect(find.text('Подписать и отправить'), findsOneWidget);
 
-    // Now advance past the delayed transport so the receipt resolves.
-    await tester.pump(const Duration(milliseconds: 60));
+    // Advance past the 4s delayed transport so the receipt resolves.
+    await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Статус: Confirmed'), findsOneWidget);
