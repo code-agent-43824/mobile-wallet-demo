@@ -48,6 +48,60 @@ Entry template:
 - Refs: probe d1cae7f; 12.1 a1af8cb; `pubspec.yaml`, `lib/src/airgap/eip4527.dart`, `test/eip4527_test.dart`,
   `docs/development-plan.md`.
 
+## 2026-06-17 — Phase 12 chunk 12.2: EIP-4527 inbound sign path — branch main — done (no version bump)
+- Plan: decode an `eth-sign-request` → branch on data-type → sign via the active backend's
+  `WalletTransactionSigner` → build an `eth-signature`. Pure logic (no QR/UI/relay); mirrors
+  `AirGapInboundCoordinator` / `WalletConnectInboundCoordinator`. Offline signer role only — no nonce
+  lookup/broadcast (the online wallet owns those; the serialized tx already carries them).
+- Done: `Eip4527InboundCoordinator` (`lib/src/airgap/eip4527_inbound.dart`) — `signRequest({request, signer,
+  transactionService}) -> EthSignature` (+ a `signRequestUr` convenience that decodes/encodes the UR via the
+  existing `Eip4527Codec`). Reuses the 12.1 codec, `Eip712Encoder`, and `keccak256` from web3dart — no new
+  hashing dep. Account targeting: rejects when the request's pinned `address` (CDDL key 6) ≠ `signer.address`
+  (case-insensitive); when no address is pinned, signs (the derivation path is the online wallet's own
+  assertion and the codec already validated it). New `Eip4527SignException` for wrong-account/unsupported-type.
+- **The `v`-byte decision per data-type (researched — decisive):** MetaMask's
+  `@keystonehq/metamask-airgapped-keyring` (extends `@keystonehq/base-eth-keyring`) reads the returned
+  `eth-signature` as `r=sig[0:32]; s=sig[32:64]; v=sig[64]` and applies it **verbatim** — `signTransaction`
+  does `TransactionFactory.fromTxData({...tx, r, s, v}, {common})` and `signPersonalMessage`/`signTypedData`
+  do `'0x'+concat(r,s,v)` with **no +27**. So the *signer* must put the final v in the slot:
+  - **rawBytes (3, personal_sign/EIP-191)** → `v = recId + 27` (standard `eth_sign`; the dApp ecrecovers it).
+    Reuses `signer.signPersonalMessage`; v left as web3dart emits it (recId+27). Unchanged.
+  - **typedData (2, EIP-712)** → `v = recId + 27`. `jsonDecode(utf8.decode(signData))` → `Eip712Encoder().
+    encode()` → `signer.signDigest`. Unchanged.
+  - **typedTransaction (4, EIP-1559/EIP-2718)** → `v = recId` (the EIP-1559 `signature_y_parity`, 0/1, fed
+    straight into `@ethereumjs/tx FeeMarketEIP1559Transaction.fromTxData`). We sign `keccak256(signData)` raw
+    (NOT `signPreparedTransfer` — we only have the serialized unsigned tx) then **re-map v: recId+27 → recId**.
+  - **transaction (1, legacy RLP)** → `v = recId + chainId*2 + 35` (EIP-155; `@ethereumjs/tx` legacy
+    `Transaction` stores the EIP-155 v directly). Sign `keccak256(signData)` raw, re-map v: recId+27 →
+    EIP-155. `_remapTransactionV` helper does this; it asserts the byte fits in 65 bytes (true for chains
+    1/11155111).
+  - Sources: KeystoneHQ/keystone-sdk-base `base-eth-keyring`/`metamask-airgapped-keyring` (`signTransaction`/
+    `signPersonalMessage`/`signTypedData`); EIP-1559 (`signature_y_parity`); EIP-155 (legacy v); web3dart
+    `secp256k1.sign` confirmed = `recId+27`. The Keystone protocol doc itself leaves `eth-signature`'s v
+    unspecified ("bytes .size 65 (r,s,v)"), so the keyring source is the authority.
+  - **ASSUMPTION / on-device verify:** the legacy (type-1) EIP-155 branch is the least-exercised; flagged in
+    the class doc + here to confirm against MetaMask on-device during 12.4 dogfood. EIP-1559/personal/typed
+    are spec-backed and recovery-validated in tests.
+- Tests: `test/eip4527_inbound_test.dart` — signer built from the well-known Anvil key (addr
+  `0xf39F…2266`, same as the WC inbound tests). Covers all 4 data-types: each asserts a 65-byte sig, the
+  expected v shape per type (27/28; 0/1; 37/38), and **ecrecovers the sig back to the wallet address** (the
+  legacy/1559 cases re-derive recId from the mapped v before recovery). Plus: wrong pinned-address → throws
+  `Eip4527SignException`; no-address → signs; an end-to-end encode→sign→decode UR round-trip. Legacy test
+  reuses the 12.1 Keystone legacy-tx RLP `sign-data` vector. Could not find a published full
+  request→signature vector (known unsigned tx + known key → known `eth-signature`) to byte-match; tests
+  validate via recovery instead. `dart format` clean (only `dart format` runs locally; CI compiles/tests —
+  the web3dart symbols used (`keccak256`/`ecRecover`/`publicKeyToAddress`/`bytesToInt`/`MsgSignature`) are the
+  same library the CI-green `eip712.dart`/`transaction_service.dart` already import).
+- No version bump (sign path not yet wired into the UI — that's 12.4). Did not touch UI/account export/
+  multipart QR (12.3/12.4).
+- Next / open: **12.3** account export (`crypto-hdkey`/`crypto-account` pairing UR); **12.4** multipart
+  animated QR + camera + rewire the Connections AirGap UI (and dogfood the legacy-tx v on MetaMask); **12.5**
+  remove the superseded `AirGapPayloadCodec`/`AirGapInboundCoordinator`. Owner end-to-end MetaMask dogfood
+  pending (transaction send especially).
+- Refs: `lib/src/airgap/eip4527_inbound.dart`, `test/eip4527_inbound_test.dart`, `lib/src/airgap/eip4527.dart`
+  (12.1), `lib/src/walletconnect/eip712.dart`, `lib/src/auth/wallet_operation_auth.dart`,
+  `lib/src/transactions/transaction_service.dart`.
+
 ## 2026-06-16 — Owner dogfood: WalletConnect v2 + per-op PIN verified on iOS sim — branch main — done (docs)
 - Result (owner, iOS simulator, current build): **WalletConnect v2 works well** — connect/disconnect,
   `personal_sign`, and sign/transaction-approve all succeed and the dApp reacts; the earlier "Approve does
