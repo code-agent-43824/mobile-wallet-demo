@@ -222,34 +222,56 @@ void main() {
     await tester.tap(find.text('Подключить устройство'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Симулировать offline'));
+    // Connecting lands on the read-only dashboard; the device controls live at
+    // the bottom of a tall scroll view, so each must be scrolled into view
+    // before tapping. Offline/reconnect now STAY on the dashboard and just
+    // refresh the runtime tiles — there is no locked screen / re-enter-PIN step.
+    final offlineButton = find.text('Симулировать offline');
+    await tester.ensureVisible(offlineButton);
+    await tester.tap(offlineButton);
     await tester.pumpAndSettle();
+    // The offline state shows on the dashboard: the runtime availability chip
+    // flips to "Device offline" and the device's offline note is surfaced.
     expect(find.text('Device offline'), findsOneWidget);
+    expect(
+      find.text('Demo device is offline. Reconnect it before signing.'),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.text('Переподключить demo device'));
+    final reconnectButton = find.text('Переподключить demo device');
+    await tester.ensureVisible(reconnectButton);
+    await tester.tap(reconnectButton);
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField).first, '5678');
-    await tester.tap(find.text('Подключить устройство'));
-    await tester.pump();
-    await tester.pumpAndSettle();
-
-    expect(find.text('Device online'), findsWidgets);
+    // Reconnect just flips availability back online on the same dashboard; the
+    // send section is still there and the device session control is offered.
+    expect(find.text('Device online'), findsOneWidget);
+    expect(find.text('Подготовка и отправка перевода'), findsOneWidget);
     expect(find.text('Разорвать device session'), findsOneWidget);
 
+    // Post-refactor the device is locked at rest (no PKCS#11 session until the
+    // next private-key op opens one via tap + PIN). Ping / read-address run the
+    // PKCS#11 op directly (not through the per-op auth sheet), so with no active
+    // session they surface the "no session" error instead of an operation tile.
     final pingButton = find.text('Проверить PKCS#11 session');
     await tester.ensureVisible(pingButton);
     await tester.tap(pingButton);
     await tester.pumpAndSettle();
-    expect(find.text('PKCS#11 operations'), findsOneWidget);
-    expect(find.text('probeSession'), findsOneWidget);
+    expect(
+      find.text('No active device session. Connect the demo device first.'),
+      findsOneWidget,
+    );
+    expect(find.text('PKCS#11 operations'), findsNothing);
 
     final readAddressButton = find.text('Прочитать адрес через PKCS#11');
     await tester.ensureVisible(readAddressButton);
     await tester.tap(readAddressButton);
     await tester.pumpAndSettle();
-    expect(find.text('Last PKCS#11 operation'), findsOneWidget);
-    expect(find.text('readPublicAddress'), findsOneWidget);
+    expect(
+      find.text('No active device session. Connect the demo device first.'),
+      findsOneWidget,
+    );
+    expect(find.text('Last PKCS#11 operation'), findsNothing);
   });
 
   testWidgets('shows seed backup step after create wallet flow', (
@@ -497,7 +519,18 @@ void main() {
     expect(find.text('Подтвердите операцию'), findsOneWidget);
     await tester.enterText(find.byType(TextField).last, '1234');
     await tester.tap(find.text('Подтвердить'));
-    await tester.pumpAndSettle();
+
+    // Observe the transient PENDING state before the 50ms delayed receipt
+    // resolves. A full pumpAndSettle here would advance the fake clock past that
+    // delay and jump straight to Confirmed, hiding the pending message. Instead:
+    // close the sheet's exit animation in one time-jump (the receipt timer is
+    // scheduled later, in the post-sheet submit microtasks, so this jump can't
+    // consume it), then flush the unlock+submit + clear the busy overlay with
+    // zero-duration pumps that don't move the clock toward the 50ms delay.
+    await tester.pump(); // start the sheet pop
+    await tester.pump(const Duration(milliseconds: 300)); // finish exit anim
+    await tester.pump(); // render unlock+submit result (success + pending)
+    await tester.pump(); // settle any trailing setState frame
 
     expect(find.text('Успешная отправка'), findsOneWidget);
     expect(
@@ -506,6 +539,7 @@ void main() {
     );
     expect(find.text('Подписать и отправить'), findsOneWidget);
 
+    // Now advance past the delayed transport so the receipt resolves.
     await tester.pump(const Duration(milliseconds: 60));
     await tester.pumpAndSettle();
 
