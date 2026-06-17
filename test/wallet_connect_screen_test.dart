@@ -40,11 +40,9 @@ Future<void> _createUnlock(WidgetTester tester) async {
   await tester.pumpAndSettle();
   await tester.tap(find.text('Я сохранил seed-фразу'));
   await tester.pumpAndSettle();
+  // After "Пока без биометрии" the app now lands straight on the read-only
+  // dashboard — there is no separate unlock step.
   await tester.tap(find.text('Пока без биометрии'));
-  await tester.pumpAndSettle();
-  await tester.enterText(find.byType(TextField).first, '1234');
-  await tester.tap(find.text('Разблокировать'));
-  await tester.pump();
   await tester.pumpAndSettle();
 }
 
@@ -205,6 +203,12 @@ void main() {
     final sign = find.text('Подписать офлайн');
     await tester.ensureVisible(sign);
     await tester.tap(sign);
+    await tester.pumpAndSettle();
+
+    // Signing is a private-key op: confirm the per-op auth sheet first.
+    expect(find.text('Подтвердите операцию'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, '1234');
+    await tester.tap(find.text('Подтвердить'));
     await tester.pumpAndSettle();
 
     expect(find.text('Expected a "airgap-tx:..." payload.'), findsOneWidget);

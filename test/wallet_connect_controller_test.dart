@@ -73,8 +73,8 @@ void main() {
     controller.goToCreateWallet();
     await controller.createWallet(pin: '1234');
     controller.finishSeedBackup();
+    // Onboarding lands straight on the read-only dashboard; no unlock step.
     await controller.completeBiometricChoice(false);
-    await controller.unlockWallet('1234');
     expect(controller.stage, WalletFlowStage.unlocked);
     return controller;
   }
@@ -191,7 +191,7 @@ void main() {
     await pumpEventQueue();
     expect(controller.pendingRequest, isNotNull);
 
-    await controller.approvePendingRequest();
+    await controller.approvePendingRequest(pin: '1234');
 
     expect(controller.pendingRequest, isNull);
     expect(service.respondedErrors, isEmpty);
@@ -217,7 +217,7 @@ void main() {
     await pumpEventQueue();
     expect(controller.pendingRequest, isNotNull);
 
-    await controller.approvePendingRequest();
+    await controller.approvePendingRequest(pin: '1234');
 
     expect(controller.pendingRequest, isNull);
     expect(service.respondedErrors, isEmpty);
@@ -271,7 +271,7 @@ void main() {
       ),
     );
 
-    await controller.signAirGapRequest(payload);
+    await controller.signAirGapRequest(payload, pin: '1234');
 
     expect(controller.errorMessage, isNull);
     final responsePayload = controller.airGapResponsePayload;
@@ -293,7 +293,7 @@ void main() {
     final service = FakeWalletConnectService();
     final controller = await buildUnlocked(service);
 
-    await controller.signAirGapRequest('garbage');
+    await controller.signAirGapRequest('garbage', pin: '1234');
 
     expect(controller.airGapResponsePayload, isNull);
     expect(controller.errorMessage, isNotNull);
@@ -367,7 +367,7 @@ void main() {
       await pumpEventQueue();
       expect(controller.pendingRequest, isNotNull);
 
-      await controller.approvePendingRequest();
+      await controller.approvePendingRequest(pin: '1234');
 
       expect(controller.pendingRequest, isNull);
       expect(service.respondedErrors, isEmpty);

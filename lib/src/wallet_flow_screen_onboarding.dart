@@ -626,3 +626,116 @@ class _LockedStageState extends State<_LockedStage> {
     );
   }
 }
+
+/// Per-operation auth prompt. Every private-key operation (send, approve a
+/// WalletConnect request, sign an AirGap payload) collects a credential through
+/// this modal — no session reuse. It pops itself (returning the credential)
+/// BEFORE the caller runs the backend op, so a `pumpAndSettle` after invoking
+/// the controller doesn't spin on an open sheet over the busy overlay.
+Future<({String? pin, bool useBiometrics})?> _promptForAuth(
+  BuildContext context, {
+  required String reason,
+  required bool biometricsOffered,
+}) {
+  return showModalBottomSheet<({String? pin, bool useBiometrics})>(
+    context: context,
+    isScrollControlled: true,
+    builder: (context) => _OperationAuthSheet(
+      reason: reason,
+      biometricsOffered: biometricsOffered,
+    ),
+  );
+}
+
+class _OperationAuthSheet extends StatefulWidget {
+  const _OperationAuthSheet({
+    required this.reason,
+    required this.biometricsOffered,
+  });
+
+  final String reason;
+  final bool biometricsOffered;
+
+  @override
+  State<_OperationAuthSheet> createState() => _OperationAuthSheetState();
+}
+
+class _OperationAuthSheetState extends State<_OperationAuthSheet> {
+  final _pinController = TextEditingController();
+
+  @override
+  void dispose() {
+    _pinController.dispose();
+    super.dispose();
+  }
+
+  void _confirmPin() {
+    final pin = _pinController.text.trim();
+    if (pin.isEmpty) {
+      return;
+    }
+    // Pop with the credential BEFORE the caller runs the backend op.
+    Navigator.of(context).pop((pin: pin, useBiometrics: false));
+  }
+
+  void _confirmBiometrics() {
+    Navigator.of(context).pop((pin: null, useBiometrics: true));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 24,
+        bottom: 24 + MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionTitle('Подтвердите операцию'),
+          const SizedBox(height: 12),
+          Text(
+            widget.reason,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 20),
+          TextField(
+            controller: _pinController,
+            obscureText: true,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'PIN',
+              border: OutlineInputBorder(),
+            ),
+            onSubmitted: (_) => _confirmPin(),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              FilledButton.icon(
+                onPressed: _confirmPin,
+                icon: const Icon(Icons.lock_open),
+                label: const Text('Подтвердить'),
+              ),
+              if (widget.biometricsOffered)
+                OutlinedButton.icon(
+                  onPressed: _confirmBiometrics,
+                  icon: const Icon(Icons.fingerprint),
+                  label: const Text('Разблокировать биометрией'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}

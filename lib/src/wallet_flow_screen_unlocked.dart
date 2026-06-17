@@ -1,20 +1,21 @@
 part of 'wallet_flow_screen.dart';
 
+/// The read-only dashboard (the [WalletFlowStage.unlocked] enum value now means
+/// "read-only dashboard"): it renders from [summary] with no key material in
+/// memory. The send form is always shown; submitting it triggers a per-op auth
+/// prompt and a freshly-unlocked sign via [onAuthorizeAndSubmit].
 class _UnlockedStage extends StatefulWidget {
   const _UnlockedStage({
     required this.blockchainProvider,
     required this.transactionService,
-    required this.transactionBroadcaster,
-    required this.nonceProvider,
     required this.trackingTransport,
-    required this.walletOperationAuthorizer,
     required this.activeBackend,
-    required this.authMethod,
-    required this.material,
     required this.summary,
     required this.backendLabel,
     required this.externalRuntimeState,
     required this.biometricsEnabled,
+    required this.canUnlockWithBiometrics,
+    required this.onAuthorizeAndSubmit,
     required this.onLock,
     required this.onReconnectExternalDevice,
     required this.onDisconnectExternalSession,
@@ -27,17 +28,14 @@ class _UnlockedStage extends StatefulWidget {
 
   final BlockchainProvider blockchainProvider;
   final TransactionService transactionService;
-  final TransactionBroadcaster transactionBroadcaster;
-  final NonceProvider nonceProvider;
   final JsonRpcTransport trackingTransport;
-  final WalletOperationAuthorizer walletOperationAuthorizer;
   final KeyStorageBackend activeBackend;
-  final WalletAuthMethod authMethod;
-  final WalletMaterial? material;
   final StoredWalletSummary? summary;
   final String backendLabel;
   final ExternalDeviceDemoRuntimeState? externalRuntimeState;
   final bool biometricsEnabled;
+  final bool canUnlockWithBiometrics;
+  final AuthorizeAndSubmitTransfer onAuthorizeAndSubmit;
   final VoidCallback onLock;
   final Future<void> Function()? onReconnectExternalDevice;
   final Future<void> Function()? onDisconnectExternalSession;
@@ -50,6 +48,22 @@ class _UnlockedStage extends StatefulWidget {
   @override
   State<_UnlockedStage> createState() => _UnlockedStageState();
 }
+
+/// Signature for the send-form authorize+sign+submit callback: the widget keeps
+/// the read-only preview, this runs the private-key part (auth → unlock → sign →
+/// submit) in the controller. Returns null if the user cancelled the auth
+/// prompt; throws [TransactionFailure]/[VaultFailure] on a real failure.
+typedef AuthorizeAndSubmitTransfer =
+    Future<HardenedSubmitResult?> Function({
+      required WalletChainSnapshot snapshot,
+      required String fromAddress,
+      required String toAddress,
+      required String amountText,
+      required TransferAssetOption asset,
+      required TransactionTracker tracker,
+      String? pin,
+      bool useBiometrics,
+    });
 
 class _UnlockedStageState extends State<_UnlockedStage> {
   EvmNetwork _selectedNetwork = EvmNetwork.ethereumMainnet;
@@ -64,7 +78,7 @@ class _UnlockedStageState extends State<_UnlockedStage> {
   }
 
   Future<void> _refresh() async {
-    final address = widget.material?.address ?? widget.summary?.address;
+    final address = widget.summary?.address;
     if (address == null) {
       return;
     }
@@ -103,7 +117,7 @@ class _UnlockedStageState extends State<_UnlockedStage> {
 
   @override
   Widget build(BuildContext context) {
-    final address = widget.material?.address ?? widget.summary?.address ?? '—';
+    final address = widget.summary?.address ?? '—';
     final config = evmNetworkConfigs[_selectedNetwork]!;
     final snapshot = _snapshot;
     final externalRuntimeState = widget.externalRuntimeState;
@@ -121,13 +135,10 @@ class _UnlockedStageState extends State<_UnlockedStage> {
         const SizedBox(height: 10),
         _SummaryTile(label: 'Backend', value: widget.backendLabel),
         const SizedBox(height: 10),
-        _SummaryTile(
-          label: 'Последний auth-метод',
-          value: switch (widget.authMethod) {
-            WalletAuthMethod.pin => 'PIN',
-            WalletAuthMethod.biometric => 'Biometric unlock',
-            WalletAuthMethod.externalDevice => 'External device',
-          },
+        const _SummaryTile(
+          label: 'Доступ к ключу',
+          value:
+              'Только просмотр. Приватный ключ запрашивает PIN/биометрию при каждой подписи.',
         ),
         const SizedBox(height: 10),
         _SummaryTile(
@@ -259,16 +270,12 @@ class _UnlockedStageState extends State<_UnlockedStage> {
             snapshot: snapshot,
             fromAddress: address,
             networkConfig: config,
-            activeBackend: widget.activeBackend,
-            walletMaterial: widget.material,
-            authMethod: widget.authMethod,
-            walletOperationAuthorizer: widget.walletOperationAuthorizer,
             transactionService: widget.transactionService,
-            transactionBroadcaster: widget.transactionBroadcaster,
-            nonceProvider: widget.nonceProvider,
             trackingTransport: widget.trackingTransport,
-            onExternalPkcs11OperationRecorded:
-                widget.onRefreshExternalRuntimeState,
+            isExternalBackend:
+                widget.activeBackend is ExternalDeviceKeyStorageBackend,
+            canUnlockWithBiometrics: widget.canUnlockWithBiometrics,
+            onAuthorizeAndSubmit: widget.onAuthorizeAndSubmit,
           ),
         ],
         const SizedBox(height: 20),
@@ -276,7 +283,7 @@ class _UnlockedStageState extends State<_UnlockedStage> {
           spacing: 10,
           runSpacing: 10,
           children: [
-            const _StatusChip(label: 'Unlocked'),
+            const _StatusChip(label: 'Только просмотр'),
             const _StatusChip(label: 'Read-only RPC'),
             const _StatusChip(label: 'Signing + send flow'),
             _StatusChip(label: 'Chain ${config.chainId}'),
@@ -351,29 +358,21 @@ class _TransferPreparationSection extends StatefulWidget {
     required this.snapshot,
     required this.fromAddress,
     required this.networkConfig,
-    required this.activeBackend,
-    required this.walletMaterial,
-    required this.authMethod,
-    required this.walletOperationAuthorizer,
     required this.transactionService,
-    required this.transactionBroadcaster,
-    required this.nonceProvider,
     required this.trackingTransport,
-    required this.onExternalPkcs11OperationRecorded,
+    required this.isExternalBackend,
+    required this.canUnlockWithBiometrics,
+    required this.onAuthorizeAndSubmit,
   });
 
   final WalletChainSnapshot snapshot;
   final String fromAddress;
   final EvmNetworkConfig networkConfig;
-  final KeyStorageBackend activeBackend;
-  final WalletMaterial? walletMaterial;
-  final WalletAuthMethod authMethod;
-  final WalletOperationAuthorizer walletOperationAuthorizer;
   final TransactionService transactionService;
-  final TransactionBroadcaster transactionBroadcaster;
-  final NonceProvider nonceProvider;
   final JsonRpcTransport trackingTransport;
-  final Future<void> Function()? onExternalPkcs11OperationRecorded;
+  final bool isExternalBackend;
+  final bool canUnlockWithBiometrics;
+  final AuthorizeAndSubmitTransfer onAuthorizeAndSubmit;
 
   @override
   State<_TransferPreparationSection> createState() =>
@@ -478,7 +477,8 @@ class _TransferPreparationSectionState
       return;
     }
 
-    AuthorizedWalletOperation authorizedOperation;
+    // Read-only validation stays in the widget; the private-key part runs in the
+    // controller behind a per-op auth prompt.
     try {
       widget.transactionService.prepareTransfer(
         snapshot: widget.snapshot,
@@ -487,37 +487,21 @@ class _TransferPreparationSectionState
         amountText: _amountController.text,
         asset: asset,
       );
-
-      if (widget.activeBackend is ExternalDeviceKeyStorageBackend) {
-        if (widget.activeBackend is ExternalDeviceDemoBackend) {
-          await (widget.activeBackend as ExternalDeviceDemoBackend)
-              .performPkcs11Operation(
-                ExternalDevicePkcs11Operation(
-                  kind:
-                      ExternalDevicePkcs11OperationKind.signTransactionPreview,
-                  payload:
-                      '${_amountController.text} ${asset.symbol} -> ${_addressController.text}',
-                ),
-              );
-          await widget.onExternalPkcs11OperationRecorded?.call();
-        }
-        authorizedOperation = widget.walletOperationAuthorizer
-            .authorizeUnlockedExternalDeviceSigning(
-              backend: widget.activeBackend as ExternalDeviceKeyStorageBackend,
-              walletMaterial: widget.walletMaterial,
-            );
-      } else {
-        authorizedOperation = widget.walletOperationAuthorizer
-            .authorizeUnlockedLocalSigning(
-              backend: widget.activeBackend,
-              walletMaterial: widget.walletMaterial,
-              authMethod: widget.authMethod,
-            );
-      }
-    } on VaultFailure catch (error) {
+    } on TransactionFailure catch (error) {
       setState(() {
         _error = error.message;
       });
+      return;
+    }
+
+    final credential = await _promptForAuth(
+      context,
+      reason: 'Подпись и отправка перевода требует доступа к приватному ключу.',
+      biometricsOffered:
+          widget.canUnlockWithBiometrics && !widget.isExternalBackend,
+    );
+    if (credential == null || !mounted) {
+      // User dismissed the auth sheet — abort silently, no error.
       return;
     }
 
@@ -537,26 +521,28 @@ class _TransferPreparationSectionState
       final tracker = TransactionTracker(
         rpcTransport: widget.trackingTransport,
       );
-      final hardenedService = widget.transactionService;
-      if (hardenedService is! HardenedTransactionService) {
-        throw const TransactionFailure(
-          'Текущий transaction service не поддерживает Phase 6 hardened flow.',
-        );
-      }
 
-      final result = await hardenedService.submitAuthorizedTransferFlow(
+      final result = await widget.onAuthorizeAndSubmit(
         snapshot: widget.snapshot,
         fromAddress: widget.fromAddress,
         toAddress: _addressController.text,
         amountText: _amountController.text,
         asset: asset,
-        signer: authorizedOperation.signer,
-        broadcaster: widget.transactionBroadcaster,
-        nonceProvider: widget.nonceProvider,
         tracker: tracker,
+        pin: credential.pin,
+        useBiometrics: credential.useBiometrics,
       );
 
       if (!mounted) {
+        return;
+      }
+
+      if (result == null) {
+        // The controller surfaced the failure via its own errorMessage banner
+        // (VaultFailure: wrong PIN/lockout/offline). Just clear the spinner.
+        setState(() {
+          _isSubmitting = false;
+        });
         return;
       }
 

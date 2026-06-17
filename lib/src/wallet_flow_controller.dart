@@ -220,9 +220,14 @@ class WalletFlowController extends ChangeNotifier {
       _externalRuntimeState = externalRuntimeState;
       _biometricsEnabled = biometricsEnabled;
       _biometricsAvailable = biometricsAvailable;
+      // An existing wallet opens STRAIGHT to the read-only dashboard
+      // (WalletFlowStage.unlocked, whose semantics are now "read-only
+      // dashboard"): no PIN/biometric/PBKDF2 just to view it. The private key is
+      // only touched per-operation. _material stays null — the dashboard renders
+      // from _summary. (locked is retained for a future "lock app on open".)
       _stage = summary == null
           ? WalletFlowStage.welcome
-          : WalletFlowStage.locked;
+          : WalletFlowStage.unlocked;
       _notify();
     } on VaultFailure catch (error) {
       // A corrupt or unsupported at-rest payload must not crash startup; surface
@@ -291,7 +296,9 @@ class WalletFlowController extends ChangeNotifier {
         _material = null;
         backend.lock();
         _externalRuntimeState = await _externalDeviceBackend.loadRuntimeState();
-        _stage = WalletFlowStage.locked;
+        // Land on the read-only dashboard; the device "tap + PIN" path runs
+        // per private-key operation.
+        _stage = WalletFlowStage.unlocked;
       } else {
         _seedPhraseToShow = material.mnemonic;
         _stage = WalletFlowStage.showSeed;
@@ -326,13 +333,19 @@ class WalletFlowController extends ChangeNotifier {
         _material = null;
         backend.lock();
         _externalRuntimeState = await _externalDeviceBackend.loadRuntimeState();
-        _stage = WalletFlowStage.locked;
+        // Land on the read-only dashboard; the device "tap + PIN" path runs
+        // per private-key operation.
+        _stage = WalletFlowStage.unlocked;
       } else {
         _stage = WalletFlowStage.biometricPrompt;
       }
     });
   }
 
+  /// Retained for a FUTURE "lock app on open" toggle: the default flow no longer
+  /// routes through a [WalletFlowStage.locked] screen (the dashboard is
+  /// read-only and each key op authenticates on demand). Kept so the locked
+  /// shell can be re-enabled without re-deriving this logic.
   Future<void> unlockWallet(String pin) async {
     await _runBusy('Разблокируем кошелёк…', () async {
       _material = await activeBackend.unlock(pin: pin);
@@ -369,7 +382,9 @@ class WalletFlowController extends ChangeNotifier {
       _material = null;
       _pendingBiometricPin = null;
       _seedPhraseToShow = null;
-      _stage = WalletFlowStage.locked;
+      // Onboarding ends on the read-only dashboard; the key is re-derived per
+      // private-key operation. We still lock the backend + drop _material.
+      _stage = WalletFlowStage.unlocked;
       activeBackend.lock();
       if (activeBackend is ExternalDeviceDemoBackend) {
         _externalRuntimeState = await _externalDeviceBackend.loadRuntimeState();
@@ -377,6 +392,8 @@ class WalletFlowController extends ChangeNotifier {
     });
   }
 
+  /// Retained for a FUTURE "lock app on open" toggle (see [unlockWallet]); the
+  /// default flow no longer enters a locked screen to unlock the whole app.
   Future<void> unlockWithBiometrics() async {
     await _runGuarded(() async {
       _material = await activeBackend.unlockWithBiometrics();
@@ -401,8 +418,10 @@ class WalletFlowController extends ChangeNotifier {
   Future<void> simulateExternalDeviceOffline() async {
     await _runGuarded(() async {
       await _externalDeviceBackend.simulateDeviceUnavailable();
+      // Stay on the read-only dashboard: viewing never needed the key, and the
+      // device's offline state is reflected in the runtime tiles. The "tap +
+      // PIN" reconnect happens lazily on the next private-key op.
       _material = null;
-      _stage = WalletFlowStage.locked;
       await refreshExternalRuntimeState();
     });
   }
@@ -417,8 +436,9 @@ class WalletFlowController extends ChangeNotifier {
   Future<void> disconnectExternalSession() async {
     await _runGuarded(() async {
       await _externalDeviceBackend.disconnectSession();
+      // Stay on the read-only dashboard; the session is re-established on the
+      // next private-key op via the device "tap + PIN" path.
       _material = null;
-      _stage = WalletFlowStage.locked;
       await refreshExternalRuntimeState();
     });
   }
@@ -499,24 +519,34 @@ class WalletFlowController extends ChangeNotifier {
 
   /// Approves [pendingRequest]: signs it with the active backend and responds to
   /// the dApp via the inbound coordinator (broadcast for `eth_sendTransaction`,
-  /// signed-tx hex for `eth_signTransaction`). The wallet is already unlocked in
-  /// this flow, so signing reuses the in-memory material (no per-request prompt).
-  Future<void> approvePendingRequest() async {
-    await _runGuarded(() async {
-      final request = _pendingRequest;
-      if (request == null) {
-        return;
-      }
-      final signer = _activeTransactionSigner();
-      final coordinator = WalletConnectInboundCoordinator(
-        service: _walletConnectService,
-        transactionService: _transactionService,
-        broadcaster: _transactionBroadcaster,
-        nonceProvider: _nonceProvider,
-      );
-      await coordinator.handleRequest(request: request, signer: signer);
-      _pendingRequest = null;
-    });
+  /// signed-tx hex for `eth_signTransaction`). A private-key operation, so it
+  /// freshly unlocks for this request only (PIN or biometric for the phone
+  /// vault; device "tap + PIN" for the external device) and re-locks after.
+  /// [pendingRequest] is cleared ONLY on success — a wrong PIN/cancel leaves the
+  /// request visible to retry.
+  Future<void> approvePendingRequest({
+    String? pin,
+    bool useBiometrics = false,
+  }) async {
+    final request = _pendingRequest;
+    if (request == null) {
+      return;
+    }
+    await _withFreshlyUnlockedMaterial(
+      pin: pin,
+      useBiometrics: useBiometrics,
+      action: () async {
+        final signer = _activeTransactionSigner();
+        final coordinator = WalletConnectInboundCoordinator(
+          service: _walletConnectService,
+          transactionService: _transactionService,
+          broadcaster: _transactionBroadcaster,
+          nonceProvider: _nonceProvider,
+        );
+        await coordinator.handleRequest(request: request, signer: signer);
+        _pendingRequest = null;
+      },
+    );
   }
 
   /// Rejects [pendingRequest] with a JSON-RPC error to the dApp.
@@ -534,8 +564,108 @@ class WalletFlowController extends ChangeNotifier {
     });
   }
 
-  /// Builds a signer for the active (unlocked) backend; throws [VaultFailure]
-  /// when the backend is locked or the material is unavailable.
+  /// Runs [action] with the active backend transiently unlocked for a single
+  /// private-key operation, then ALWAYS re-locks and wipes the in-memory key.
+  ///
+  /// Auth is collected per call (no session reuse): [useBiometrics] takes the
+  /// biometric fast-path, otherwise [pin] is required. Runs behind the busy
+  /// overlay and through [_runGuarded] so wrong-PIN/lockout/offline
+  /// [VaultFailure]s surface via [errorMessage]. The `finally` lock+wipe runs
+  /// even if [action] throws, so the key never outlives the operation.
+  Future<void> _withFreshlyUnlockedMaterial({
+    String? pin,
+    bool useBiometrics = false,
+    required Future<void> Function() action,
+  }) async {
+    await _runBusy('Разблокируем для подписи…', () async {
+      try {
+        if (useBiometrics) {
+          _material = await activeBackend.unlockWithBiometrics();
+          _lastUnlockAuthMethod = WalletAuthMethod.biometric;
+        } else {
+          _material = await activeBackend.unlock(pin: pin!);
+          _lastUnlockAuthMethod =
+              activeBackend is ExternalDeviceKeyStorageBackend
+              ? WalletAuthMethod.externalDevice
+              : WalletAuthMethod.pin;
+        }
+        await action();
+      } finally {
+        activeBackend.lock();
+        _material = null;
+        if (activeBackend is ExternalDeviceDemoBackend) {
+          _externalRuntimeState = await _externalDeviceBackend
+              .loadRuntimeState();
+        }
+      }
+    });
+  }
+
+  /// Authorizes, signs and submits a transfer from the read-only dashboard send
+  /// form. A private-key operation: freshly unlocks for this send only and
+  /// re-locks after (no [_material] is held after this returns). The widget
+  /// keeps the read-only `prepareTransfer` validation/preview; this method moves
+  /// the authorize + (external-device PKCS#11 sign op) + `submitAuthorized
+  /// TransferFlow` here so signing happens while the key is briefly in memory.
+  ///
+  /// Returns the [HardenedSubmitResult] (incl. the async `trackingFuture`) so
+  /// the widget can render the result + drive tracking; throws on failure so
+  /// the caller's wrapper surfaces it. Errors are also mirrored to
+  /// [errorMessage] via [_runGuarded].
+  Future<HardenedSubmitResult?> authorizeAndSubmitTransfer({
+    required WalletChainSnapshot snapshot,
+    required String fromAddress,
+    required String toAddress,
+    required String amountText,
+    required TransferAssetOption asset,
+    required TransactionTracker tracker,
+    String? pin,
+    bool useBiometrics = false,
+  }) async {
+    final transactionService = _transactionService;
+    if (transactionService is! HardenedTransactionService) {
+      throw const TransactionFailure(
+        'Текущий transaction service не поддерживает Phase 6 hardened flow.',
+      );
+    }
+
+    HardenedSubmitResult? result;
+    await _withFreshlyUnlockedMaterial(
+      pin: pin,
+      useBiometrics: useBiometrics,
+      action: () async {
+        // The external device session must be open for the mock PKCS#11 sign
+        // op; it runs while we hold a fresh unlock (the finally re-locks).
+        final backend = activeBackend;
+        if (backend is ExternalDeviceDemoBackend) {
+          await backend.performPkcs11Operation(
+            ExternalDevicePkcs11Operation(
+              kind: ExternalDevicePkcs11OperationKind.signTransactionPreview,
+              payload: '$amountText ${asset.symbol} -> $toAddress',
+            ),
+          );
+        }
+
+        final signer = _activeTransactionSigner();
+        result = await transactionService.submitAuthorizedTransferFlow(
+          snapshot: snapshot,
+          fromAddress: fromAddress,
+          toAddress: toAddress,
+          amountText: amountText,
+          asset: asset,
+          signer: signer,
+          broadcaster: _transactionBroadcaster,
+          nonceProvider: _nonceProvider,
+          tracker: tracker,
+        );
+      },
+    );
+    return result;
+  }
+
+  /// Builds a signer for the active backend, reading the transiently-set
+  /// [_material]; throws [VaultFailure] when the backend is locked or the
+  /// material is unavailable. Only valid inside [_withFreshlyUnlockedMaterial].
   WalletTransactionSigner _activeTransactionSigner() {
     final backend = activeBackend;
     if (backend is ExternalDeviceKeyStorageBackend) {
@@ -557,16 +687,27 @@ class WalletFlowController extends ChangeNotifier {
 
   /// Signs an offline AirGap `airgap-tx:` request payload with the active
   /// backend and stores the `airgap-sig:` response in [airGapResponsePayload].
-  Future<void> signAirGapRequest(String payload) async {
-    await _runGuarded(() async {
-      final signer = _activeTransactionSigner();
-      _airGapResponsePayload = await const AirGapInboundCoordinator()
-          .signRequestPayload(
-            requestPayload: payload,
-            transactionService: _transactionService,
-            signer: signer,
-          );
-    });
+  /// A private-key operation: freshly unlocks for this signature only (PIN or
+  /// biometric for the phone vault; device "tap + PIN" for the external device)
+  /// and re-locks after.
+  Future<void> signAirGapRequest(
+    String payload, {
+    String? pin,
+    bool useBiometrics = false,
+  }) async {
+    await _withFreshlyUnlockedMaterial(
+      pin: pin,
+      useBiometrics: useBiometrics,
+      action: () async {
+        final signer = _activeTransactionSigner();
+        _airGapResponsePayload = await const AirGapInboundCoordinator()
+            .signRequestPayload(
+              requestPayload: payload,
+              transactionService: _transactionService,
+              signer: signer,
+            );
+      },
+    );
   }
 
   /// Clears the displayed AirGap response.
@@ -612,6 +753,9 @@ class WalletFlowController extends ChangeNotifier {
     _notify();
   }
 
+  /// Retained for a FUTURE "lock app on open" toggle (see [unlockWallet]); the
+  /// default flow stays on the read-only dashboard rather than entering a locked
+  /// screen.
   void lockWallet() {
     activeBackend.lock();
     if (activeBackend is ExternalDeviceDemoBackend) {

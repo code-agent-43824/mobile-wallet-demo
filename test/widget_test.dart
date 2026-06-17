@@ -154,7 +154,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Wallet Demo'), findsOneWidget);
-    expect(find.text('v1.31.0+42'), findsOneWidget);
+    expect(find.text('v1.32.0+43'), findsOneWidget);
     expect(find.text('Phone Secure Vault'), findsOneWidget);
     expect(find.text('External NFC demo device'), findsOneWidget);
     expect(find.text('Создать новый кошелёк'), findsOneWidget);
@@ -190,8 +190,10 @@ void main() {
     await tester.tap(find.text('Подключить устройство'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Внешнее устройство заблокировано'), findsOneWidget);
-    expect(find.text('PIN устройства'), findsOneWidget);
+    // Connecting the device now lands straight on the read-only dashboard, not a
+    // locked screen — the device "tap + PIN" path runs per private-key op.
+    expect(find.text('Подготовка и отправка перевода'), findsOneWidget);
+    expect(find.text('Только просмотр'), findsOneWidget);
     expect(find.text('External NFC demo device'), findsAtLeastNWidgets(1));
   });
 
@@ -304,16 +306,13 @@ void main() {
 
     await tester.tap(find.text('Я сохранил seed-фразу'));
     await tester.pumpAndSettle();
+    // The dashboard appears straight after the biometric choice — no unlock.
     await tester.tap(find.text('Пока без биометрии'));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.byType(TextField).first, '1234');
-    await tester.tap(find.text('Разблокировать'));
-    await tester.pump();
     await tester.pumpAndSettle();
 
     expect(find.text('Подготовка и отправка перевода'), findsOneWidget);
 
+    // Building the preview is read-only and must not prompt for auth.
     final sendFields = find.byType(TextField);
     await tester.enterText(
       sendFields.at(0),
@@ -325,21 +324,25 @@ void main() {
     await tester.tap(previewButton);
     await tester.pumpAndSettle();
 
+    expect(find.text('Подтвердите операцию'), findsNothing);
     expect(find.text('Итоговый debit'), findsOneWidget);
     expect(find.text('Получатель'), findsOneWidget);
     expect(find.textContaining('Preview валиден'), findsOneWidget);
   });
 
-  testWidgets('allows biometric unlock when biometrics are enabled', (
+  testWidgets('offers biometric as a per-op fast-path when enabled', (
     WidgetTester tester,
   ) async {
-    await tester.binding.setSurfaceSize(const Size(1200, 1400));
+    await tester.binding.setSurfaceSize(const Size(1200, 1600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
+        nonceProvider: _FakeNonceProvider(),
+        transactionBroadcaster: _FakeBroadcaster(),
+        trackingTransport: const _FakeTrackingTransport(),
         biometricAuthGateway: const SimulatedBiometricAuthGateway(),
       ),
     );
@@ -356,14 +359,34 @@ void main() {
 
     await tester.tap(find.text('Я сохранил seed-фразу'));
     await tester.pumpAndSettle();
+    // Enabling biometrics now lands straight on the read-only dashboard; the
+    // biometric path becomes a per-operation fast-path instead of an app unlock.
     await tester.tap(find.textContaining('Включить биометрию'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Разблокировать биометрией'), findsOneWidget);
-    await tester.tap(find.text('Разблокировать биометрией'));
+    expect(find.text('Подготовка и отправка перевода'), findsOneWidget);
+
+    final sendFields = find.byType(TextField);
+    await tester.enterText(
+      sendFields.at(0),
+      '0x1111111111111111111111111111111111111111',
+    );
+    await tester.enterText(sendFields.at(1), '0.1');
+
+    final sendButton = find.text('Подписать и отправить');
+    await tester.ensureVisible(sendButton);
+    await tester.tap(sendButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('Подготовка и отправка перевода'), findsOneWidget);
+    // The per-op auth sheet offers the biometric fast-path; use it to sign.
+    expect(find.text('Подтвердите операцию'), findsOneWidget);
+    final biometricButton = find.text('Разблокировать биометрией');
+    expect(biometricButton, findsOneWidget);
+    await tester.tap(biometricButton);
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Успешная отправка'), findsOneWidget);
   });
 
   testWidgets('submits signed transfer and shows success state', (
@@ -394,12 +417,8 @@ void main() {
 
     await tester.tap(find.text('Я сохранил seed-фразу'));
     await tester.pumpAndSettle();
+    // Dashboard appears straight after the biometric choice — no unlock step.
     await tester.tap(find.text('Пока без биометрии'));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.byType(TextField).first, '1234');
-    await tester.tap(find.text('Разблокировать'));
-    await tester.pump();
     await tester.pumpAndSettle();
 
     final sendFields = find.byType(TextField);
@@ -412,6 +431,12 @@ void main() {
     final sendButton = find.text('Подписать и отправить');
     await tester.ensureVisible(sendButton);
     await tester.tap(sendButton);
+    await tester.pumpAndSettle();
+
+    // Sending is a private-key op: confirm the per-op auth sheet with the PIN.
+    expect(find.text('Подтвердите операцию'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, '1234');
+    await tester.tap(find.text('Подтвердить'));
     await tester.pump();
     await tester.pumpAndSettle();
 
@@ -451,12 +476,8 @@ void main() {
 
     await tester.tap(find.text('Я сохранил seed-фразу'));
     await tester.pumpAndSettle();
+    // Dashboard appears straight after the biometric choice — no unlock step.
     await tester.tap(find.text('Пока без биометрии'));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.byType(TextField).first, '1234');
-    await tester.tap(find.text('Разблокировать'));
-    await tester.pump();
     await tester.pumpAndSettle();
 
     final sendFields = find.byType(TextField);
@@ -469,7 +490,14 @@ void main() {
     final sendButton = find.text('Подписать и отправить');
     await tester.ensureVisible(sendButton);
     await tester.tap(sendButton);
-    await tester.pump();
+    await tester.pumpAndSettle();
+
+    // Confirm the per-op auth sheet; the unlock+submit then completes while
+    // receipt tracking stays pending (delayed transport).
+    expect(find.text('Подтвердите операцию'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, '1234');
+    await tester.tap(find.text('Подтвердить'));
+    await tester.pumpAndSettle();
 
     expect(find.text('Успешная отправка'), findsOneWidget);
     expect(
@@ -512,12 +540,8 @@ void main() {
 
     await tester.tap(find.text('Я сохранил seed-фразу'));
     await tester.pumpAndSettle();
+    // Dashboard appears straight after the biometric choice — no unlock step.
     await tester.tap(find.text('Пока без биометрии'));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.byType(TextField).first, '1234');
-    await tester.tap(find.text('Разблокировать'));
-    await tester.pump();
     await tester.pumpAndSettle();
 
     final sendFields = find.byType(TextField);
@@ -530,6 +554,12 @@ void main() {
     final sendButton = find.text('Подписать и отправить');
     await tester.ensureVisible(sendButton);
     await tester.tap(sendButton);
+    await tester.pumpAndSettle();
+
+    // Confirm the per-op auth sheet; the broadcast then fails downstream.
+    expect(find.text('Подтвердите операцию'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, '1234');
+    await tester.tap(find.text('Подтвердить'));
     await tester.pump();
     await tester.pumpAndSettle();
 

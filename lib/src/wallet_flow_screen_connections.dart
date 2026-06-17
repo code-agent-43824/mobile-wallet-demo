@@ -15,6 +15,8 @@ class _ConnectionsStage extends StatefulWidget {
     required this.walletAddress,
     required this.isQrCameraAvailable,
     required this.isQrFileLoadAvailable,
+    required this.canUnlockWithBiometrics,
+    required this.isExternalBackend,
     required this.onScanQrCamera,
     required this.onLoadQrFromFile,
     required this.onPair,
@@ -36,14 +38,20 @@ class _ConnectionsStage extends StatefulWidget {
   final String? walletAddress;
   final bool isQrCameraAvailable;
   final bool isQrFileLoadAvailable;
+  final bool canUnlockWithBiometrics;
+  final bool isExternalBackend;
   final Future<String?> Function({String title}) onScanQrCamera;
   final Future<String?> Function() onLoadQrFromFile;
   final Future<void> Function({required String uri}) onPair;
   final Future<void> Function() onApprove;
   final Future<void> Function() onReject;
-  final Future<void> Function() onApproveRequest;
+  // Private-key operations: the credential is collected per-op in this widget
+  // and threaded to the controller. Reject/clear stay auth-free.
+  final Future<void> Function({String? pin, bool useBiometrics})
+  onApproveRequest;
   final Future<void> Function() onRejectRequest;
-  final Future<void> Function(String payload) onSignAirGap;
+  final Future<void> Function(String payload, {String? pin, bool useBiometrics})
+  onSignAirGap;
   final VoidCallback onClearAirGap;
   final Future<void> Function(String topic) onDisconnect;
   final VoidCallback onBack;
@@ -71,12 +79,45 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
     await widget.onPair(uri: uri);
   }
 
+  bool get _biometricsOffered =>
+      widget.canUnlockWithBiometrics && !widget.isExternalBackend;
+
+  Future<void> _approveRequest() async {
+    final credential = await _promptForAuth(
+      context,
+      reason:
+          'Одобрение входящего запроса требует доступа к приватному ключу для подписи.',
+      biometricsOffered: _biometricsOffered,
+    );
+    if (credential == null) {
+      // User dismissed the auth sheet — abort silently, keep the request shown.
+      return;
+    }
+    await widget.onApproveRequest(
+      pin: credential.pin,
+      useBiometrics: credential.useBiometrics,
+    );
+  }
+
   Future<void> _signAirGap() async {
     final payload = _airGapController.text.trim();
     if (payload.isEmpty) {
       return;
     }
-    await widget.onSignAirGap(payload);
+    final credential = await _promptForAuth(
+      context,
+      reason: 'Офлайн-подпись AirGap требует доступа к приватному ключу.',
+      biometricsOffered: _biometricsOffered,
+    );
+    if (credential == null) {
+      // User dismissed the auth sheet — abort silently.
+      return;
+    }
+    await widget.onSignAirGap(
+      payload,
+      pin: credential.pin,
+      useBiometrics: credential.useBiometrics,
+    );
   }
 
   Future<void> _fillFrom(
@@ -168,7 +209,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
           const SizedBox(height: 24),
           _RequestCard(
             request: request,
-            onApprove: widget.onApproveRequest,
+            onApprove: _approveRequest,
             onReject: widget.onRejectRequest,
           ),
         ],

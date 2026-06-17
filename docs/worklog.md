@@ -18,6 +18,34 @@ Entry template:
 
 ---
 
+## 2026-06-16 — Phase 11: auth per operation, not on app open — branch main — implemented, verifying CI
+- Trigger: owner noticed the PBKDF2 progress screen on **every** wallet access and asked: is the heavy
+  derivation needed just to view? And for a card-based key, should the PIN really be asked to view the
+  status screen? Agreed: no. Decisions — open → **read-only dashboard, no auth**; each **private-key op**
+  authenticates **every time** (no session reuse), PIN/biometric for the vault, tap+PIN for the device;
+  optional "lock app on open" toggle **deferred** (recorded in the plan, Phase 11 "Deferred").
+- Plan (Phase 11 in `development-plan.md`): (11.1) `loadInitialState` + onboarding end states → the `unlocked`
+  stage repurposed as a read-only dashboard (render from `summary`, no held material); keep `locked`/
+  `_LockedStage`/`unlockWallet`/`lockWallet` for the future toggle. (11.2) `_withFreshlyUnlockedMaterial(
+  {pin,useBiometrics})` = unlock→op→`lock()` in `finally`, + an `_OperationAuthSheet` (PIN + optional
+  biometric) shown before each op. (11.3) rewire send / WC-approve / AirGap-sign to authenticate-on-demand
+  (direct `{pin, useBiometrics}` params, not held material); update widget + controller tests.
+- Done (v1.32.0+43): `loadInitialState` + onboarding end states → the `unlocked` stage repurposed as the
+  read-only dashboard (renders from `summary`, no held material). `_withFreshlyUnlockedMaterial({pin,
+  useBiometrics})` unlocks→runs the op→`lock()`+wipes `_material` in a `finally` (key never outlives the op).
+  `approvePendingRequest`/`signAirGapRequest`/new `authorizeAndSubmitTransfer` take `{pin, useBiometrics}` and
+  run through it; `_pendingRequest` clears only on success. New `_OperationAuthSheet` + `_promptForAuth`
+  (PIN + optional biometric) shown by the unlocked/connections widgets before each op, popping the sheet
+  with the credential BEFORE the busy op (so `pumpAndSettle` doesn't spin). `locked`/`_LockedStage`/
+  `unlockWallet`/`lockWallet` kept for the deferred toggle. Tests reworked (controller + widget + connections).
+  Reviewed the security-critical lock-in-`finally`; `dart format` clean (parses).
+- Next / open: land the code, version bump, `dart format`, then CI must be green (the per-op flow changes
+  many widget/controller tests; the auth sheet must pop before the busy overlay so `pumpAndSettle` settles).
+  Then owner verifies on device: open = instant read-only dashboard; PIN/biometric prompt only on
+  send/approve/sign.
+- Refs: this commit; will touch `lib/src/wallet_flow_controller.dart`,
+  `lib/src/wallet_flow_screen{,_unlocked,_onboarding,_connections}.dart`, the widget/controller tests.
+
 ## 2026-06-16 — Cosmetic: rename to "Wallet Demo" + custom W icon (all platforms) — branch main — done
 - Trigger: owner asked for (1) a proper app name + file name "Wallet Demo" on all platforms, (2) a custom
   icon replacing the Flutter default — a round white badge with a big black "W".

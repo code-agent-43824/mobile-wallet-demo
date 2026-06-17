@@ -219,20 +219,38 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
               : null,
         );
       case WalletFlowStage.unlocked:
+        // unlocked == the read-only dashboard. No key material is held here; the
+        // send form authorizes per-op via controller.authorizeAndSubmitTransfer.
         return _UnlockedStage(
           blockchainProvider: widget.blockchainProvider,
           transactionService: widget.transactionService,
-          transactionBroadcaster: widget.transactionBroadcaster,
-          nonceProvider: widget.nonceProvider,
           trackingTransport: widget.trackingTransport,
-          walletOperationAuthorizer: controller.walletOperationAuthorizer,
           activeBackend: controller.activeBackend,
-          authMethod: controller.lastUnlockAuthMethod,
-          material: controller.material,
           summary: controller.summary,
           backendLabel: controller.backendLabel,
           externalRuntimeState: controller.externalRuntimeState,
           biometricsEnabled: controller.biometricsEnabled,
+          canUnlockWithBiometrics: controller.canUnlockWithBiometrics,
+          onAuthorizeAndSubmit:
+              ({
+                required snapshot,
+                required fromAddress,
+                required toAddress,
+                required amountText,
+                required asset,
+                required tracker,
+                pin,
+                useBiometrics = false,
+              }) => controller.authorizeAndSubmitTransfer(
+                snapshot: snapshot,
+                fromAddress: fromAddress,
+                toAddress: toAddress,
+                amountText: amountText,
+                asset: asset,
+                tracker: tracker,
+                pin: pin,
+                useBiometrics: useBiometrics,
+              ),
           onLock: controller.lockWallet,
           onReconnectExternalDevice: controller.isExternalBackendSelected
               ? controller.reconnectExternalDevice
@@ -264,6 +282,8 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           walletAddress: controller.summary?.address,
           isQrCameraAvailable: controller.isQrCameraAvailable,
           isQrFileLoadAvailable: controller.isQrFileLoadAvailable,
+          canUnlockWithBiometrics: controller.canUnlockWithBiometrics,
+          isExternalBackend: controller.isExternalBackendSelected,
           onScanQrCamera: controller.scanQrWithCamera,
           onLoadQrFromFile: controller.loadQrFromFile,
           onPair: controller.pairWalletConnect,
