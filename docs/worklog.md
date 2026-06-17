@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-06-16 — Phase 12 kickoff: AirGap → EIP-4527/BC-UR (MetaMask-compatible) — branch main — in progress (deps probe)
+## 2026-06-16 — Phase 12 kickoff: AirGap → EIP-4527/BC-UR (MetaMask-compatible) — branch main — in progress (12.1 done)
 - Decision (owner): make AirGap interoperate with **MetaMask** (not our bespoke `airgap-tx:` format); the app
   is **always the offline signer** (QR hardware wallet), no app↔app interop. Protocol = **EIP-4527 over
   BC-UR** (Keystone standard MetaMask adopted). Plan = Phase 12 in `development-plan.md`.
@@ -34,9 +34,19 @@ Entry template:
   - without origin → `ur:eth-sign-request/onadtpdagdndcawmgtfrkigrpmndutdnbtkgfssbjnaohdgryagalalnascsgljpnbaelfdibemwaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaelaoxlbjyihjkjyeyaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaeaehnaehglalalaaxadaaadahtaaddyoeadlecsdwykadykadykaewkadwkaocybgeehfkswdtklffd`
   - (Will also pull an `eth-signature` vector + a `crypto-hdkey` vector during 12.1/12.3.)
 - Done so far: added `cbor`+`bc_ur` to pubspec (dep-only probe); wrote the Phase 12 plan + recorded vectors.
-- Next / open: CI probe (deps resolve + build on all 4 platforms — expected clean, pure Dart). Then 12.1
-  `Eip4527Codec` + tests vs the vectors. No version bump (build/config only this step).
-- Refs: this commit; `pubspec.yaml`, `docs/development-plan.md`.
+- Done: probe green on all 4 platforms (`cbor`+`bc_ur` resolve + build, pure Dart). **12.1 done** —
+  `Eip4527Codec` (`lib/src/airgap/eip4527.dart`) over cbor (CBOR, tags 37/304) + bc_ur (UR/bytewords):
+  encode/decode `eth-sign-request` + `eth-signature`. **Both Keystone vectors match byte-for-byte** (decode
+  AND encode, with/without origin) — verified standalone by the impl + re-run green in CI's `flutter test`
+  (run 27721517203, commit a1af8cb). Fingerprint `0x12345678` (hex) confirmed by the vector. No version bump
+  (codec not yet wired).
+- Next / open: **12.2** — decode an `eth-sign-request` → compute the digest per data-type → sign via the
+  active backend → `eth-signature` UR. CAUTION: the returned signature `v` convention differs by data-type
+  (personal_sign/EIP-712 reuse `signPersonalMessage`/`signDigest` = recovery-id+27; tx types 1/4 likely want
+  raw recovery-id/EIP-155 — must research + validate against a Keystone EthSignature / full request→signature
+  vector). 12.3 account export, 12.4 multipart QR + UI, 12.5 cleanup.
+- Refs: probe d1cae7f; 12.1 a1af8cb; `pubspec.yaml`, `lib/src/airgap/eip4527.dart`, `test/eip4527_test.dart`,
+  `docs/development-plan.md`.
 
 ## 2026-06-16 — Owner dogfood: WalletConnect v2 + per-op PIN verified on iOS sim — branch main — done (docs)
 - Result (owner, iOS simulator, current build): **WalletConnect v2 works well** — connect/disconnect,
