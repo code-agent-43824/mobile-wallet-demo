@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-06-16 — Phase 11: auth per operation, not on app open — branch main — implemented, verifying CI
+## 2026-06-16 — Phase 11: auth per operation, not on app open — branch main — done (CI green)
 - Trigger: owner noticed the PBKDF2 progress screen on **every** wallet access and asked: is the heavy
   derivation needed just to view? And for a card-based key, should the PIN really be asked to view the
   status screen? Agreed: no. Decisions — open → **read-only dashboard, no auth**; each **private-key op**
@@ -39,10 +39,15 @@ Entry template:
   with the credential BEFORE the busy op (so `pumpAndSettle` doesn't spin). `locked`/`_LockedStage`/
   `unlockWallet`/`lockWallet` kept for the deferred toggle. Tests reworked (controller + widget + connections).
   Reviewed the security-critical lock-in-`finally`; `dart format` clean (parses).
-- Next / open: land the code, version bump, `dart format`, then CI must be green (the per-op flow changes
-  many widget/controller tests; the auth sheet must pop before the busy overlay so `pumpAndSettle` settles).
-  Then owner verifies on device: open = instant read-only dashboard; PIN/biometric prompt only on
-  send/approve/sign.
+- Verified: **CI green on all 5 platforms** (run 27701182333). Two stale widget tests were fixed after the
+  refactor landed: the external-device test (off-screen taps on the taller dashboard + the old reconnect/
+  unlock flow → at rest the demo device is locked, so its PKCS#11 ping/read-address buttons now show a
+  graceful "no session" banner; recorded as a deferred follow-up), and the async-tracking test (the
+  transient "pending receipt" assertion raced the receipt timer once the auth sheet added a pumpAndSettle →
+  bumped the test transport delay to 4s so the pending state is deterministic).
+- Next / open: owner verifies on device — open = instant read-only dashboard (no PIN/PBKDF2); PIN/biometric
+  (or device tap+PIN) prompt only on send / WC-approve / AirGap-sign. Deferred: the "lock app on open"
+  toggle + the external-device session-management UX (both in the plan's Phase 11 "Deferred").
 - Refs: this commit; will touch `lib/src/wallet_flow_controller.dart`,
   `lib/src/wallet_flow_screen{,_unlocked,_onboarding,_connections}.dart`, the widget/controller tests.
 

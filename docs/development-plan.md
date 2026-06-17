@@ -371,7 +371,7 @@ Owner decisions (2026-06-16):
 - **Each private-key operation authenticates EVERY time** (no 5-min session reuse): PIN or biometric for `PhoneSecureVault`; "tap + device PIN" for `ExternalDeviceDemoBackend`. The key is unlocked transiently for the op and wiped (`lock()`) immediately after. Rationale (owner): if the PIN is behind fingerprint/Face ID, re-authing per op is trivial.
 - The three key ops: send a transaction, approve an inbound WalletConnect request, sign an offline AirGap request. Reject/clear stay auth-free.
 
-Status: ✅ implemented (v1.32) — pending CI + owner device check.
+Status: ✅ done (v1.32, CI green on all platforms) — pending owner device check.
 
 ### Chunks
 - **11.1** — state machine: `loadInitialState` (and the post-onboarding end states) land on the read-only dashboard (the `unlocked` stage, repurposed) instead of `locked`; the dashboard renders from `summary` with no held material. The `locked` stage + `_LockedStage` + `unlockWallet`/`lockWallet` are **kept** (unused by default) for the deferred lock-on-open toggle below.
@@ -380,6 +380,7 @@ Status: ✅ implemented (v1.32) — pending CI + owner device check.
 
 ### Deferred / future (recorded per owner request)
 - **Optional "lock app on open" toggle** — a privacy setting that re-introduces an app-open gate (PIN/biometric to even view), reusing the retained `locked` stage. Off by default. Not built now.
+- **External-device session-management UX** — post-Phase-11 the demo device is locked at rest (no PKCS#11 session), so the dashboard's "ping session" / "read address via PKCS#11" buttons surface a "No active device session" banner until a signing op briefly opens one. Demo-path nicety: either hide those controls until a session exists, or have them open a session on demand. (Phase 10 will revisit the real device lifecycle anyway.)
 
 ## Suggested release sequence
 - `v0.3` — architecture skeleton + secure vault foundation
