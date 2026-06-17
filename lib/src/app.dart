@@ -85,7 +85,7 @@ class MobileWalletDemoApp extends StatelessWidget {
     );
 
     return MaterialApp(
-      title: 'Mobile Wallet Demo',
+      title: 'Wallet Demo',
       debugShowCheckedModeBanner: false,
       navigatorKey: _appNavigatorKey,
       theme: theme,

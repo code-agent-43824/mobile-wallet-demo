@@ -18,6 +18,29 @@ Entry template:
 
 ---
 
+## 2026-06-16 — Cosmetic: rename to "Wallet Demo" + custom W icon (all platforms) — branch main — done
+- Trigger: owner asked for (1) a proper app name + file name "Wallet Demo" on all platforms, (2) a custom
+  icon replacing the Flutter default — a round white badge with a big black "W".
+- Done (name → **Wallet Demo**): Android `android:label`; iOS `CFBundleDisplayName` + `CFBundleName`; Windows
+  window title (`main.cpp`) + `Runner.rc` (FileDescription/ProductName) + `BINARY_NAME`→`WalletDemo` (exe;
+  CMake target names can't contain spaces, so the .exe is `WalletDemo.exe`) + `InternalName`/`OriginalFilename`;
+  in-app header (`wallet_flow_screen_widgets.dart`) + `MaterialApp.title`; WC peer metadata name
+  (`reown_wallet_connect_service.dart`); the iOS artifact `.app` (ci.yml `ditto` + README) → `Wallet Demo.app`;
+  `widget_test` assertion updated. **Kept** the Dart package name (`mobile_wallet_demo`) and bundle id
+  (`com.example.mobile_wallet_demo`) — those are identifiers, not display names.
+- Done (icon): `scripts/gen_app_icon.py` (Pillow, Outfit-Bold "W", 4× supersampled) regenerates all platform
+  icons. Android `mipmap-*/ic_launcher.png` + Windows `app_icon.ico` = a white **circle** on a transparent
+  background (true round icon). iOS `AppIcon.appiconset/*` = a white **opaque square** (iOS fills alpha with
+  black and squircle-masks, so a transparent circle would get black corners) — visually a white rounded icon
+  with the W. Verified by rendering a preview.
+- **Version bump v1.30.0+41 → v1.31.0+42.**
+- Next / open: CI green (Windows build must accept `BINARY_NAME=WalletDemo`; tests with the renamed header
+  assertion; all icon files are static assets). Owner sees "Wallet Demo" + the W icon after reinstalling.
+- Refs: this commit; `android/.../AndroidManifest.xml` + `mipmap-*`, `ios/Runner/Info.plist` +
+  `Assets.xcassets/AppIcon.appiconset/*`, `windows/CMakeLists.txt` + `runner/{main.cpp,Runner.rc,resources/app_icon.ico}`,
+  `lib/src/{app.dart,wallet_flow_screen_widgets.dart,walletconnect/reown_wallet_connect_service.dart}`,
+  `scripts/gen_app_icon.py`, `.github/workflows/ci.yml`, README, version files.
+
 ## 2026-06-16 — On-device UX fixes: biometric activity, create/unlock freeze, progress overlay — branch main — done
 - Trigger: owner ran the fixed **release** APK on Android — launches now. Two reported issues + one on-screen
   error: (1) create-wallet (after PIN) **freezes the UI for several seconds**; (2) a (smaller) freeze on PIN

@@ -133,8 +133,8 @@ jobs:
           mkdir -p "$stage"
           # ditto preserves the bundle; staging it under a parent dir makes
           # upload-artifact keep the ".app" folder instead of stripping it,
-          # so the downloaded zip unpacks to a single "Mobile Wallet Demo.app".
-          ditto "$app" "$stage/Mobile Wallet Demo.app"
+          # so the downloaded zip unpacks to a single "Wallet Demo.app".
+          ditto "$app" "$stage/Wallet Demo.app"
 
       - name: Upload iOS simulator artifact
         uses: actions/upload-artifact@v4
@@ -202,7 +202,7 @@ jobs:
           stage="build/ios/device-artifact"
           rm -rf "$stage"
           mkdir -p "$stage"
-          ditto "$app" "$stage/Mobile Wallet Demo.app"
+          ditto "$app" "$stage/Wallet Demo.app"
 
       - name: Upload iOS device artifact
         uses: actions/upload-artifact@v4

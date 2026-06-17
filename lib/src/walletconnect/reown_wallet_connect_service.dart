@@ -21,7 +21,7 @@ class ReownWalletConnectService implements WalletConnectService {
       _metadata = metadata ?? _defaultMetadata;
 
   static const PairingMetadata _defaultMetadata = PairingMetadata(
-    name: 'Mobile Wallet Demo',
+    name: 'Wallet Demo',
     description: 'Flutter EVM wallet demo — WalletConnect v2 wallet side.',
     url: 'https://github.com/code-agent-43824/mobile-wallet-demo',
     icons: <String>['https://avatars.githubusercontent.com/u/37784886'],

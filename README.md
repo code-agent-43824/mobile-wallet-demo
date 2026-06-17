@@ -39,7 +39,7 @@
 
 ## Версионирование
 
-- Текущая версия: `v1.30.0+41`
+- Текущая версия: `v1.31.0+42`
 - По договорённости в этом проекте дальше повышаем minor-версию с каждым функциональным шагом
 
 ## Что покрывает текущий этап
@@ -78,7 +78,7 @@
 Workflow публикует скачиваемые артефакты так, чтобы при скачивании с GitHub был нужен только один `unzip`:
 
 - Android: `app-release.apk`
-- iOS Simulator: `ios-simulator-app.zip` — внутри одна папка `Mobile Wallet Demo.app` (см. раздел «iOS artifacts»)
+- iOS Simulator: `ios-simulator-app.zip` — внутри одна папка `Wallet Demo.app` (см. раздел «iOS artifacts»)
 - iOS Device: `ios-device-build.zip` — **неподписанный** device-build (технический артефакт; см. «iOS artifacts»)
 - Windows x64: один архив GitHub Artifact с содержимым `Release/` внутри
 
@@ -91,19 +91,19 @@ CI собирает два независимых iOS-артефакта (пар
 
 1. Открой нужный запуск в GitHub → вкладка **Actions** → job **iOS Simulator build**.
 2. Скачай артефакт **`ios-simulator-app.zip`**.
-3. Распакуй — внутри одна папка **`Mobile Wallet Demo.app`** (готовый `.app` bundle, а не набор файлов
+3. Распакуй — внутри одна папка **`Wallet Demo.app`** (готовый `.app` bundle, а не набор файлов
    `Info.plist` / `Runner` / `Frameworks` / `Assets.car`).
 4. Запусти **Simulator** (Xcode → Open Developer Tool → Simulator) и дождись загрузки симулятора.
 5. Установи приложение одним из способов:
-   - перетащи `Mobile Wallet Demo.app` на окно запущенного симулятора; **или**
-   - в Finder правый клик по `Mobile Wallet Demo.app` → **Share / Поделиться** → **Simulator** → выбери
+   - перетащи `Wallet Demo.app` на окно запущенного симулятора; **или**
+   - в Finder правый клик по `Wallet Demo.app` → **Share / Поделиться** → **Simulator** → выбери
      запущенный симулятор.
 
 Так приложение можно посмотреть на Mac без Apple-аккаунта и без подписи.
 
 ### 2. Запуск на реальном iPhone / iPad
 
-Артефакт **`ios-device-build.zip`** содержит **неподписанный** device-build (`Mobile Wallet Demo.app`) —
+Артефакт **`ios-device-build.zip`** содержит **неподписанный** device-build (`Wallet Demo.app`) —
 это технический артефакт. **Установить его на реальное устройство без подписи нельзя.**
 
 Способы запустить на устройстве:

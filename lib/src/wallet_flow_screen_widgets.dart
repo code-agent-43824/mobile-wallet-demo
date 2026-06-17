@@ -77,7 +77,7 @@ class _Header extends StatelessWidget {
         ),
         const SizedBox(height: 24),
         Text(
-          'Mobile Wallet Demo',
+          'Wallet Demo',
           style: theme.textTheme.headlineMedium?.copyWith(
             fontWeight: FontWeight.w700,
           ),
