@@ -18,6 +18,21 @@ Entry template:
 
 ---
 
+## 2026-06-16 — Owner dogfood: WalletConnect v2 + per-op PIN verified on iOS sim — branch main — done (docs)
+- Result (owner, iOS simulator, current build): **WalletConnect v2 works well** — connect/disconnect,
+  `personal_sign`, and sign/transaction-approve all succeed and the dApp reacts; the earlier "Approve does
+  nothing" is gone (the v1.33 `_runGuarded` catch-all + the Phase 11 fresh-per-op unlock). The **per-op PIN
+  prompt** (auth on each private-key op, not on app open) "works well". Phase 11 + WC v2 are now
+  **device-validated**.
+- Not yet verified: **AirGap inbound** — owner hadn't set up MetaMask / an air-gapped companion. Recorded as
+  an explicit owner TODO in `development-plan.md` → Phase 9 "Pending owner verification" (and referenced in
+  the status snapshot + stopping point) so it isn't forgotten.
+- Done: documentation only — marked Phase 9 (WC) + Phase 11 device-validated, fixed the stale "in progress"
+  phrasing, and recorded the AirGap verification task. No code/version change.
+- Next / open: owner does the AirGap end-to-end check when convenient. Roadmap-next is **Phase 10** (real
+  custody/NFC: PKCS#11 over the external-device backend) — see the Phase 10 chunk list.
+- Refs: this commit; `docs/development-plan.md`.
+
 ## 2026-06-16 — Surface silent failures in the controller (WC approve "does nothing") — branch main — done
 - Trigger: owner dogfood (iOS sim, **pre-Phase-11 build**, live WalletConnect test dApp): connect/disconnect +
   reject all work and the dApp reacts, but **Approve on `personal_sign` / sign-transaction does nothing** —
