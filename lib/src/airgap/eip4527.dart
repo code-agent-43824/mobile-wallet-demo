@@ -191,6 +191,79 @@ class EthSignature {
   String get signatureHex => bytesToHex(signature, include0x: true);
 }
 
+/// A `crypto-coininfo` (BC-UR tag 305): a `crypto-hdkey`'s `use-info` (CDDL key
+/// 5) — the SLIP-44 coin [type] (60 for Ethereum) and [network].
+class CoinInfo {
+  const CoinInfo({this.type = 60, this.network = 0});
+
+  /// SLIP-44 coin type (CDDL key `1`; the CBOR default when absent is `0` =
+  /// Bitcoin). Ethereum is `60`.
+  final int type;
+
+  /// Network (CDDL key `2`, default `0` = mainnet).
+  final int network;
+}
+
+/// A `crypto-hdkey` (UR type `crypto-hdkey`, BC-UR tag 303): a BIP-32 extended
+/// key. For account export (pairing) this is a **derived public** key — the
+/// account-level node's compressed pubkey ([keyData]) + [chainCode] + the
+/// derivation [origin] and [parentFingerprint] — which an online wallet
+/// (MetaMask) imports watch-only and then derives addresses from.
+class CryptoHDKey {
+  const CryptoHDKey({
+    required this.keyData,
+    this.chainCode,
+    this.isMaster = false,
+    this.isPrivate = false,
+    this.useInfo,
+    this.origin,
+    this.children,
+    this.parentFingerprint,
+    this.name,
+    this.note,
+  });
+
+  /// `is-master` (CDDL key `1`): `true` only for the master node. Omitted from
+  /// the encoding for derived keys (the CBOR default is `false`).
+  final bool isMaster;
+
+  /// `is-private` (CDDL key `2`): `true` if [keyData] is a private key. Omitted
+  /// for public keys (the default). Always `false`/omitted for an export.
+  final bool isPrivate;
+
+  /// `key-data` (CDDL key `3`): the 33-byte compressed SEC1 public key (or, if
+  /// [isPrivate], `0x00 ‖ 32-byte private key`).
+  final Uint8List keyData;
+
+  /// `chain-code` (CDDL key `4`): the 32-byte BIP-32 chain code, if present.
+  final Uint8List? chainCode;
+
+  /// `use-info` (CDDL key `5`): the coin/network this key is for.
+  final CoinInfo? useInfo;
+
+  /// `origin` (CDDL key `6`): the derivation path from the master to this key
+  /// (with the master's `source-fingerprint`), e.g. `M/44'/60'/0'`.
+  final CryptoKeypath? origin;
+
+  /// `children` (CDDL key `7`): the path pattern for this key's children, e.g.
+  /// `0/*`, telling the importer how to derive addresses.
+  final CryptoKeypath? children;
+
+  /// `parent-fingerprint` (CDDL key `8`): the 32-bit fingerprint of this key's
+  /// immediate parent node.
+  final int? parentFingerprint;
+
+  /// `name` (CDDL key `9`): a human-readable label, if any.
+  final String? name;
+
+  /// `note` (CDDL key `10`): free-form note. Keystone uses it to signal the
+  /// derivation scheme (e.g. `account.standard`).
+  final String? note;
+
+  /// [keyData] as a `0x`-prefixed hex string.
+  String get keyDataHex => bytesToHex(keyData, include0x: true);
+}
+
 /// Pure-Dart codec for the EIP-4527 / Keystone BC-UR air-gapped protocol.
 ///
 /// Encodes/decodes `eth-sign-request` and `eth-signature` UR strings — the CBOR
@@ -203,9 +276,11 @@ class Eip4527Codec {
 
   static const String signRequestType = 'eth-sign-request';
   static const String signatureType = 'eth-signature';
+  static const String hdKeyType = 'crypto-hdkey';
 
   static const int _uuidTag = 37;
   static const int _keypathTag = 304;
+  static const int _coinInfoTag = 305;
 
   /// Decodes an `ur:eth-sign-request/...` string into an [EthSignRequest].
   EthSignRequest decodeSignRequest(String ur) {
@@ -305,6 +380,99 @@ class Eip4527Codec {
       entries[const CborSmallInt(3)] = CborString(signature.origin!);
     }
     return _encodeMap(CborMap(entries), signatureType);
+  }
+
+  /// Encodes a [CryptoHDKey] into an `ur:crypto-hdkey/...` string.
+  ///
+  /// Top-level UR: the CBOR map is emitted **without** the `crypto-hdkey` tag
+  /// (303) — the UR type string carries the type. Keys are emitted in ascending
+  /// order; optional fields (and `is-master`/`is-private` when false) are
+  /// omitted, matching the Keystone encoder.
+  String encodeHdKey(CryptoHDKey key) {
+    final entries = <CborValue, CborValue>{};
+    if (key.isMaster) {
+      entries[const CborSmallInt(1)] = const CborBool(true);
+    }
+    if (key.isPrivate) {
+      entries[const CborSmallInt(2)] = const CborBool(true);
+    }
+    entries[const CborSmallInt(3)] = CborBytes(key.keyData);
+    if (key.chainCode != null) {
+      entries[const CborSmallInt(4)] = CborBytes(key.chainCode!);
+    }
+    if (key.useInfo != null) {
+      entries[const CborSmallInt(5)] = _coinInfoToValue(key.useInfo!);
+    }
+    if (key.origin != null) {
+      entries[const CborSmallInt(6)] = _keypathToValue(key.origin!);
+    }
+    if (key.children != null) {
+      entries[const CborSmallInt(7)] = _keypathToValue(key.children!);
+    }
+    if (key.parentFingerprint != null) {
+      entries[const CborSmallInt(8)] = CborSmallInt(key.parentFingerprint!);
+    }
+    if (key.name != null) {
+      entries[const CborSmallInt(9)] = CborString(key.name!);
+    }
+    if (key.note != null) {
+      entries[const CborSmallInt(10)] = CborString(key.note!);
+    }
+    return _encodeMap(CborMap(entries), hdKeyType);
+  }
+
+  /// Decodes an `ur:crypto-hdkey/...` string into a [CryptoHDKey].
+  CryptoHDKey decodeHdKey(String ur) {
+    final map = _decodeMap(ur, hdKeyType);
+
+    final isMasterValue = map[const CborSmallInt(1)];
+    final isMaster = isMasterValue is CborBool ? isMasterValue.value : false;
+    final isPrivateValue = map[const CborSmallInt(2)];
+    final isPrivate = isPrivateValue is CborBool ? isPrivateValue.value : false;
+
+    final keyData = _bytes(_required(map, 3, 'key-data'), 'key-data');
+
+    final chainCodeValue = map[const CborSmallInt(4)];
+    final chainCode = chainCodeValue == null
+        ? null
+        : _bytes(chainCodeValue, 'chain-code');
+
+    final useInfoValue = map[const CborSmallInt(5)];
+    final useInfo = useInfoValue == null
+        ? null
+        : _coinInfoFromValue(useInfoValue);
+
+    final originValue = map[const CborSmallInt(6)];
+    final origin = originValue == null ? null : _keypathFromValue(originValue);
+
+    final childrenValue = map[const CborSmallInt(7)];
+    final children = childrenValue == null
+        ? null
+        : _keypathFromValue(childrenValue);
+
+    final parentFingerprintValue = map[const CborSmallInt(8)];
+    final parentFingerprint = parentFingerprintValue == null
+        ? null
+        : _int(parentFingerprintValue, 'parent-fingerprint');
+
+    final nameValue = map[const CborSmallInt(9)];
+    final name = nameValue == null ? null : _string(nameValue, 'name');
+
+    final noteValue = map[const CborSmallInt(10)];
+    final note = noteValue == null ? null : _string(noteValue, 'note');
+
+    return CryptoHDKey(
+      keyData: keyData,
+      chainCode: chainCode,
+      isMaster: isMaster,
+      isPrivate: isPrivate,
+      useInfo: useInfo,
+      origin: origin,
+      children: children,
+      parentFingerprint: parentFingerprint,
+      name: name,
+      note: note,
+    );
   }
 
   // --- UR <-> CBOR map plumbing -------------------------------------------
@@ -426,6 +594,33 @@ class Eip4527Codec {
       entries[const CborSmallInt(3)] = CborSmallInt(keypath.depth!);
     }
     return CborMap(entries, tags: const [_keypathTag]);
+  }
+
+  CborValue _coinInfoToValue(CoinInfo info) {
+    // Omit fields at their CDDL default (type 0, network 0) for the canonical
+    // minimal encoding.
+    final entries = <CborValue, CborValue>{};
+    if (info.type != 0) {
+      entries[const CborSmallInt(1)] = CborSmallInt(info.type);
+    }
+    if (info.network != 0) {
+      entries[const CborSmallInt(2)] = CborSmallInt(info.network);
+    }
+    return CborMap(entries, tags: const [_coinInfoTag]);
+  }
+
+  CoinInfo _coinInfoFromValue(CborValue value) {
+    if (value is! CborMap || !value.tags.contains(_coinInfoTag)) {
+      throw Eip4527Exception(
+        'use-info must be a crypto-coininfo (CBOR tag $_coinInfoTag).',
+      );
+    }
+    final typeValue = value[const CborSmallInt(1)];
+    final networkValue = value[const CborSmallInt(2)];
+    return CoinInfo(
+      type: typeValue == null ? 0 : _int(typeValue, 'coin-type'),
+      network: networkValue == null ? 0 : _int(networkValue, 'coin-network'),
+    );
   }
 
   // --- UUID <-> tag-37 16-byte bstr ---------------------------------------

@@ -18,6 +18,38 @@ Entry template:
 
 ---
 
+## 2026-06-18 — Phase 12 chunk 12.3: account export (crypto-hdkey pairing) — branch main — done (no version bump)
+- Plan: build the EIP-4527 / BC-UR **account-export** UR an online wallet (MetaMask) scans to add this wallet
+  watch-only — from the vault's account-level extended public key (`m/44'/60'/0'`) + chain code + master
+  fingerprint. Pure logic + tests, no UI (wiring is 12.4), no version bump (mirrors 12.1/12.2).
+- **Format decision (researched, decisive):** for a SINGLE standard BIP-44 EVM account the export is a **bare
+  `ur:crypto-hdkey/...`** (the "BIP44 Standard" mode MetaMask supports per EIP-4527) — *not* the multi-key
+  `crypto-account` container Keystone uses for Bitcoin / Ledger-Live. CBOR keys for the derived **public** key:
+  `3` key-data (33-byte compressed pubkey), `4` chain-code (32), `5` use-info `#6.305(coininfo{1:60})` (ETH,
+  mainnet network 0 omitted), `6` origin `#6.304(keypath)` = `44'/60'/0'` + source-fingerprint (master) +
+  depth 3, `8` parent-fingerprint. Omitted: `1` is-master / `2` is-private (public derived key), `7` children,
+  `9` name (optional — deriver takes an optional label), `10` note. MetaMask derives addresses `M/0/i` from
+  the xpub → index 0 = this wallet's own `m/44'/60'/0'/0/0`.
+- Done: `Eip4527Codec.encodeHdKey`/`decodeHdKey` + `CryptoHDKey`/`CoinInfo` models (`lib/src/airgap/
+  eip4527.dart`); `AccountExportDeriver` (`lib/src/airgap/account_export.dart`) turns a mnemonic → `CryptoHDKey`
+  via bip32/bip39 (account already exposed via `WalletMaterial.mnemonic`, so no vault change needed). Tests
+  (`test/eip4527_account_export_test.dart`): byte-exact field values for the Hardhat "test…junk" seed
+  (master fp `16a93ed0`, parent fp `86968b77`, depth 3, pubkey `0206b81b…71f5`, chaincode `2258179a…1812`),
+  a regression-pin of the encoded UR, encode/decode round-trip, a wrong-type-UR rejection, and the **decisive
+  correctness test** — reconstruct the watch-only node from ONLY the exported pubkey+chaincode, derive `M/0/0`,
+  and assert it reproduces the private leaf pubkey for `0xf39Fd6…2266`. Derivation + UR bytes pre-validated
+  offline with a standalone Dart probe (no Flutter SDK in this env; CI runs `flutter test`).
+- No external Keystone vector exists for this seed, so the UR assertion is a self-encoding **regression pin**
+  (guards CBOR key order / tag emission); correctness is carried by the re-derivation test.
+- Next / open: **12.4** — multipart **animated** QR (bc_ur fountain) + camera sequence scanning; rewire the
+  Connections "AirGap" UI to show the pairing QR (call `AccountExportDeriver` under per-op auth), scan an
+  `eth-sign-request`, and show the `eth-signature` QR. Then **12.5** cleanup (drop the legacy `airgap-tx:`
+  codec) + version bump + owner MetaMask dogfood. **Dogfood watch-item:** if MetaMask rejects the bare
+  `crypto-hdkey` or picks the wrong derivation, the levers are wrapping in `crypto-account` and/or adding
+  `note:"account.standard"` (key 10) — codec already supports the fields.
+- Refs: this commit; `lib/src/airgap/eip4527.dart`, `lib/src/airgap/account_export.dart`,
+  `test/eip4527_account_export_test.dart`, `docs/development-plan.md`.
+
 ## 2026-06-16 — Phase 12 kickoff: AirGap → EIP-4527/BC-UR (MetaMask-compatible) — branch main — in progress (12.1 done)
 - Decision (owner): make AirGap interoperate with **MetaMask** (not our bespoke `airgap-tx:` format); the app
   is **always the offline signer** (QR hardware wallet), no app↔app interop. Protocol = **EIP-4527 over
