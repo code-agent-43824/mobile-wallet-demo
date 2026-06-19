@@ -18,6 +18,21 @@ Entry template:
 
 ---
 
+## 2026-06-18 — Docs: reconcile WC-tx wording + repoint AirGap verification to EIP-4527 — branch main — done (docs only)
+- Plan: fix two doc-drift items found in a plan review (no code): (1) the Phase 9 "Pending owner verification"
+  still framed the AirGap dogfood around the legacy `airgap-tx:` format; (2) the WalletConnect transaction
+  status was worded inconsistently between CLAUDE.md and the plan.
+- Done: repointed the AirGap end-to-end verification to the MetaMask-compatible **EIP-4527 / BC-UR** path
+  (Phase 12) and marked the legacy `airgap-tx:` direction superseded (removed in 12.5) — in the Phase 9
+  "Pending owner verification" item, the Phase 9 top status bullet, and the "Current stopping point".
+  Reconciled the WC-tx wording to "connect/disconnect + `personal_sign` + the transaction approve+sign flow
+  validated on iOS sim (v1.33); only a live on-chain broadcast with test funds is unconfirmed" — in CLAUDE.md
+  and the stopping point. Added a Phase 12 progress line (12.1–12.3 done + CI-green; 12.4/12.5 remain) to the
+  stopping point, which previously ended at Phase 11. Historical release-note lines (e.g. v1.29) left as-is.
+- Next / open: no code change; Phase 12 continues at **12.4** (animated multipart QR + camera sequence scan +
+  Connections AirGap UI rewire), then 12.5 cleanup + the MetaMask dogfood.
+- Refs: this commit; `CLAUDE.md`, `docs/development-plan.md`.
+
 ## 2026-06-18 — Phase 12 chunk 12.3: account export (crypto-hdkey pairing) — branch main — done (no version bump)
 - Plan: build the EIP-4527 / BC-UR **account-export** UR an online wallet (MetaMask) scans to add this wallet
   watch-only — from the vault's account-level extended public key (`m/44'/60'/0'`) + chain code + master
