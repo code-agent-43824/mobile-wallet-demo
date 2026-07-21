@@ -70,6 +70,7 @@ class _UnlockedStageState extends State<_UnlockedStage> {
   WalletChainSnapshot? _snapshot;
   String? _error;
   bool _isLoading = false;
+  int _refreshId = 0;
 
   @override
   void initState() {
@@ -82,6 +83,8 @@ class _UnlockedStageState extends State<_UnlockedStage> {
     if (address == null) {
       return;
     }
+    final network = _selectedNetwork;
+    final refreshId = ++_refreshId;
 
     setState(() {
       _isLoading = true;
@@ -90,24 +93,24 @@ class _UnlockedStageState extends State<_UnlockedStage> {
 
     try {
       final snapshot = await widget.blockchainProvider.loadSnapshot(
-        network: _selectedNetwork,
+        network: network,
         address: address,
       );
-      if (!mounted) {
+      if (!mounted || refreshId != _refreshId || network != _selectedNetwork) {
         return;
       }
       setState(() {
         _snapshot = snapshot;
       });
     } on BlockchainFailure catch (error) {
-      if (!mounted) {
+      if (!mounted || refreshId != _refreshId || network != _selectedNetwork) {
         return;
       }
       setState(() {
         _error = error.message;
       });
     } finally {
-      if (mounted) {
+      if (mounted && refreshId == _refreshId && network == _selectedNetwork) {
         setState(() {
           _isLoading = false;
         });
@@ -217,6 +220,8 @@ class _UnlockedStageState extends State<_UnlockedStage> {
 
             setState(() {
               _selectedNetwork = network;
+              _snapshot = null;
+              _error = null;
             });
             _refresh();
           },
@@ -416,14 +421,29 @@ class _TransferPreparationSectionState
     super.didUpdateWidget(oldWidget);
     final assets = _assets;
     final selectedId = _selectedAsset?.id;
-    final stillExists = assets.any((asset) => asset.id == selectedId);
-    if (!stillExists) {
-      _selectedAsset = assets.isEmpty ? null : assets.first;
+    final selectedIndex = assets.indexWhere((asset) => asset.id == selectedId);
+    final nextSelectedAsset = selectedIndex < 0
+        ? (assets.isEmpty ? null : assets.first)
+        : assets[selectedIndex];
+    final snapshotChanged =
+        !identical(oldWidget.snapshot, widget.snapshot) ||
+        oldWidget.networkConfig.network != widget.networkConfig.network ||
+        oldWidget.fromAddress != widget.fromAddress;
+
+    // TransferAssetOption carries balanceRaw. Rebind even when the asset id is
+    // unchanged so validation uses the latest snapshot rather than the object
+    // created before an incoming transfer or network refresh.
+    _selectedAsset = nextSelectedAsset;
+    if (snapshotChanged || selectedId != nextSelectedAsset?.id) {
       _preview = null;
       _loadedNonce = null;
       _signedTransfer = null;
       _submittedTransfer = null;
       _trackingReceipt = null;
+      _submissionAttempts = 0;
+      _gasMultiplier = 1.0;
+      _replacementTransfer = false;
+      _error = null;
     }
   }
 

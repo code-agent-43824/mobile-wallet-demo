@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/app.dart';
@@ -42,6 +44,57 @@ class _FakeBlockchainProvider implements BlockchainProvider {
           statusLabel: 'Confirmed',
         ),
       ],
+    );
+  }
+}
+
+class _NetworkBalanceBlockchainProvider implements BlockchainProvider {
+  @override
+  Future<WalletChainSnapshot> loadSnapshot({
+    required EvmNetwork network,
+    required String address,
+  }) async {
+    final isSepolia = network == EvmNetwork.ethereumSepolia;
+    return WalletChainSnapshot(
+      network: network,
+      address: address,
+      nativeBalanceWei: isSepolia
+          ? BigInt.parse('100000000000000000')
+          : BigInt.zero,
+      nativeBalanceFormatted: isSepolia ? '0.1' : '0',
+      baseFeeGwei: 1,
+      providerLabel: 'network-balance.fake',
+      fetchedAtUtc: DateTime.utc(2026, 7, 21, 16, 20),
+      tokenBalances: const <TokenBalanceSnapshot>[],
+      recentTransactions: const <RecentTransactionSnapshot>[],
+    );
+  }
+}
+
+class _OutOfOrderBlockchainProvider implements BlockchainProvider {
+  final Completer<WalletChainSnapshot> mainnetSnapshot =
+      Completer<WalletChainSnapshot>();
+
+  @override
+  Future<WalletChainSnapshot> loadSnapshot({
+    required EvmNetwork network,
+    required String address,
+  }) {
+    if (network == EvmNetwork.ethereumMainnet) {
+      return mainnetSnapshot.future;
+    }
+    return Future<WalletChainSnapshot>.value(
+      WalletChainSnapshot(
+        network: network,
+        address: address,
+        nativeBalanceWei: BigInt.parse('100000000000000000'),
+        nativeBalanceFormatted: '0.1',
+        baseFeeGwei: 1,
+        providerLabel: 'sepolia-fast.fake',
+        fetchedAtUtc: DateTime.utc(2026, 7, 21, 16, 20),
+        tokenBalances: const <TokenBalanceSnapshot>[],
+        recentTransactions: const <RecentTransactionSnapshot>[],
+      ),
     );
   }
 }
@@ -157,7 +210,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Wallet Demo'), findsOneWidget);
-    expect(find.text('v1.33.0+44'), findsOneWidget);
+    expect(find.text('v1.34.0+45'), findsOneWidget);
     expect(find.text('Phone Secure Vault'), findsOneWidget);
     expect(find.text('External NFC demo device'), findsOneWidget);
     expect(find.text('Создать новый кошелёк'), findsOneWidget);
@@ -353,6 +406,110 @@ void main() {
     expect(find.text('Итоговый debit'), findsOneWidget);
     expect(find.text('Получатель'), findsOneWidget);
     expect(find.textContaining('Preview валиден'), findsOneWidget);
+  });
+
+  testWidgets('uses funded balance after switching networks', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _NetworkBalanceBlockchainProvider(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Создать новый кошелёк'));
+    await tester.pumpAndSettle();
+
+    final setupFields = find.byType(TextField);
+    await tester.enterText(setupFields.at(0), '1234');
+    await tester.enterText(setupFields.at(1), '1234');
+    await tester.tap(find.text('Создать кошелёк'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Я сохранил seed-фразу'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Пока без биометрии'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('0 ETH'), findsOneWidget);
+    await tester.tap(find.text('Ethereum Mainnet'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ethereum Sepolia').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('0.1 SepoliaETH'), findsOneWidget);
+    expect(find.text('Доступно: 0.1 SepoliaETH'), findsOneWidget);
+
+    final sendFields = find.byType(TextField);
+    await tester.enterText(
+      sendFields.at(0),
+      '0x1111111111111111111111111111111111111111',
+    );
+    await tester.enterText(sendFields.at(1), '0.05');
+    final previewButton = find.text('Оценить и показать preview');
+    await tester.ensureVisible(previewButton);
+    await tester.tap(previewButton);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Недостаточно'), findsNothing);
+    expect(find.textContaining('Preview валиден'), findsOneWidget);
+  });
+
+  testWidgets('ignores a late snapshot from the previous network', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final provider = _OutOfOrderBlockchainProvider();
+
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: provider,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Создать новый кошелёк'));
+    await tester.pumpAndSettle();
+    final setupFields = find.byType(TextField);
+    await tester.enterText(setupFields.at(0), '1234');
+    await tester.enterText(setupFields.at(1), '1234');
+    await tester.tap(find.text('Создать кошелёк'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Я сохранил seed-фразу'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Пока без биометрии'));
+    await tester.pump();
+
+    await tester.tap(find.text('Ethereum Mainnet'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Ethereum Sepolia').last);
+    await tester.pumpAndSettle();
+    expect(find.text('0.1 SepoliaETH'), findsOneWidget);
+
+    provider.mainnetSnapshot.complete(
+      WalletChainSnapshot(
+        network: EvmNetwork.ethereumMainnet,
+        address: '0x0000000000000000000000000000000000000000',
+        nativeBalanceWei: BigInt.zero,
+        nativeBalanceFormatted: '0',
+        baseFeeGwei: 1,
+        providerLabel: 'mainnet-late.fake',
+        fetchedAtUtc: DateTime.utc(2026, 7, 21, 16, 21),
+        tokenBalances: const <TokenBalanceSnapshot>[],
+        recentTransactions: const <RecentTransactionSnapshot>[],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('0.1 SepoliaETH'), findsOneWidget);
+    expect(find.text('0 ETH'), findsNothing);
   });
 
   testWidgets('offers biometric as a per-op fast-path when enabled', (

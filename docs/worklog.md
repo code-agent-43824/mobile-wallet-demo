@@ -18,6 +18,25 @@ Entry template:
 
 ---
 
+## 2026-07-21 — Fix stale balance after network switch/refresh — branch fix/network-balance-refresh — done
+- Plan: fix the live Sepolia send failure reproduced by the owner: the dashboard currently keeps the previous
+  network's snapshot while a new network loads, permits out-of-order refreshes to overwrite the selected network,
+  and keeps `_TransferPreparationSection._selectedAsset` bound to an obsolete balance object after a snapshot
+  refresh. Clear network-specific UI state on switch, accept only the newest matching refresh response, always
+  rebind the selected asset to the latest snapshot, invalidate stale transfer previews/results, and add widget
+  regression coverage for switching from a zero-balance Mainnet snapshot to a funded Sepolia snapshot.
+- Done: `_UnlockedStage` now clears the old snapshot when changing networks and tags every refresh so only the
+  newest response for the currently selected network may update snapshot/error/loading state. The transfer form
+  now rebinds its selected `TransferAssetOption` to every fresh snapshot (so `balanceRaw` cannot remain stale) and
+  invalidates previews/submission state derived from an older snapshot. Added widget regressions for the owner's
+  exact zero-Mainnet → funded-Sepolia path (`0.05` preview succeeds from a `0.1` balance) and for a late Mainnet
+  response arriving after Sepolia. Bumped the functional-step version to `v1.34.0+45`. Local validation: format
+  clean, `flutter analyze` clean, all 142 tests passed; after the version sync the full widget suite also passed
+  (11/11).
+- Next / open: owner dogfood the rebuilt v1.34 app by returning less than the full 0.1 SepoliaETH (leave gas).
+- Refs: this commit; owner dogfood; Sepolia tx
+  `0x5b17e9165f13627636f35f1621c0d92d88d2eccc9981257defc690bfaa7425d4`.
+
 ## 2026-06-18 — Docs: reconcile WC-tx wording + repoint AirGap verification to EIP-4527 — branch main — done (docs only)
 - Plan: fix two doc-drift items found in a plan review (no code): (1) the Phase 9 "Pending owner verification"
   still framed the AirGap dogfood around the legacy `airgap-tx:` format; (2) the WalletConnect transaction
