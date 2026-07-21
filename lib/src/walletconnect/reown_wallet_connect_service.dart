@@ -162,7 +162,7 @@ class ReownWalletConnectService implements WalletConnectService {
   @override
   Future<void> respondResult({
     required WalletConnectRequest request,
-    required String result,
+    required Object? result,
   }) async {
     final JsonRpcResponse response = JsonRpcResponse(
       id: request.id,

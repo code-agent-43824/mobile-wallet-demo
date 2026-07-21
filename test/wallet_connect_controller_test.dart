@@ -55,13 +55,14 @@ Map<String, Object?> _txObject({required String from}) => <String, Object?>{
 void main() {
   Future<WalletFlowController> buildUnlocked(
     WalletConnectService service, {
+    SecureKeyValueStore? store,
     TransactionService? transactionService,
     TransactionBroadcaster? transactionBroadcaster,
     NonceProvider? nonceProvider,
     QrScanner qrScanner = const UnavailableQrScanner(),
   }) async {
     final controller = WalletFlowController(
-      store: InMemorySecureKeyValueStore(),
+      store: store ?? InMemorySecureKeyValueStore(),
       biometricAuthGateway: const SimulatedBiometricAuthGateway(),
       walletConnectService: service,
       transactionService: transactionService,
@@ -201,6 +202,139 @@ void main() {
     await service.dispose();
   });
 
+  test(
+    'queues concurrent incoming requests without overwriting either',
+    () async {
+      final service = FakeWalletConnectService();
+      final controller = await buildUnlocked(
+        service,
+        transactionService: const LocalTransactionService(),
+      );
+      final address = controller.summary!.address;
+
+      final first = service.simulateRequest(
+        topic: 'topic-1',
+        method: 'personal_sign',
+        chainId: 'eip155:11155111',
+        params: <Object?>['0x6669727374', address],
+      );
+      final second = service.simulateRequest(
+        topic: 'topic-1',
+        method: 'personal_sign',
+        chainId: 'eip155:11155111',
+        params: <Object?>['0x7365636f6e64', address],
+      );
+      await pumpEventQueue();
+
+      expect(controller.pendingRequest!.id, first.id);
+      expect(controller.pendingRequestCount, 2);
+
+      await controller.approvePendingRequest(pin: '1234');
+      expect(service.respondedResults.single.id, first.id);
+      expect(controller.pendingRequest!.id, second.id);
+      expect(controller.pendingRequestCount, 1);
+
+      await controller.rejectPendingRequest();
+      expect(service.respondedErrors.single.id, second.id);
+      expect(controller.pendingRequest, isNull);
+
+      controller.dispose();
+      await service.dispose();
+    },
+  );
+
+  test('chain switch does not unlock the vault or require a PIN', () async {
+    final service = FakeWalletConnectService();
+    final controller = await buildUnlocked(service);
+
+    service.simulateRequest(
+      topic: 'topic-1',
+      method: 'wallet_switchEthereumChain',
+      params: const <Object?>[
+        <String, Object?>{'chainId': '0xaa36a7'},
+      ],
+    );
+    await pumpEventQueue();
+
+    await controller.approvePendingRequest();
+
+    expect(controller.errorMessage, isNull);
+    expect(controller.pendingRequest, isNull);
+    expect(service.respondedErrors, isEmpty);
+    expect(service.respondedResults.single.result, isNull);
+
+    controller.dispose();
+    await service.dispose();
+  });
+
+  test(
+    'loaded wallet summary keeps signing bound to its own backend',
+    () async {
+      final service = FakeWalletConnectService();
+      final controller = await buildUnlocked(
+        service,
+        transactionService: const LocalTransactionService(),
+      );
+      final address = controller.summary!.address;
+
+      // Reproduce the stale mutable selection that previously redirected an
+      // existing phone wallet to the empty external-device vault.
+      await controller.selectBackend('external_nfc_demo_device');
+      service.simulateRequest(
+        topic: 'topic-1',
+        method: 'personal_sign',
+        params: <Object?>['0x48656c6c6f', address],
+      );
+      await pumpEventQueue();
+
+      await controller.approvePendingRequest(pin: '1234');
+
+      expect(controller.errorMessage, isNull);
+      expect(service.respondedErrors, isEmpty);
+      expect(service.respondedResults.single.result, isA<String>());
+
+      controller.dispose();
+      await service.dispose();
+    },
+  );
+
+  test('wallet survives controller disposal and a cold reload', () async {
+    final store = InMemorySecureKeyValueStore();
+    final firstService = FakeWalletConnectService();
+    final first = await buildUnlocked(firstService, store: store);
+    final address = first.summary!.address;
+    // Simulate a process death after a stale backend-selection write. Startup
+    // must discover the persisted phone wallet instead of showing onboarding.
+    await first.selectBackend('external_nfc_demo_device');
+    first.dispose();
+    await firstService.dispose();
+
+    final secondService = FakeWalletConnectService();
+    final second = WalletFlowController(
+      store: store,
+      biometricAuthGateway: const SimulatedBiometricAuthGateway(),
+      walletConnectService: secondService,
+      transactionService: const LocalTransactionService(),
+    );
+    await second.loadInitialState();
+
+    expect(second.stage, WalletFlowStage.unlocked);
+    expect(second.summary!.address, address);
+    secondService.simulateRequest(
+      topic: 'topic-2',
+      method: 'personal_sign',
+      params: <Object?>['0x636f6c642d7374617274', address],
+    );
+    await pumpEventQueue();
+    await second.approvePendingRequest(pin: '1234');
+
+    expect(second.errorMessage, isNull);
+    expect(secondService.respondedResults.single.result, isA<String>());
+
+    second.dispose();
+    await secondService.dispose();
+  });
+
   test('approve incoming personal_sign responds with a signature', () async {
     final service = FakeWalletConnectService();
     final controller = await buildUnlocked(
@@ -221,7 +355,8 @@ void main() {
 
     expect(controller.pendingRequest, isNull);
     expect(service.respondedErrors, isEmpty);
-    expect(service.respondedResults.single.result, startsWith('0x'));
+    expect(service.respondedResults.single.result, isA<String>());
+    expect(service.respondedResults.single.result as String, startsWith('0x'));
 
     controller.dispose();
     await service.dispose();
@@ -371,7 +506,11 @@ void main() {
 
       expect(controller.pendingRequest, isNull);
       expect(service.respondedErrors, isEmpty);
-      expect(service.respondedResults.single.result, startsWith('0x'));
+      expect(service.respondedResults.single.result, isA<String>());
+      expect(
+        service.respondedResults.single.result as String,
+        startsWith('0x'),
+      );
 
       controller.dispose();
       await service.dispose();

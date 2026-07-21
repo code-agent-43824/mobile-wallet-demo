@@ -100,6 +100,7 @@ class WalletConnectV2RequestCodec {
   static const String ethSignMethod = 'eth_sign';
   static const String signTypedDataV4Method = 'eth_signTypedData_v4';
   static const String signTypedDataV3Method = 'eth_signTypedData_v3';
+  static const String switchEthereumChainMethod = 'wallet_switchEthereumChain';
 
   /// Whether [method] is a transaction request this codec can decode.
   bool isTransactionMethod(String method) =>
@@ -112,6 +113,38 @@ class WalletConnectV2RequestCodec {
   /// Whether [method] is an EIP-712 typed-data request (v3/v4 JSON shape).
   bool isTypedDataMethod(String method) =>
       method == signTypedDataV4Method || method == signTypedDataV3Method;
+
+  /// Whether [method] changes dApp chain context without accessing a key.
+  bool isChainSwitchMethod(String method) =>
+      method == switchEthereumChainMethod;
+
+  /// Decodes EIP-3326 / EIP-1193 `[{chainId: "0x..."}]` parameters.
+  int decodeSwitchEthereumChainId(List<Object?> params) {
+    if (params.isEmpty || params.first is! Map) {
+      throw const WalletConnectCodecException(
+        'wallet_switchEthereumChain требует объект с chainId.',
+      );
+    }
+    final raw = (params.first as Map)['chainId'];
+    if (raw is! String || raw.isEmpty) {
+      throw const WalletConnectCodecException(
+        'В wallet_switchEthereumChain отсутствует chainId.',
+      );
+    }
+    final normalized = raw.toLowerCase().startsWith('0x')
+        ? raw.substring(2)
+        : raw;
+    final chainId = int.tryParse(
+      normalized,
+      radix: raw.toLowerCase().startsWith('0x') ? 16 : 10,
+    );
+    if (chainId == null) {
+      throw WalletConnectCodecException(
+        'Некорректный chainId в wallet_switchEthereumChain: $raw.',
+      );
+    }
+    return chainId;
+  }
 
   /// Decodes an `eth_signTypedData_v4` / `_v3` request (`[address, typedData]`),
   /// where `typedData` is the EIP-712 object as a JSON string or a Map.

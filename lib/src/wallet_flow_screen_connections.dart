@@ -83,6 +83,14 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
       widget.canUnlockWithBiometrics && !widget.isExternalBackend;
 
   Future<void> _approveRequest() async {
+    const codec = WalletConnectV2RequestCodec();
+    final request = widget.pendingRequest;
+    if (request != null && codec.isChainSwitchMethod(request.method)) {
+      // Chain switching changes the dApp context only; it must not unlock the
+      // vault or ask for a PIN.
+      await widget.onApproveRequest();
+      return;
+    }
     final credential = await _promptForAuth(
       context,
       reason:
@@ -406,6 +414,23 @@ class _RequestCard extends StatelessWidget {
     }
   }
 
+  String? _chainSwitchTarget() {
+    const codec = WalletConnectV2RequestCodec();
+    if (!codec.isChainSwitchMethod(request.method)) {
+      return null;
+    }
+    try {
+      final chainId = codec.decodeSwitchEthereumChainId(request.params);
+      return chainId == 11155111
+          ? 'Sepolia (eip155:11155111)'
+          : chainId == 1
+          ? 'Ethereum Mainnet (eip155:1)'
+          : 'eip155:$chainId';
+    } catch (_) {
+      return 'некорректный chainId';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -417,6 +442,7 @@ class _RequestCard extends StatelessWidget {
     final value = tx['value']?.toString();
     final message = _messageText();
     final typedData = _typedDataSummary();
+    final chainSwitchTarget = _chainSwitchTarget();
 
     return Container(
       width: double.infinity,
@@ -429,7 +455,9 @@ class _RequestCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Входящий запрос на подпись',
+            chainSwitchTarget == null
+                ? 'Входящий запрос на подпись'
+                : 'Запрос на переключение сети',
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
             ),
@@ -437,6 +465,8 @@ class _RequestCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text('Метод: ${request.method}'),
           Text('Сеть: ${request.chainId}'),
+          if (chainSwitchTarget != null)
+            Text('Переключить на: $chainSwitchTarget'),
           if (from != null) Text('Отправитель: $from'),
           if (to != null) Text('Получатель: $to'),
           if (value != null) Text('Сумма (wei): $value'),
@@ -449,7 +479,13 @@ class _RequestCard extends StatelessWidget {
             children: [
               FilledButton(
                 onPressed: onApprove,
-                child: const Text('Одобрить и подписать'),
+                child: Text(
+                  const WalletConnectV2RequestCodec().isChainSwitchMethod(
+                        request.method,
+                      )
+                      ? 'Переключить сеть'
+                      : 'Одобрить и подписать',
+                ),
               ),
               OutlinedButton(
                 onPressed: onReject,

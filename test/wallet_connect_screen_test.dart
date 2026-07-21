@@ -181,6 +181,44 @@ void main() {
     expect(service.respondedErrors, hasLength(1));
   });
 
+  testWidgets('connections screen: chain switch skips the PIN sheet', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final service = FakeWalletConnectService();
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _FakeBlockchainProvider(),
+        walletConnectService: service,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _createUnlock(tester);
+    await _openConnections(tester);
+
+    service.simulateRequest(
+      topic: 'topic-1',
+      method: 'wallet_switchEthereumChain',
+      params: const <Object?>[
+        <String, Object?>{'chainId': '0xaa36a7'},
+      ],
+    );
+    await tester.pumpAndSettle();
+
+    final switchButton = find.text('Переключить сеть');
+    await tester.ensureVisible(switchButton);
+    await tester.tap(switchButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Подтвердите операцию'), findsNothing);
+    expect(find.text('Входящий запрос на подпись'), findsNothing);
+    expect(service.respondedErrors, isEmpty);
+    expect(service.respondedResults.single.result, isNull);
+  });
+
   testWidgets('connections screen: a malformed AirGap payload shows an error', (
     WidgetTester tester,
   ) async {

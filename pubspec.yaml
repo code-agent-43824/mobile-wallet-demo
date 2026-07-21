@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number used as the build suffix.
-version: 1.35.0+46
+version: 1.36.0+47
 
 environment:
   sdk: ^3.11.0
@@ -38,7 +38,7 @@ dependencies:
   bip39: ^1.0.6
   convert: ^3.1.2
   cryptography: ^2.7.0
-  flutter_secure_storage: ^9.2.4
+  flutter_secure_storage: ^10.3.1
   web3dart: ^3.0.1
   # web3dart 3.x moved EthereumAddress/EtherAmount into the `wallet` package and
   # no longer re-exports them, so we depend on it directly for those types.
@@ -69,6 +69,10 @@ dependencies:
 # 0xf39Fd6…266 in test/phone_secure_vault_test.dart).
 dependency_overrides:
   pointycastle: ^4.0.0
+  # reown_core 1.3.8 still caps this at 9.x, but 10.x retains the API it uses
+  # and adds the supported Android cipher/migration implementation. Keep the
+  # override covered by all platform builds until Reown widens its constraint.
+  flutter_secure_storage: 10.3.1
   # reown pulls connectivity_plus; 7.1.x's iOS/macOS code uses
   # NWPath.isUltraConstrained (a too-new SDK symbol the CI Xcode lacks). Pin to
   # the clean 7.0.0 — within reown_core's >=6.1.3 <8.0.0, same 7.x Dart API.

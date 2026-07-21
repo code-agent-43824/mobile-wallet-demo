@@ -74,7 +74,12 @@ class WalletFlowController extends ChangeNotifier {
       _notify();
     });
     _walletConnectRequestSub = _walletConnectService.requests.listen((request) {
-      _pendingRequest = request;
+      final alreadyQueued = _pendingRequests.any(
+        (queued) => queued.id == request.id && queued.topic == request.topic,
+      );
+      if (!alreadyQueued) {
+        _pendingRequests.addLast(request);
+      }
       _notify();
     });
     unawaited(_walletConnectService.init());
@@ -107,7 +112,9 @@ class WalletFlowController extends ChangeNotifier {
   String? _pendingBiometricPin;
   String? _selectedBackendId;
   WalletConnectSessionProposal? _pendingProposal;
-  WalletConnectRequest? _pendingRequest;
+  final ListQueue<WalletConnectRequest> _pendingRequests =
+      ListQueue<WalletConnectRequest>();
+  bool _isHandlingWalletConnectRequest = false;
   String? _airGapResponsePayload;
   List<WalletConnectSession> _walletConnectSessions =
       const <WalletConnectSession>[];
@@ -161,15 +168,21 @@ class WalletFlowController extends ChangeNotifier {
   WalletConnectSessionProposal? get pendingProposal => _pendingProposal;
 
   /// The incoming signing request awaiting approve/reject, if any.
-  WalletConnectRequest? get pendingRequest => _pendingRequest;
+  WalletConnectRequest? get pendingRequest =>
+      _pendingRequests.isEmpty ? null : _pendingRequests.first;
+
+  int get pendingRequestCount => _pendingRequests.length;
 
   /// The most recent AirGap `airgap-sig:` response payload, if any.
   String? get airGapResponsePayload => _airGapResponsePayload;
 
   KeyStorageBackend get activeBackend {
-    final selectedBackendId = _selectedBackendId;
-    if (selectedBackendId != null) {
-      final backend = _backendRegistry.backendById(selectedBackendId);
+    // Once a wallet exists, its persisted summary is authoritative. The
+    // mutable onboarding selection must never redirect a private-key operation
+    // to another (uninitialized) vault.
+    final backendId = _summary?.backendId ?? _selectedBackendId;
+    if (backendId != null) {
+      final backend = _backendRegistry.backendById(backendId);
       if (backend != null) {
         return backend;
       }
@@ -204,9 +217,30 @@ class WalletFlowController extends ChangeNotifier {
 
   Future<void> loadInitialState() async {
     try {
-      final selectedBackendId = await _backendRegistry.loadSelectedBackendId();
-      final backend = _backendRegistry.backendById(selectedBackendId) ?? _vault;
-      final summary = await backend.getWalletSummary();
+      var selectedBackendId = await _backendRegistry.loadSelectedBackendId();
+      var backend = _backendRegistry.backendById(selectedBackendId) ?? _vault;
+      var summary = await backend.getWalletSummary();
+
+      // A backend-selection write and a wallet-payload write are separate
+      // durable records. If Android killed the process between them (or an old
+      // build left a stale selection), recover the existing wallet by scanning
+      // the small backend catalog instead of incorrectly returning to welcome.
+      if (summary == null) {
+        for (final entry in _backendRegistry.availableEntries) {
+          final candidate = entry.backend;
+          if (candidate == null || candidate.backendId == backend.backendId) {
+            continue;
+          }
+          final candidateSummary = await candidate.getWalletSummary();
+          if (candidateSummary != null) {
+            backend = candidate;
+            summary = candidateSummary;
+            selectedBackendId = candidate.backendId;
+            await _backendRegistry.selectBackend(selectedBackendId);
+            break;
+          }
+        }
+      }
       final biometricsEnabled = await backend.isBiometricUnlockEnabled();
       final biometricsAvailable = await backend.isBiometricUnlockAvailable();
       final externalRuntimeState = backend is ExternalDeviceDemoBackend
@@ -522,46 +556,72 @@ class WalletFlowController extends ChangeNotifier {
   /// signed-tx hex for `eth_signTransaction`). A private-key operation, so it
   /// freshly unlocks for this request only (PIN or biometric for the phone
   /// vault; device "tap + PIN" for the external device) and re-locks after.
-  /// [pendingRequest] is cleared ONLY on success — a wrong PIN/cancel leaves the
-  /// request visible to retry.
+  /// The queue head is removed after the coordinator has answered the dApp; a
+  /// wrong PIN/cancel leaves it visible to retry, while later requests remain
+  /// queued instead of overwriting it.
   Future<void> approvePendingRequest({
     String? pin,
     bool useBiometrics = false,
   }) async {
-    final request = _pendingRequest;
-    if (request == null) {
+    final request = pendingRequest;
+    if (request == null || _isHandlingWalletConnectRequest) {
       return;
     }
-    await _withFreshlyUnlockedMaterial(
-      pin: pin,
-      useBiometrics: useBiometrics,
-      action: () async {
-        final signer = _activeTransactionSigner();
-        final coordinator = WalletConnectInboundCoordinator(
-          service: _walletConnectService,
-          transactionService: _transactionService,
-          broadcaster: _transactionBroadcaster,
-          nonceProvider: _nonceProvider,
-        );
-        await coordinator.handleRequest(request: request, signer: signer);
-        _pendingRequest = null;
-      },
-    );
+    _isHandlingWalletConnectRequest = true;
+    _notify();
+    try {
+      final coordinator = _walletConnectCoordinator();
+      const codec = WalletConnectV2RequestCodec();
+      if (codec.isChainSwitchMethod(request.method)) {
+        await _runGuarded(() async {
+          await coordinator.handleRequest(request: request);
+          _removePendingRequest(request);
+        });
+        return;
+      }
+      await _withFreshlyUnlockedMaterial(
+        pin: pin,
+        useBiometrics: useBiometrics,
+        action: () async {
+          final signer = _activeTransactionSigner();
+          await coordinator.handleRequest(request: request, signer: signer);
+          _removePendingRequest(request);
+        },
+      );
+    } finally {
+      _isHandlingWalletConnectRequest = false;
+      _notify();
+    }
   }
 
   /// Rejects [pendingRequest] with a JSON-RPC error to the dApp.
   Future<void> rejectPendingRequest() async {
     await _runGuarded(() async {
-      final request = _pendingRequest;
-      if (request == null) {
+      final request = pendingRequest;
+      if (request == null || _isHandlingWalletConnectRequest) {
         return;
       }
       await _walletConnectService.respondError(
         request: request,
         message: 'Запрос отклонён пользователем.',
       );
-      _pendingRequest = null;
+      _removePendingRequest(request);
     });
+  }
+
+  WalletConnectInboundCoordinator _walletConnectCoordinator() {
+    return WalletConnectInboundCoordinator(
+      service: _walletConnectService,
+      transactionService: _transactionService,
+      broadcaster: _transactionBroadcaster,
+      nonceProvider: _nonceProvider,
+    );
+  }
+
+  void _removePendingRequest(WalletConnectRequest request) {
+    _pendingRequests.removeWhere(
+      (queued) => queued.id == request.id && queued.topic == request.topic,
+    );
   }
 
   /// Runs [action] with the active backend transiently unlocked for a single

@@ -125,14 +125,15 @@ abstract interface class WalletConnectService {
   /// Emits the full active-session list on every change.
   Stream<List<WalletConnectSession>> get sessionsChanges;
 
-  /// Incoming signing requests from connected dApps.
+  /// Incoming session requests from connected dApps (signing and wallet
+  /// methods such as `wallet_switchEthereumChain`).
   Stream<WalletConnectRequest> get requests;
 
-  /// Responds to [request] with a successful JSON-RPC result (e.g. a tx hash
-  /// or a signed-tx/signature hex string).
+  /// Responds to [request] with a successful JSON-RPC result (e.g. a tx hash,
+  /// a signed-tx/signature hex string, or null for EIP-1193 wallet methods).
   Future<void> respondResult({
     required WalletConnectRequest request,
-    required String result,
+    required Object? result,
   });
 
   /// Responds to [request] with a JSON-RPC error (e.g. the user rejected it).
@@ -200,7 +201,7 @@ class UnavailableWalletConnectService implements WalletConnectService {
   @override
   Future<void> respondResult({
     required WalletConnectRequest request,
-    required String result,
+    required Object? result,
   }) async {}
 
   @override
@@ -236,8 +237,8 @@ class FakeWalletConnectService implements WalletConnectService {
   final List<WalletConnectSession> _active = <WalletConnectSession>[];
 
   /// Successful responses recorded for assertions, in arrival order.
-  final List<({int id, String result})> respondedResults =
-      <({int id, String result})>[];
+  final List<({int id, Object? result})> respondedResults =
+      <({int id, Object? result})>[];
 
   /// Error responses recorded for assertions, in arrival order.
   final List<({int id, String message})> respondedErrors =
@@ -347,7 +348,7 @@ class FakeWalletConnectService implements WalletConnectService {
   @override
   Future<void> respondResult({
     required WalletConnectRequest request,
-    required String result,
+    required Object? result,
   }) async {
     respondedResults.add((id: request.id, result: result));
   }

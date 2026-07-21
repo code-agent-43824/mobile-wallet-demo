@@ -8,7 +8,20 @@ abstract interface class SecureKeyValueStore {
 
 class FlutterSecureKeyValueStore implements SecureKeyValueStore {
   FlutterSecureKeyValueStore([FlutterSecureStorage? storage])
-    : _storage = storage ?? const FlutterSecureStorage();
+    : _storage =
+          storage ??
+          const FlutterSecureStorage(
+            aOptions: AndroidOptions(
+              // Never erase a wallet merely because the platform keystore
+              // reported a transient/migration error. Surface the exception
+              // instead so recovery remains possible.
+              resetOnError: false,
+              migrateOnAlgorithmChange: true,
+              // v10 migrates the legacy v9 Android cipher used by existing
+              // installs. Keep a crash-safe backup until migration commits.
+              migrateWithBackup: true,
+            ),
+          );
 
   final FlutterSecureStorage _storage;
 

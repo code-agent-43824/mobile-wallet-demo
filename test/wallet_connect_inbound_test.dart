@@ -85,6 +85,45 @@ WalletConnectInboundCoordinator _coordinator(FakeWalletConnectService service) {
 }
 
 void main() {
+  test(
+    'wallet_switchEthereumChain accepts built-in Sepolia without signer',
+    () async {
+      final service = FakeWalletConnectService();
+      final request = service.simulateRequest(
+        topic: 'topic-1',
+        method: 'wallet_switchEthereumChain',
+        params: const <Object?>[
+          <String, Object?>{'chainId': '0xaa36a7'},
+        ],
+      );
+
+      await _coordinator(service).handleRequest(request: request);
+
+      expect(service.respondedErrors, isEmpty);
+      expect(service.respondedResults.single.id, request.id);
+      expect(service.respondedResults.single.result, isNull);
+    },
+  );
+
+  test('wallet_switchEthereumChain rejects an unknown chain', () async {
+    final service = FakeWalletConnectService();
+    final request = service.simulateRequest(
+      topic: 'topic-1',
+      method: 'wallet_switchEthereumChain',
+      params: const <Object?>[
+        <String, Object?>{'chainId': '0x89'},
+      ],
+    );
+
+    await _coordinator(service).handleRequest(request: request);
+
+    expect(service.respondedResults, isEmpty);
+    expect(
+      service.respondedErrors.single.message,
+      contains('не поддерживается'),
+    );
+  });
+
   test('eth_sendTransaction signs and broadcasts', () async {
     final service = FakeWalletConnectService();
     final request = service.simulateRequest(
@@ -117,7 +156,11 @@ void main() {
     ).handleRequest(request: request, signer: _signer);
 
     expect(service.respondedErrors, isEmpty);
-    expect(service.respondedResults.single.result, startsWith('0x02'));
+    expect(service.respondedResults.single.result, isA<String>());
+    expect(
+      service.respondedResults.single.result as String,
+      startsWith('0x02'),
+    );
   });
 
   test('rejects a request for another account', () async {
@@ -141,7 +184,7 @@ void main() {
     final service = FakeWalletConnectService();
     final request = service.simulateRequest(
       topic: 'topic-1',
-      method: 'wallet_switchEthereumChain',
+      method: 'wallet_addEthereumChain',
       chainId: 'eip155:1',
       params: const <Object?>[
         <String, Object?>{'chainId': '0x1'},
@@ -169,7 +212,7 @@ void main() {
     ).handleRequest(request: request, signer: _signer);
 
     expect(service.respondedErrors, isEmpty);
-    final result = service.respondedResults.single.result;
+    final result = service.respondedResults.single.result as String;
     expect(result, startsWith('0x'));
     expect(result.length, 132); // 65-byte r‖s‖v signature
   });
@@ -204,7 +247,7 @@ void main() {
     ).handleRequest(request: request, signer: _signer);
 
     expect(service.respondedErrors, isEmpty);
-    final result = service.respondedResults.single.result;
+    final result = service.respondedResults.single.result as String;
     expect(result, startsWith('0x'));
     expect(result.length, 132); // 65-byte r‖s‖v signature
   });
@@ -222,7 +265,8 @@ void main() {
     ).handleRequest(request: request, signer: _signer);
 
     expect(service.respondedErrors, isEmpty);
-    expect(service.respondedResults.single.result, startsWith('0x'));
+    expect(service.respondedResults.single.result, isA<String>());
+    expect(service.respondedResults.single.result as String, startsWith('0x'));
   });
 
   test('rejects a personal_sign for another account', () async {

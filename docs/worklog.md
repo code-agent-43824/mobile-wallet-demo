@@ -18,6 +18,32 @@ Entry template:
 
 ---
 
+## 2026-07-21 — Harden WalletConnect request routing and Android vault persistence — branch fix/walletconnect-vault-persistence — done (local; CI pending)
+- Plan: fix the owner's Android dogfood failures where WalletConnect signing intermittently reports
+  `Wallet vault is not initialized yet` even though the same wallet is loaded, and where a wallet appears
+  absent after Android process death. Bind every private-key operation to the backend recorded by the loaded
+  wallet summary (not a mutable onboarding selection), queue incoming WalletConnect requests instead of
+  overwriting one pending slot, serialize approval handling, and add restart/race regressions. Add the
+  EIP-1193 `wallet_switchEthereumChain` request path needed by Uniswap for the two supported chains, without
+  prompting for key access because chain switching is not a signing operation. Upgrade/harden Android secure
+  storage using its current supported persistence/migration path, disable Android Auto Backup for keystore-
+  encrypted preferences, bump the functional-step version, and run the full validation/CI flow.
+- Done: v1.36.0+47. Existing-wallet operations now resolve the backend from the persisted wallet summary,
+  startup discovers a wallet in another catalog backend if the separate selection record is stale, and
+  WalletConnect requests are deduplicated, queued in arrival order, and handled one at a time. Added
+  `wallet_switchEthereumChain` for Mainnet/Sepolia with the required JSON-null success response and no vault
+  unlock/PIN prompt; unsupported chains still receive an error. Upgraded `flutter_secure_storage` 9.2.4 →
+  10.3.1 (temporary compatibility override for Reown's stale 9.x constraint), configured crash-safe cipher
+  migration with `resetOnError:false`, and disabled Android Auto Backup. The v10 Android implementation commits
+  writes synchronously, closing the process-kill window in v9's asynchronous `SharedPreferences.apply()` path.
+  Added coordinator/controller/widget regressions for switch-chain, a two-request queue, stale backend binding,
+  and cold controller reload/recovery. Local format and analyze are clean; all 150 tests pass. A local Android
+  build could not run because this host has no Android SDK, so platform compilation remains the CI gate.
+- Next / open: push and require all GitHub Actions jobs (Validate, Android, iOS simulator/device, Windows) to
+  pass; then owner dogfoods v1.36 with process kill/reopen, the React test dApp, and Uniswap on Android.
+- Refs: owner Android/WalletConnect dogfood; `lib/src/wallet_flow_controller.dart`,
+  `lib/src/key_storage/secure_key_value_store.dart`, WalletConnect coordinator/service/codec.
+
 ## 2026-07-21 — Fix malformed EIP-1559 raw transaction submission — branch fix/eip1559-double-prefix — done
 - Plan: diagnose and fix the owner's first live Sepolia broadcast from v1.34. The balance/preview path now
   succeeds, but every RPC rejects the signed payload and the UI only surfaces the final fallback's ZAN quota

@@ -38,9 +38,22 @@ class WalletConnectInboundCoordinator {
 
   Future<void> handleRequest({
     required WalletConnectRequest request,
-    required WalletTransactionSigner signer,
+    WalletTransactionSigner? signer,
   }) async {
     try {
+      if (_codec.isChainSwitchMethod(request.method)) {
+        await _handleChainSwitch(request);
+        return;
+      }
+
+      if (signer == null) {
+        await _service.respondError(
+          request: request,
+          message: 'Для метода ${request.method} требуется подпись кошелька.',
+        );
+        return;
+      }
+
       if (_codec.isMessageSignMethod(request.method)) {
         await _handleMessageSign(request: request, signer: signer);
         return;
@@ -117,6 +130,25 @@ class WalletConnectInboundCoordinator {
     } catch (error) {
       await _service.respondError(request: request, message: error.toString());
     }
+  }
+
+  /// EIP-3326 / EIP-1193 chain switching changes the dApp session context but
+  /// does not access the private key. The request's own CAIP-2 chain can still
+  /// point at the old chain; the target is carried in params.
+  Future<void> _handleChainSwitch(WalletConnectRequest request) async {
+    final requestedChainId = _codec.decodeSwitchEthereumChainId(request.params);
+    final supported = evmNetworkConfigs.values.any(
+      (config) => config.chainId == requestedChainId,
+    );
+    if (!supported) {
+      await _service.respondError(
+        request: request,
+        message: 'Сеть eip155:$requestedChainId не поддерживается.',
+      );
+      return;
+    }
+    // EIP-3326 success result is JSON null.
+    await _service.respondResult(request: request, result: null);
   }
 
   /// `personal_sign` / `eth_sign`: decode → verify the account → sign the
