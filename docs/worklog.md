@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-07-21 — Harden WalletConnect request routing and Android vault persistence — branch fix/walletconnect-vault-persistence — done (local; CI pending)
+## 2026-07-21 — Harden WalletConnect request routing and Android vault persistence — branch fix/walletconnect-vault-persistence — done (CI green)
 - Plan: fix the owner's Android dogfood failures where WalletConnect signing intermittently reports
   `Wallet vault is not initialized yet` even though the same wallet is loaded, and where a wallet appears
   absent after Android process death. Bind every private-key operation to the backend recorded by the loaded
@@ -37,11 +37,11 @@ Entry template:
   migration with `resetOnError:false`, and disabled Android Auto Backup. The v10 Android implementation commits
   writes synchronously, closing the process-kill window in v9's asynchronous `SharedPreferences.apply()` path.
   Added coordinator/controller/widget regressions for switch-chain, a two-request queue, stale backend binding,
-  and cold controller reload/recovery. Local format and analyze are clean; all 150 tests pass. A local Android
-  build could not run because this host has no Android SDK, so platform compilation remains the CI gate.
-- Next / open: push and require all GitHub Actions jobs (Validate, Android, iOS simulator/device, Windows) to
-  pass; then owner dogfoods v1.36 with process kill/reopen, the React test dApp, and Uniswap on Android.
-- Refs: owner Android/WalletConnect dogfood; `lib/src/wallet_flow_controller.dart`,
+  and cold controller reload/recovery. Local format and analyze are clean; all 150 tests pass. GitHub Actions
+  run 29861364617 is fully green: Validate, Android APK, iOS Simulator, unsigned iOS Device, and Windows x64.
+- Next / open: owner dogfoods v1.36 with Android process kill/reopen, the React test dApp, and Uniswap on
+  Sepolia. `wallet_addEthereumChain` and proposal-chain validation remain separate deferred follow-ups.
+- Refs: commit `ba0e4f6`; CI run `29861364617`; owner Android/WalletConnect dogfood; `lib/src/wallet_flow_controller.dart`,
   `lib/src/key_storage/secure_key_value_store.dart`, WalletConnect coordinator/service/codec.
 
 ## 2026-07-21 — Fix malformed EIP-1559 raw transaction submission — branch fix/eip1559-double-prefix — done
