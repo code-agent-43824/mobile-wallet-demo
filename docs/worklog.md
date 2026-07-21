@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-07-21 — Phase 12 MetaMask AirGap QR flow — branch feat/metamask-airgap-qr — done (local green; CI pending)
+## 2026-07-21 — Phase 12 MetaMask AirGap QR flow — branch feat/metamask-airgap-qr — done (CI green)
 - Plan: complete only the initial EIP-4527 AirGap signer flow needed for real MetaMask + dApp dogfood on
   Ethereum Mainnet and Sepolia. Replace the legacy paste-only `airgap-tx:` UI with: authenticated account
   export as a MetaMask-compatible `crypto-hdkey` QR; camera/file intake of single- or multipart
@@ -41,11 +41,13 @@ Entry template:
   MetaMask Extension source confirms pairing accepts both `crypto-hdkey`/`crypto-account` and signing accepts
   `eth-signature`; MetaMask support documents QR hardware-wallet connections. Format/analyze are clean and all
   161 tests pass locally, including Mainnet/Sepolia, Keystone vectors, multipart reconstruction, controller,
-  camera seam, and end-to-end widget coverage.
-- Next / open: push/merge and wait for all platform CI jobs; owner then dogfoods MetaMask Extension + Uniswap
-  with the v1.38 Android build. If MetaMask rejects this standards-compliant bare hdkey on a specific release,
+  camera seam, and end-to-end widget coverage. GitHub Actions run 29874584226 is fully green: Validate,
+  Android APK, iOS Simulator, unsigned iOS Device, and Windows x64.
+- Next / open: owner dogfoods MetaMask Extension + Uniswap with the v1.38 Android build. If MetaMask rejects
+  this standards-compliant bare hdkey on a specific release,
   the documented compatibility lever remains a `crypto-account` wrapper / `account.standard` note.
-- Refs: Phase 12.4–12.5; ERC-4527; MetaMask Extension QR reader/importer source; MetaMask hardware-wallet hub.
+- Refs: commit `203b02b`; CI run `29874584226`; Phase 12.4–12.5; EIP-4527; MetaMask Extension QR
+  reader/importer source; MetaMask hardware-wallet hub.
 
 ## 2026-07-21 — WalletConnect capabilities + safe contract preview — branch fix/walletconnect-capabilities-preview — done (CI green)
 - Plan: harden the live Uniswap flow after owner dogfood confirmed v1.36 persistence/signing but surfaced
