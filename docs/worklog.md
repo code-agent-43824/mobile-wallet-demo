@@ -18,6 +18,35 @@ Entry template:
 
 ---
 
+## 2026-07-21 — Phase 12 MetaMask AirGap QR flow — branch feat/metamask-airgap-qr — done (local green; CI pending)
+- Plan: complete only the initial EIP-4527 AirGap signer flow needed for real MetaMask + dApp dogfood on
+  Ethereum Mainnet and Sepolia. Replace the legacy paste-only `airgap-tx:` UI with: authenticated account
+  export as a MetaMask-compatible `crypto-hdkey` QR; camera/file intake of single- or multipart
+  `eth-sign-request` URs; a decoded request preview restricted to legacy/EIP-2718 transactions on chain ids 1
+  and 11155111; per-operation PIN/biometric signing through the summary-bound active backend; and a static or
+  animated `eth-signature` QR response for MetaMask to scan and broadcast. Add a reusable BC-UR fountain
+  encoder/assembler, an in-app QR renderer, camera progress for multipart sequences, controller/widget/unit
+  regressions, and remove the superseded `AirGapPayloadCodec` / `AirGapInboundCoordinator` path and tests.
+  Bump the functional-step version to v1.38.0+49, reconcile README/architecture/roadmap docs, and run full CI.
+- Done: v1.38.0+49. The Connections screen now provides the full three-step signer flow: unlock briefly to
+  derive/show a public account-level `crypto-hdkey`; scan a MetaMask `eth-sign-request`; verify decoded
+  network/type/from/to/value/nonce/gas/maximum-fee/calldata fields; sign after per-operation auth; and show a
+  looping `eth-signature` QR for MetaMask to scan and broadcast. Added `UrQrEncoder`/`UrQrAssembler` over the
+  BC-UR fountain codec, compact uppercase QR rendering, multipart camera progress, and single-frame file
+  intake. Request policy is intentionally narrow: EIP-1559 on Mainnet/Sepolia and legacy EIP-155 on Mainnet;
+  unknown chains, messages/typed data, foreign addresses, unknown unpinned derivation paths, chain mismatch,
+  malformed RLP, and legacy Sepolia are rejected before PIN. The exact scanned bytes are signed; preview does
+  not rebuild the transaction. Account derivation and signing wipe unlocked material after each operation.
+  Removed the custom `airgap-tx:`/`airgap-sig:` codec, coordinator, paste UI, and obsolete tests. Current
+  MetaMask Extension source confirms pairing accepts both `crypto-hdkey`/`crypto-account` and signing accepts
+  `eth-signature`; MetaMask support documents QR hardware-wallet connections. Format/analyze are clean and all
+  161 tests pass locally, including Mainnet/Sepolia, Keystone vectors, multipart reconstruction, controller,
+  camera seam, and end-to-end widget coverage.
+- Next / open: push/merge and wait for all platform CI jobs; owner then dogfoods MetaMask Extension + Uniswap
+  with the v1.38 Android build. If MetaMask rejects this standards-compliant bare hdkey on a specific release,
+  the documented compatibility lever remains a `crypto-account` wrapper / `account.standard` note.
+- Refs: Phase 12.4–12.5; ERC-4527; MetaMask Extension QR reader/importer source; MetaMask hardware-wallet hub.
+
 ## 2026-07-21 — WalletConnect capabilities + safe contract preview — branch fix/walletconnect-capabilities-preview — done (CI green)
 - Plan: harden the live Uniswap flow after owner dogfood confirmed v1.36 persistence/signing but surfaced
   repeated `wallet_getCapabilities` approval cards. Implement EIP-5792 capability discovery as an authorized,

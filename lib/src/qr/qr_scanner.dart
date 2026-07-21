@@ -1,5 +1,5 @@
 /// Injectable seam for obtaining a QR payload — a WalletConnect `wc:` pairing
-/// URI or an AirGap `airgap-tx:` request — from one of two sources:
+/// URI or an EIP-4527 BC-UR request — from one of two sources:
 ///
 /// - **camera scan** (`scanWithCamera`): live camera; not available on every
 ///   platform (notably Windows x64, a CI build target) so it stays deferred for
@@ -19,6 +19,10 @@ abstract interface class QrScanner {
   /// Opens the camera scanner; resolves with the decoded text or null when
   /// cancelled. Throws [QrScannerException] when camera scanning is unavailable.
   Future<String?> scanWithCamera({String title});
+
+  /// Opens a camera scanner that keeps collecting BC-UR fountain frames until
+  /// a complete canonical single-part UR has been reconstructed.
+  Future<String?> scanUrWithCamera({String title, String? expectedType});
 
   /// Picks an image file and decodes the QR in it; resolves with the decoded
   /// text or null when the user cancels. Throws [QrScannerException] when file
@@ -54,6 +58,14 @@ class UnavailableQrScanner implements QrScanner {
   }
 
   @override
+  Future<String?> scanUrWithCamera({
+    String title = '',
+    String? expectedType,
+  }) async {
+    throw const QrScannerException(_message);
+  }
+
+  @override
   Future<String?> loadFromFile() async {
     throw const QrScannerException(_message);
   }
@@ -83,6 +95,15 @@ class FakeQrScanner implements QrScanner {
   @override
   Future<String?> scanWithCamera({String title = ''}) async {
     events.add('camera:$title');
+    return nextResult;
+  }
+
+  @override
+  Future<String?> scanUrWithCamera({
+    String title = '',
+    String? expectedType,
+  }) async {
+    events.add('camera-ur:$title:${expectedType ?? ''}');
     return nextResult;
   }
 

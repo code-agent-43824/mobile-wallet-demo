@@ -26,7 +26,7 @@ class Eip4527SignException implements Exception {
 /// [WalletTransactionSigner], and returns an `eth-signature` UR that the online
 /// wallet assembles + broadcasts.
 ///
-/// Pure logic (no camera/QR/relay) — mirrors [AirGapInboundCoordinator] /
+/// Pure logic (no camera/QR/relay), analogous to
 /// `WalletConnectInboundCoordinator`. There is no nonce lookup or broadcast: the
 /// online wallet owns those (the request already carries nonce/gas/fees inside
 /// the serialized transaction).
@@ -161,9 +161,8 @@ class Eip4527InboundCoordinator {
   /// - [EthSignDataType.typedTransaction] → `v = recId` (`yParity`, 0/1).
   /// - [EthSignDataType.transaction] (legacy) → `v = recId + chainId*2 + 35`
   ///   (EIP-155). NOTE: a legacy v can exceed one byte for large chain ids, but
-  ///   the `eth-signature` slot is exactly 65 bytes; for our supported chains
-  ///   (1, 11155111) it fits in a byte, and the legacy branch is verified
-  ///   on-device. See the class doc.
+  ///   the `eth-signature` slot is exactly 65 bytes. It fits for Mainnet; the
+  ///   initial UI therefore rejects legacy Sepolia and requires EIP-1559 there.
   Uint8List _remapTransactionV({
     required Uint8List rawSig,
     required EthSignDataType dataType,

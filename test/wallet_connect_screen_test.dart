@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/app.dart';
+import 'package:mobile_wallet_demo/src/airgap/eip4527.dart';
 import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
 import 'package:mobile_wallet_demo/src/key_storage/phone_secure_vault.dart';
@@ -10,6 +11,23 @@ import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
 import 'package:mobile_wallet_demo/src/qr/qr_scanner.dart';
 import 'package:mobile_wallet_demo/src/walletconnect/wallet_connect_service.dart';
 import 'package:mobile_wallet_demo/src/walletconnect/wallet_connect_preflight.dart';
+import 'package:web3dart/web3dart.dart' show hexToBytes;
+
+String _airGapRequestUr() => const Eip4527Codec().encodeSignRequest(
+  EthSignRequest(
+    requestId: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
+    signData: Uint8List.fromList(
+      hexToBytes(
+        '02e80180843b9aca0085069db9ac0082520894'
+        '11111111111111111111111111111111111111110180c0',
+      ),
+    ),
+    dataType: EthSignDataType.typedTransaction,
+    chainId: 1,
+    derivationPath: CryptoKeypath.parse("M/44'/60'/0'/0/0"),
+    origin: 'metamask',
+  ),
+);
 
 class _SuccessfulPreflight implements WalletConnectTransactionPreflight {
   const _SuccessfulPreflight();
@@ -311,37 +329,78 @@ void main() {
     expect(find.text('Подтвердите операцию'), findsNothing);
   });
 
-  testWidgets('connections screen: a malformed AirGap payload shows an error', (
+  testWidgets(
+    'connections screen: malformed MetaMask AirGap QR shows an error',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MobileWalletDemoApp(
+          store: InMemorySecureKeyValueStore(),
+          blockchainProvider: _FakeBlockchainProvider(),
+          walletConnectService: FakeWalletConnectService(),
+          qrScanner: FakeQrScanner(nextResult: 'not-a-valid-payload'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _createUnlock(tester);
+      await _openConnections(tester);
+
+      final scan = find.text('Сканировать запрос');
+      await tester.ensureVisible(scan);
+      await tester.tap(scan);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Ожидался BC-UR, начинающийся с "ur:".'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('connections screen previews and signs MetaMask AirGap tx', (
     WidgetTester tester,
   ) async {
-    await tester.binding.setSurfaceSize(const Size(1200, 1800));
+    await tester.binding.setSurfaceSize(const Size(1200, 2400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
+    final scanner = FakeQrScanner(nextResult: _airGapRequestUr());
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
         walletConnectService: FakeWalletConnectService(),
+        qrScanner: scanner,
       ),
     );
     await tester.pumpAndSettle();
     await _createUnlock(tester);
     await _openConnections(tester);
 
-    // The AirGap payload field is the second TextField (after the wc: URI one).
-    await tester.enterText(find.byType(TextField).at(1), 'not-a-valid-payload');
-    final sign = find.text('Подписать офлайн');
+    final scan = find.text('Сканировать запрос');
+    await tester.ensureVisible(scan);
+    await tester.tap(scan);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Проверьте транзакцию'), findsOneWidget);
+    expect(find.text('Ethereum Mainnet'), findsOneWidget);
+    expect(find.text('0.000000000000000001 ETH'), findsOneWidget);
+    expect(
+      scanner.events,
+      contains('camera-ur:MetaMask eth-sign-request:eth-sign-request'),
+    );
+
+    final sign = find.text('Подписать транзакцию');
     await tester.ensureVisible(sign);
     await tester.tap(sign);
     await tester.pumpAndSettle();
-
-    // Signing is a private-key op: confirm the per-op auth sheet first.
-    expect(find.text('Подтвердите операцию'), findsOneWidget);
     await tester.enterText(find.byType(TextField).last, '1234');
     await tester.tap(find.text('Подтвердить'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Expected a "airgap-tx:..." payload.'), findsOneWidget);
+    expect(find.text('3. Верните подпись в MetaMask'), findsOneWidget);
+    expect(find.textContaining('BC-UR'), findsWidgets);
   });
 
   testWidgets(

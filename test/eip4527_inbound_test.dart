@@ -93,11 +93,11 @@ const String _legacyTxSignDataHex =
 
 // A minimal EIP-1559 (type-2) UNSIGNED serialization: 0x02 ‖ rlp([chainId,
 // nonce, maxPriorityFee, maxFee, gasLimit, to, value, data, accessList]).
-// chainId 1, nonce 0, tip 1 gwei, max 30 gwei, gas 21000, to 0x1111..1111,
+// chainId 1, nonce 0, tip 1 gwei, max ~28.416 gwei, gas 21000, to 0x1111..1111,
 // value 1 wei, empty data, empty access list. (Used only as opaque bytes to
 // hash; the coordinator signs keccak256(signData) without re-parsing it.)
 const String _eip1559TxSignDataHex =
-    '02ef0180843b9aca0085069db9ac0082520894'
+    '02e80180843b9aca0085069db9ac0082520894'
     '111111111111111111111111111111111111111101'
     '80c0';
 

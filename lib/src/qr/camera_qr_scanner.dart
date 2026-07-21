@@ -3,6 +3,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import 'file_qr_scanner.dart';
 import 'qr_scanner.dart';
+import 'ur_qr.dart';
 
 /// Production [QrScanner] on Android/iOS: live **camera** QR scanning via
 /// `mobile_scanner` (Apple Vision on iOS, ML Kit on Android), with **file**
@@ -50,16 +51,37 @@ class CameraQrScanner implements QrScanner {
   }
 
   @override
+  Future<String?> scanUrWithCamera({
+    String title = '',
+    String? expectedType,
+  }) async {
+    final navigator = _navigatorKey.currentState;
+    if (navigator == null) {
+      throw const QrScannerException(
+        'Не удалось открыть камеру: навигатор недоступен.',
+      );
+    }
+    return navigator.push<String>(
+      MaterialPageRoute<String>(
+        fullscreenDialog: true,
+        builder: (context) =>
+            _CameraScannerScreen(title: title, expectedUrType: expectedType),
+      ),
+    );
+  }
+
+  @override
   Future<String?> loadFromFile() => _fileDelegate.loadFromFile();
 }
 
 /// Full-screen camera scanner. Pops with the first decoded QR text, or null
 /// when the user backs out (the AppBar back button).
 class _CameraScannerScreen extends StatefulWidget {
-  const _CameraScannerScreen({required this.title});
+  const _CameraScannerScreen({required this.title, this.expectedUrType});
 
   /// Short label for what's being scanned (e.g. `wc: URI`), shown as a hint.
   final String title;
+  final String? expectedUrType;
 
   @override
   State<_CameraScannerScreen> createState() => _CameraScannerScreenState();
@@ -71,7 +93,11 @@ class _CameraScannerScreenState extends State<_CameraScannerScreen> {
     formats: const <BarcodeFormat>[BarcodeFormat.qrCode],
     detectionSpeed: DetectionSpeed.noDuplicates,
   );
+  late final UrQrAssembler? _urAssembler = widget.expectedUrType == null
+      ? null
+      : UrQrAssembler(expectedType: widget.expectedUrType);
   bool _handled = false;
+  String? _sequenceError;
 
   @override
   void dispose() {
@@ -86,8 +112,27 @@ class _CameraScannerScreenState extends State<_CameraScannerScreen> {
     for (final barcode in capture.barcodes) {
       final value = barcode.rawValue;
       if (value != null && value.isNotEmpty) {
-        _handled = true;
-        Navigator.of(context).pop(value);
+        final assembler = _urAssembler;
+        if (assembler == null) {
+          _handled = true;
+          Navigator.of(context).pop(value);
+          return;
+        }
+        try {
+          assembler.add(value);
+          if (assembler.isComplete) {
+            _handled = true;
+            Navigator.of(context).pop(assembler.result);
+            return;
+          }
+          if (mounted) {
+            setState(() => _sequenceError = null);
+          }
+        } on UrQrException catch (error) {
+          if (mounted) {
+            setState(() => _sequenceError = error.message);
+          }
+        }
         return;
       }
     }
@@ -98,6 +143,12 @@ class _CameraScannerScreenState extends State<_CameraScannerScreen> {
     final hint = widget.title.isEmpty
         ? 'Наведите камеру на QR-код'
         : 'Наведите камеру на QR-код (${widget.title})';
+    final assembler = _urAssembler;
+    final sequenceHint = assembler == null
+        ? hint
+        : assembler.expectedCount > 0
+        ? '$hint\nСобрано: ${assembler.receivedCount}/${assembler.expectedCount}'
+        : '$hint\nОжидание первого UR-фрагмента';
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -156,8 +207,9 @@ class _CameraScannerScreenState extends State<_CameraScannerScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      hint,
+                      _sequenceError ?? sequenceHint,
                       style: const TextStyle(color: Colors.white),
+                      textAlign: TextAlign.center,
                     ),
                   ),
                 ),

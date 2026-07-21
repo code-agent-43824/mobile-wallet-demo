@@ -14,6 +14,9 @@ class _ConnectionsStage extends StatefulWidget {
     required this.pendingRequestPreview,
     required this.pendingRequestPreviewError,
     required this.isPendingRequestPreviewLoading,
+    required this.airGapAccountExportPayload,
+    required this.airGapRequest,
+    required this.airGapRequestPreview,
     required this.airGapResponsePayload,
     required this.walletAddress,
     required this.isQrCameraAvailable,
@@ -27,8 +30,11 @@ class _ConnectionsStage extends StatefulWidget {
     required this.onReject,
     required this.onApproveRequest,
     required this.onRejectRequest,
-    required this.onSignAirGap,
-    required this.onClearAirGap,
+    required this.onPrepareAirGapAccountExport,
+    required this.onScanAirGapRequest,
+    required this.onLoadAirGapRequest,
+    required this.onSignAirGapRequest,
+    required this.onClearAirGapRequest,
     required this.onDisconnect,
     required this.onBack,
   });
@@ -40,6 +46,9 @@ class _ConnectionsStage extends StatefulWidget {
   final WalletConnectTransactionPreview? pendingRequestPreview;
   final String? pendingRequestPreviewError;
   final bool isPendingRequestPreviewLoading;
+  final String? airGapAccountExportPayload;
+  final EthSignRequest? airGapRequest;
+  final Eip4527TransactionPreview? airGapRequestPreview;
   final String? airGapResponsePayload;
   final String? walletAddress;
   final bool isQrCameraAvailable;
@@ -56,9 +65,13 @@ class _ConnectionsStage extends StatefulWidget {
   final Future<void> Function({String? pin, bool useBiometrics})
   onApproveRequest;
   final Future<void> Function() onRejectRequest;
-  final Future<void> Function(String payload, {String? pin, bool useBiometrics})
-  onSignAirGap;
-  final VoidCallback onClearAirGap;
+  final Future<void> Function({String? pin, bool useBiometrics})
+  onPrepareAirGapAccountExport;
+  final Future<void> Function() onScanAirGapRequest;
+  final Future<void> Function() onLoadAirGapRequest;
+  final Future<void> Function({String? pin, bool useBiometrics})
+  onSignAirGapRequest;
+  final VoidCallback onClearAirGapRequest;
   final Future<void> Function(String topic) onDisconnect;
   final VoidCallback onBack;
 
@@ -68,12 +81,10 @@ class _ConnectionsStage extends StatefulWidget {
 
 class _ConnectionsStageState extends State<_ConnectionsStage> {
   final TextEditingController _uriController = TextEditingController();
-  final TextEditingController _airGapController = TextEditingController();
 
   @override
   void dispose() {
     _uriController.dispose();
-    _airGapController.dispose();
     super.dispose();
   }
 
@@ -113,22 +124,32 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
     );
   }
 
-  Future<void> _signAirGap() async {
-    final payload = _airGapController.text.trim();
-    if (payload.isEmpty) {
-      return;
-    }
+  Future<void> _prepareAirGapAccountExport() async {
     final credential = await _promptForAuth(
       context,
-      reason: 'Офлайн-подпись AirGap требует доступа к приватному ключу.',
+      reason:
+          'Для публичного QR аккаунта нужно кратко открыть seed и вывести только xpub.',
       biometricsOffered: _biometricsOffered,
     );
     if (credential == null) {
-      // User dismissed the auth sheet — abort silently.
       return;
     }
-    await widget.onSignAirGap(
-      payload,
+    await widget.onPrepareAirGapAccountExport(
+      pin: credential.pin,
+      useBiometrics: credential.useBiometrics,
+    );
+  }
+
+  Future<void> _signAirGap() async {
+    final credential = await _promptForAuth(
+      context,
+      reason: 'Подпись запроса MetaMask требует доступа к приватному ключу.',
+      biometricsOffered: _biometricsOffered,
+    );
+    if (credential == null) {
+      return;
+    }
+    await widget.onSignAirGapRequest(
       pin: credential.pin,
       useBiometrics: credential.useBiometrics,
     );
@@ -149,6 +170,9 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
     final theme = Theme.of(context);
     final proposal = widget.pendingProposal;
     final request = widget.pendingRequest;
+    final accountExport = widget.airGapAccountExportPayload;
+    final airGapRequest = widget.airGapRequest;
+    final airGapPreview = widget.airGapRequestPreview;
     final airGapResponse = widget.airGapResponsePayload;
     final sessions = widget.sessions;
 
@@ -251,61 +275,97 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
             ),
           ),
         const SizedBox(height: 24),
-        const _SectionTitle('AirGap (офлайн-подпись)'),
+        const _SectionTitle('AirGap через MetaMask'),
         const SizedBox(height: 8),
         const Text(
-          'Вставьте airgap-tx: запрос (из QR офлайн-устройства), подпишите '
-          'офлайн и верните airgap-sig: ответ.',
+          'Wallet Demo хранит ключ и работает как QR hardware wallet. MetaMask '
+          'создаёт и отправляет транзакцию, а приложение только проверяет и подписывает её.',
         ),
         const SizedBox(height: 12),
-        TextField(
-          controller: _airGapController,
-          minLines: 1,
-          maxLines: 3,
-          decoration: const InputDecoration(
-            labelText: 'airgap-tx: запрос',
-            border: OutlineInputBorder(),
+        _AirGapStepCard(
+          title: '1. Добавьте аккаунт в MetaMask',
+          description:
+              'В MetaMask выберите добавление QR-based hardware wallet и отсканируйте публичный crypto-hdkey.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              FilledButton.icon(
+                onPressed: _prepareAirGapAccountExport,
+                icon: const Icon(Icons.qr_code_2),
+                label: Text(
+                  accountExport == null
+                      ? 'Показать QR аккаунта'
+                      : 'Обновить QR аккаунта',
+                ),
+              ),
+              if (accountExport != null) ...[
+                const SizedBox(height: 12),
+                _UrQrDisplay(
+                  payload: accountExport,
+                  semanticsLabel: 'QR публичного аккаунта для MetaMask',
+                ),
+              ],
+            ],
           ),
         ),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          children: [
-            FilledButton.icon(
-              onPressed: _signAirGap,
-              icon: const Icon(Icons.qr_code_2),
-              label: const Text('Подписать офлайн'),
-            ),
-            if (widget.isQrFileLoadAvailable)
-              OutlinedButton.icon(
-                onPressed: () =>
-                    _fillFrom(_airGapController, widget.onLoadQrFromFile),
-                icon: const Icon(Icons.image_outlined),
-                label: const Text('Загрузить airgap-tx из файла'),
+        _AirGapStepCard(
+          title: '2. Отсканируйте запрос транзакции',
+          description:
+              'После отправки ETH в MetaMask отсканируйте показанный eth-sign-request. Поддерживаются Mainnet и Sepolia.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  if (widget.isQrCameraAvailable)
+                    FilledButton.icon(
+                      onPressed: widget.onScanAirGapRequest,
+                      icon: const Icon(Icons.qr_code_scanner),
+                      label: const Text('Сканировать запрос'),
+                    ),
+                  if (widget.isQrFileLoadAvailable)
+                    OutlinedButton.icon(
+                      onPressed: widget.onLoadAirGapRequest,
+                      icon: const Icon(Icons.image_outlined),
+                      label: const Text('Загрузить QR из файла'),
+                    ),
+                ],
               ),
-            if (widget.isQrCameraAvailable)
-              OutlinedButton.icon(
-                onPressed: () => _fillFrom(
-                  _airGapController,
-                  () => widget.onScanQrCamera(title: 'airgap-tx'),
+              if (airGapRequest != null && airGapPreview != null) ...[
+                const SizedBox(height: 16),
+                _AirGapTransactionPreviewCard(
+                  request: airGapRequest,
+                  preview: airGapPreview,
                 ),
-                icon: const Icon(Icons.qr_code_scanner),
-                label: const Text('Сканировать airgap-tx камерой'),
-              ),
-          ],
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: _signAirGap,
+                  icon: const Icon(Icons.draw),
+                  label: const Text('Подписать транзакцию'),
+                ),
+              ],
+            ],
+          ),
         ),
         if (airGapResponse != null) ...[
           const SizedBox(height: 12),
-          _SummaryTile(
-            label: 'airgap-sig ответ (покажите/отсканируйте обратно)',
-            value: airGapResponse,
+          _AirGapStepCard(
+            title: '3. Верните подпись в MetaMask',
+            description:
+                'Покажите этот eth-signature QR камере MetaMask. MetaMask соберёт и отправит транзакцию в сеть.',
+            child: _UrQrDisplay(
+              payload: airGapResponse,
+              semanticsLabel: 'QR подписи транзакции для MetaMask',
+            ),
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
-            onPressed: widget.onClearAirGap,
+            onPressed: widget.onClearAirGapRequest,
             icon: const Icon(Icons.clear),
-            label: const Text('Очистить ответ'),
+            label: const Text('Новая транзакция'),
           ),
         ],
         const SizedBox(height: 24),
@@ -317,6 +377,213 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
       ],
     );
   }
+}
+
+class _AirGapStepCard extends StatelessWidget {
+  const _AirGapStepCard({
+    required this.title,
+    required this.description,
+    required this.child,
+  });
+
+  final String title;
+  final String description;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 6),
+          Text(description),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _AirGapTransactionPreviewCard extends StatelessWidget {
+  const _AirGapTransactionPreviewCard({
+    required this.request,
+    required this.preview,
+  });
+
+  final EthSignRequest request;
+  final Eip4527TransactionPreview preview;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle('Проверьте транзакцию'),
+        const SizedBox(height: 8),
+        _SummaryTile(label: 'Сеть', value: preview.networkLabel),
+        _SummaryTile(label: 'Тип', value: preview.transactionTypeLabel),
+        _SummaryTile(
+          label: 'Откуда',
+          value: request.addressHex ?? request.derivationPath.toPathString(),
+        ),
+        _SummaryTile(
+          label: 'Куда',
+          value: preview.toAddress ?? 'Создание контракта',
+        ),
+        _SummaryTile(label: 'Сумма', value: '${preview.valueEth} ETH'),
+        _SummaryTile(label: 'Nonce', value: preview.nonce.toString()),
+        _SummaryTile(label: 'Gas limit', value: preview.gasLimit.toString()),
+        _SummaryTile(
+          label: 'Максимальная комиссия',
+          value: '${preview.maximumFeeEth} ETH',
+        ),
+        _SummaryTile(
+          label: 'Данные контракта',
+          value: preview.dataLength == 0
+              ? 'нет'
+              : '${preview.dataLength} байт, selector ${preview.selector ?? 'нет'}',
+        ),
+        if (request.origin != null)
+          _SummaryTile(label: 'Источник', value: request.origin!),
+      ],
+    );
+  }
+}
+
+/// Static QR for small URs and a looping animated fountain sequence for larger
+/// ones. QR contents are uppercased to use compact alphanumeric mode; BC-UR is
+/// case-insensitive and camera intake normalizes it back to lowercase.
+class _UrQrDisplay extends StatefulWidget {
+  const _UrQrDisplay({required this.payload, required this.semanticsLabel});
+
+  final String payload;
+  final String semanticsLabel;
+
+  @override
+  State<_UrQrDisplay> createState() => _UrQrDisplayState();
+}
+
+class _UrQrDisplayState extends State<_UrQrDisplay> {
+  Timer? _timer;
+  late List<String> _frames;
+  var _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _configure();
+  }
+
+  @override
+  void didUpdateWidget(covariant _UrQrDisplay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.payload != widget.payload) {
+      _configure();
+    }
+  }
+
+  void _configure() {
+    _timer?.cancel();
+    _frames = const UrQrEncoder().encode(widget.payload);
+    _index = 0;
+    if (_frames.length > 1) {
+      _timer = Timer.periodic(const Duration(milliseconds: 350), (_) {
+        if (mounted) {
+          setState(() => _index = (_index + 1) % _frames.length);
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: widget.semanticsLabel,
+      image: true,
+      child: Column(
+        children: [
+          Center(
+            child: Container(
+              color: Colors.white,
+              padding: const EdgeInsets.all(12),
+              child: SizedBox.square(
+                dimension: 280,
+                child: CustomPaint(
+                  painter: _QrPainter(_qrModules(_frames[_index])),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _frames.length == 1
+                ? 'Статический BC-UR QR'
+                : 'Анимированный BC-UR: ${_index + 1}/${_frames.length}',
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<List<bool>> _qrModules(String frame) {
+    final qr = Encoder.encode(frame.toUpperCase(), ErrorCorrectionLevel.m);
+    final matrix = qr.matrix!;
+    return List<List<bool>>.generate(
+      matrix.height,
+      (y) => List<bool>.generate(matrix.width, (x) => matrix.get(x, y) == 1),
+    );
+  }
+}
+
+class _QrPainter extends CustomPainter {
+  const _QrPainter(this.modules);
+
+  final List<List<bool>> modules;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final dimension = modules.length;
+    const quietZone = 4;
+    final moduleSize = size.shortestSide / (dimension + quietZone * 2);
+    final paint = Paint()..color = Colors.black;
+    for (var y = 0; y < dimension; y++) {
+      for (var x = 0; x < dimension; x++) {
+        if (modules[y][x]) {
+          canvas.drawRect(
+            Rect.fromLTWH(
+              (x + quietZone) * moduleSize,
+              (y + quietZone) * moduleSize,
+              moduleSize + 0.05,
+              moduleSize + 0.05,
+            ),
+            paint,
+          );
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _QrPainter oldDelegate) =>
+      oldDelegate.modules != modules;
 }
 
 class _ProposalCard extends StatelessWidget {

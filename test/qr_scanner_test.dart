@@ -12,6 +12,10 @@ void main() {
       throwsA(isA<QrScannerException>()),
     );
     await expectLater(
+      scanner.scanUrWithCamera(expectedType: 'eth-sign-request'),
+      throwsA(isA<QrScannerException>()),
+    );
+    await expectLater(
       scanner.loadFromFile(),
       throwsA(isA<QrScannerException>()),
     );
@@ -23,8 +27,19 @@ void main() {
     expect(scanner.isCameraScanAvailable, isTrue);
     expect(scanner.isFileLoadAvailable, isTrue);
     expect(await scanner.scanWithCamera(title: 'pairing'), 'wc:abc@2');
+    expect(
+      await scanner.scanUrWithCamera(
+        title: 'request',
+        expectedType: 'eth-sign-request',
+      ),
+      'wc:abc@2',
+    );
     expect(await scanner.loadFromFile(), 'wc:abc@2');
-    expect(scanner.events, <String>['camera:pairing', 'file']);
+    expect(scanner.events, <String>[
+      'camera:pairing',
+      'camera-ur:request:eth-sign-request',
+      'file',
+    ]);
 
     scanner.nextResult = null;
     expect(await scanner.loadFromFile(), isNull);

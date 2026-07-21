@@ -1,12 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_wallet_demo/src/airgap/airgap_signing.dart';
+import 'dart:typed_data';
+
 import 'package:mobile_wallet_demo/src/auth/biometric_auth.dart';
+import 'package:mobile_wallet_demo/src/airgap/eip4527.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
 import 'package:mobile_wallet_demo/src/qr/qr_scanner.dart';
 import 'package:mobile_wallet_demo/src/transactions/transaction_service.dart';
 import 'package:mobile_wallet_demo/src/wallet_flow_screen.dart';
 import 'package:mobile_wallet_demo/src/walletconnect/wallet_connect_service.dart';
+import 'package:web3dart/web3dart.dart' show hexToBytes;
 
 class _FakeBroadcaster implements TransactionBroadcaster {
   @override
@@ -416,50 +419,123 @@ void main() {
     await service.dispose();
   });
 
-  test('signs an AirGap request payload from this account', () async {
+  test(
+    'exports the account xpub for MetaMask without retaining key material',
+    () async {
+      final service = FakeWalletConnectService();
+      final controller = await buildUnlocked(
+        service,
+        transactionService: const LocalTransactionService(),
+      );
+
+      await controller.prepareAirGapAccountExport(pin: '1234');
+
+      final payload = controller.airGapAccountExportPayload;
+      expect(payload, startsWith('ur:crypto-hdkey/'));
+      final export = const Eip4527Codec().decodeHdKey(payload!);
+      expect(export.chainCode, hasLength(32));
+      expect(export.origin!.toPathString(), "M/44'/60'/0'");
+      expect(controller.material, isNull);
+
+      controller.dispose();
+      await service.dispose();
+    },
+  );
+
+  test('previews and signs a MetaMask EIP-1559 AirGap request', () async {
     final service = FakeWalletConnectService();
     final controller = await buildUnlocked(
       service,
       transactionService: const LocalTransactionService(),
     );
-    final payload = const AirGapPayloadCodec().encodeRequest(
-      AirGapSigningRequest(
-        requestId: 'req-air',
-        chainId: 'eip155:1',
-        fromAddress: controller.summary!.address,
-        toAddress: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
-        valueWeiHex: '0x2386f26fc10000',
-        dataHex: '0x',
-        nonce: 1,
-        gasLimit: 21000,
-        maxFeePerGasWeiHex: '0x77359400',
-        maxPriorityFeePerGasWeiHex: '0x3b9aca00',
+    final address = Uint8List.fromList(
+      hexToBytes(controller.summary!.address.substring(2)),
+    );
+    final payload = const Eip4527Codec().encodeSignRequest(
+      EthSignRequest(
+        requestId: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
+        signData: Uint8List.fromList(
+          hexToBytes(
+            '02e80180843b9aca0085069db9ac0082520894'
+            '11111111111111111111111111111111111111110180c0',
+          ),
+        ),
+        dataType: EthSignDataType.typedTransaction,
+        chainId: 1,
+        derivationPath: CryptoKeypath.parse("M/44'/60'/0'/0/0"),
+        address: address,
+        origin: 'metamask',
       ),
     );
 
-    await controller.signAirGapRequest(payload, pin: '1234');
+    await controller.loadAirGapRequest(payload);
+    expect(controller.errorMessage, isNull);
+    expect(controller.airGapRequestPreview!.networkLabel, 'Ethereum Mainnet');
+    expect(
+      controller.airGapRequestPreview!.toAddress,
+      '0x1111111111111111111111111111111111111111',
+    );
+
+    await controller.signPendingAirGapRequest(pin: '1234');
 
     expect(controller.errorMessage, isNull);
     final responsePayload = controller.airGapResponsePayload;
-    expect(responsePayload, isNotNull);
-    final response = const AirGapPayloadCodec().decodeResponse(
-      responsePayload!,
-    );
-    expect(response.requestId, 'req-air');
-    expect(response.rawSignedTransactionHex, startsWith('0x02'));
+    final response = const Eip4527Codec().decodeSignature(responsePayload!);
+    expect(response.requestId, '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d');
+    expect(response.signature, hasLength(65));
+    expect(response.signature.last, anyOf(0, 1));
 
-    controller.clearAirGapResponse();
+    controller.clearAirGapRequest();
+    expect(controller.airGapRequest, isNull);
     expect(controller.airGapResponsePayload, isNull);
 
     controller.dispose();
     await service.dispose();
   });
 
-  test('a malformed AirGap payload surfaces an error', () async {
+  test('previews and signs a Sepolia EIP-1559 AirGap request', () async {
+    final service = FakeWalletConnectService();
+    final controller = await buildUnlocked(
+      service,
+      transactionService: const LocalTransactionService(),
+    );
+    final payload = const Eip4527Codec().encodeSignRequest(
+      EthSignRequest(
+        requestId: 'aa1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
+        signData: Uint8List.fromList(
+          hexToBytes(
+            '02ef83aa36a780843b9aca0085069db9ac0082520894'
+            '2222222222222222222222222222222222222222808412345678c0',
+          ),
+        ),
+        dataType: EthSignDataType.typedTransaction,
+        chainId: 11155111,
+        derivationPath: CryptoKeypath.parse("M/44'/60'/0'/0/0"),
+        origin: 'metamask',
+      ),
+    );
+
+    await controller.loadAirGapRequest(payload);
+    expect(controller.errorMessage, isNull);
+    expect(controller.airGapRequestPreview!.networkLabel, 'Sepolia');
+    expect(controller.airGapRequestPreview!.selector, '0x12345678');
+
+    await controller.signPendingAirGapRequest(pin: '1234');
+    final signature = const Eip4527Codec().decodeSignature(
+      controller.airGapResponsePayload!,
+    );
+    expect(signature.signature.last, anyOf(0, 1));
+    expect(controller.material, isNull);
+
+    controller.dispose();
+    await service.dispose();
+  });
+
+  test('a malformed EIP-4527 AirGap payload surfaces an error', () async {
     final service = FakeWalletConnectService();
     final controller = await buildUnlocked(service);
 
-    await controller.signAirGapRequest('garbage', pin: '1234');
+    await controller.loadAirGapRequest('garbage');
 
     expect(controller.airGapResponsePayload, isNull);
     expect(controller.errorMessage, isNotNull);

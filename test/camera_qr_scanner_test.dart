@@ -51,6 +51,13 @@ void main() {
         () => scanner.scanWithCamera(title: 'wc: URI'),
         throwsA(isA<QrScannerException>()),
       );
+      await expectLater(
+        () => scanner.scanUrWithCamera(
+          title: 'request',
+          expectedType: 'eth-sign-request',
+        ),
+        throwsA(isA<QrScannerException>()),
+      );
     });
   });
 }

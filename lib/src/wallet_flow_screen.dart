@@ -3,9 +3,12 @@ import 'dart:collection';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:zxing2/qrcode.dart';
 
-import 'airgap/airgap_inbound.dart';
-import 'airgap/airgap_signing.dart';
+import 'airgap/account_export.dart';
+import 'airgap/eip4527.dart';
+import 'airgap/eip4527_inbound.dart';
+import 'airgap/eip4527_transaction_preview.dart';
 import 'auth/biometric_auth.dart';
 import 'auth/wallet_operation_auth.dart';
 import 'blockchain/blockchain_provider.dart';
@@ -17,6 +20,7 @@ import 'key_storage/key_storage_backend.dart';
 import 'key_storage/phone_secure_vault.dart';
 import 'key_storage/secure_key_value_store.dart';
 import 'qr/qr_scanner.dart';
+import 'qr/ur_qr.dart';
 import 'transactions/hardened_transaction_service.dart';
 import 'transactions/transaction_service.dart';
 import 'transactions/transaction_tracker.dart';
@@ -287,6 +291,9 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           pendingRequestPreviewError: controller.pendingRequestPreviewError,
           isPendingRequestPreviewLoading:
               controller.isPendingRequestPreviewLoading,
+          airGapAccountExportPayload: controller.airGapAccountExportPayload,
+          airGapRequest: controller.airGapRequest,
+          airGapRequestPreview: controller.airGapRequestPreview,
           airGapResponsePayload: controller.airGapResponsePayload,
           walletAddress: controller.summary?.address,
           isQrCameraAvailable: controller.isQrCameraAvailable,
@@ -300,8 +307,11 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           onReject: controller.rejectPendingProposal,
           onApproveRequest: controller.approvePendingRequest,
           onRejectRequest: controller.rejectPendingRequest,
-          onSignAirGap: controller.signAirGapRequest,
-          onClearAirGap: controller.clearAirGapResponse,
+          onPrepareAirGapAccountExport: controller.prepareAirGapAccountExport,
+          onScanAirGapRequest: controller.scanAirGapRequestWithCamera,
+          onLoadAirGapRequest: controller.loadAirGapRequestFromFile,
+          onSignAirGapRequest: controller.signPendingAirGapRequest,
+          onClearAirGapRequest: controller.clearAirGapRequest,
           onDisconnect: (topic) =>
               controller.disconnectWalletConnectSession(topic: topic),
           onBack: controller.closeConnections,

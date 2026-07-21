@@ -78,6 +78,16 @@ class FileQrScanner implements QrScanner {
   }
 
   @override
+  Future<String?> scanUrWithCamera({
+    String title = '',
+    String? expectedType,
+  }) async {
+    throw const QrScannerException(
+      'Сканирование камерой пока недоступно — используйте загрузку из файла.',
+    );
+  }
+
+  @override
   Future<String?> loadFromFile() async {
     final bytes = await _pickImageBytes();
     if (bytes == null) {

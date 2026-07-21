@@ -131,6 +131,10 @@ class WalletFlowController extends ChangeNotifier {
   WalletConnectTransactionPreview? _pendingRequestPreview;
   String? _pendingRequestPreviewError;
   bool _isPendingRequestPreviewLoading = false;
+  String? _airGapAccountExportPayload;
+  String? _airGapRequestPayload;
+  EthSignRequest? _airGapRequest;
+  Eip4527TransactionPreview? _airGapRequestPreview;
   String? _airGapResponsePayload;
   List<WalletConnectSession> _walletConnectSessions =
       const <WalletConnectSession>[];
@@ -196,7 +200,12 @@ class WalletFlowController extends ChangeNotifier {
 
   bool get isPendingRequestPreviewLoading => _isPendingRequestPreviewLoading;
 
-  /// The most recent AirGap `airgap-sig:` response payload, if any.
+  /// MetaMask-compatible account export and transaction signing state.
+  String? get airGapAccountExportPayload => _airGapAccountExportPayload;
+  EthSignRequest? get airGapRequest => _airGapRequest;
+  Eip4527TransactionPreview? get airGapRequestPreview => _airGapRequestPreview;
+
+  /// The most recent EIP-4527 `eth-signature` response, if any.
   String? get airGapResponsePayload => _airGapResponsePayload;
 
   KeyStorageBackend get activeBackend {
@@ -737,9 +746,10 @@ class WalletFlowController extends ChangeNotifier {
   Future<void> _withFreshlyUnlockedMaterial({
     String? pin,
     bool useBiometrics = false,
+    String busyMessage = 'Разблокируем для подписи…',
     required Future<void> Function() action,
   }) async {
-    await _runBusy('Разблокируем для подписи…', () async {
+    await _runBusy(busyMessage, () async {
       try {
         if (useBiometrics) {
           _material = await activeBackend.unlockWithBiometrics();
@@ -847,33 +857,129 @@ class WalletFlowController extends ChangeNotifier {
         .signer;
   }
 
-  /// Signs an offline AirGap `airgap-tx:` request payload with the active
-  /// backend and stores the `airgap-sig:` response in [airGapResponsePayload].
-  /// A private-key operation: freshly unlocks for this signature only (PIN or
-  /// biometric for the phone vault; device "tap + PIN" for the external device)
-  /// and re-locks after.
-  Future<void> signAirGapRequest(
-    String payload, {
+  /// Exports only the account-level extended PUBLIC key as `crypto-hdkey`, for
+  /// MetaMask's QR hardware-wallet account import.
+  Future<void> prepareAirGapAccountExport({
     String? pin,
     bool useBiometrics = false,
   }) async {
     await _withFreshlyUnlockedMaterial(
       pin: pin,
       useBiometrics: useBiometrics,
+      busyMessage: 'Готовим публичный QR аккаунта…',
       action: () async {
-        final signer = _activeTransactionSigner();
-        _airGapResponsePayload = await const AirGapInboundCoordinator()
-            .signRequestPayload(
-              requestPayload: payload,
+        final material = _material;
+        if (material == null) {
+          throw const VaultFailure('Ключ кошелька недоступен.');
+        }
+        final export = const AccountExportDeriver().deriveAccountExport(
+          mnemonic: material.mnemonic,
+          name: 'Wallet Demo',
+        );
+        _airGapAccountExportPayload = const Eip4527Codec().encodeHdKey(export);
+      },
+    );
+  }
+
+  /// Decodes and validates an EIP-4527 request without unlocking the key.
+  Future<void> loadAirGapRequest(String payload) async {
+    await _runGuarded(() async {
+      final normalized = normalizeUr(payload);
+      if (normalized.split('/').length != 2) {
+        throw const UrQrException(
+          'Multipart UR нужно полностью отсканировать камерой.',
+        );
+      }
+      final request = const Eip4527Codec().decodeSignRequest(normalized);
+      if (request.chainId != 1 && request.chainId != 11155111) {
+        throw Eip4527Exception(
+          'AirGap поддерживает только Ethereum Mainnet и Sepolia (получен chainId ${request.chainId}).',
+        );
+      }
+      if (request.dataType != EthSignDataType.transaction &&
+          request.dataType != EthSignDataType.typedTransaction) {
+        throw const Eip4527Exception(
+          'В базовом AirGap режиме поддерживаются только ETH-транзакции.',
+        );
+      }
+      if (request.dataType == EthSignDataType.transaction &&
+          request.chainId != 1) {
+        throw const Eip4527Exception(
+          'Legacy EIP-155 AirGap поддержан только для Mainnet; для Sepolia MetaMask должен использовать EIP-1559.',
+        );
+      }
+      final expectedAddress = _summary?.address.toLowerCase();
+      final requestAddress = request.addressHex?.toLowerCase();
+      if (requestAddress != null && requestAddress != expectedAddress) {
+        throw Eip4527Exception(
+          'Запрос адресован другому аккаунту ($requestAddress).',
+        );
+      }
+      if (requestAddress == null &&
+          request.derivationPath.toPathString() != "M/44'/60'/0'/0/0") {
+        throw Eip4527Exception(
+          'Запрос без адреса использует неизвестный путь ${request.derivationPath.toPathString()}.',
+        );
+      }
+      final preview = const Eip4527TransactionPreviewDecoder().decode(request);
+      _airGapRequestPayload = normalized;
+      _airGapRequest = request;
+      _airGapRequestPreview = preview;
+      _airGapResponsePayload = null;
+    });
+  }
+
+  Future<void> scanAirGapRequestWithCamera() async {
+    final payload = await _runQr(
+      () => _qrScanner.scanUrWithCamera(
+        title: 'MetaMask eth-sign-request',
+        expectedType: Eip4527Codec.signRequestType,
+      ),
+    );
+    if (payload != null) {
+      await loadAirGapRequest(payload);
+    }
+  }
+
+  Future<void> loadAirGapRequestFromFile() async {
+    final payload = await _runQr(_qrScanner.loadFromFile);
+    if (payload != null) {
+      await loadAirGapRequest(payload);
+    }
+  }
+
+  /// Signs the exact request that produced the visible preview. The online
+  /// MetaMask instance remains responsible for assembly and broadcast.
+  Future<void> signPendingAirGapRequest({
+    String? pin,
+    bool useBiometrics = false,
+  }) async {
+    final requestPayload = _airGapRequestPayload;
+    if (requestPayload == null || _airGapRequest == null) {
+      await _runGuarded(() async {
+        throw const Eip4527Exception('Сначала отсканируйте запрос MetaMask.');
+      });
+      return;
+    }
+    await _withFreshlyUnlockedMaterial(
+      pin: pin,
+      useBiometrics: useBiometrics,
+      action: () async {
+        _airGapResponsePayload = await const Eip4527InboundCoordinator()
+            .signRequestUr(
+              requestUr: requestPayload,
+              signer: _activeTransactionSigner(),
               transactionService: _transactionService,
-              signer: signer,
             );
       },
     );
   }
 
-  /// Clears the displayed AirGap response.
-  void clearAirGapResponse() {
+  /// Clears the request/signature while keeping the reusable account QR.
+  void clearAirGapRequest() {
+    _airGapRequestPayload = null;
+    _airGapRequest = null;
+    _airGapRequestPreview = null;
     _airGapResponsePayload = null;
     _errorMessage = null;
     _notify();
@@ -961,7 +1067,13 @@ class WalletFlowController extends ChangeNotifier {
     } on WalletConnectServiceException catch (error) {
       _errorMessage = error.message;
       _notify();
-    } on AirGapPayloadException catch (error) {
+    } on Eip4527Exception catch (error) {
+      _errorMessage = error.message;
+      _notify();
+    } on Eip4527SignException catch (error) {
+      _errorMessage = error.message;
+      _notify();
+    } on UrQrException catch (error) {
       _errorMessage = error.message;
       _notify();
     } catch (error) {

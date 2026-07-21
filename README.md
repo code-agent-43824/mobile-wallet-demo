@@ -36,6 +36,8 @@
 - WalletConnect v2 wallet-side flow: QR pairing, queued inbound transaction/message/typed-data requests,
   `wallet_switchEthereumChain` для Mainnet/Sepolia, бесшумный EIP-5792 `wallet_getCapabilities` и локальная
   подпись после RPC-симуляции/безопасного gas+fee preview
+- MetaMask-compatible AirGap signer (EIP-4527/BC-UR): публичный `crypto-hdkey` QR для добавления аккаунта,
+  single/multipart camera scan транзакции, проверяемый Mainnet/Sepolia preview и `eth-signature` QR после PIN
 - Android vault persistence: crash-safe migration/current secure-storage implementation, synchronous durable writes,
   recovery from a stale backend-selection record и отключённый Auto Backup для keystore-зашифрованных данных
 - Unit- и widget-тесты для ключевых flow
@@ -44,7 +46,7 @@
 
 ## Версионирование
 
-- Текущая версия: `v1.37.0+48`
+- Текущая версия: `v1.38.0+49`
 - По договорённости в этом проекте дальше повышаем minor-версию с каждым функциональным шагом
 
 ## Что покрывает текущий этап
