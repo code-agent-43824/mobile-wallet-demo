@@ -105,6 +105,51 @@ void main() {
     },
   );
 
+  test('reports failures from every broadcast fallback', () async {
+    final snapshot = buildSnapshot();
+    final asset = service
+        .availableAssets(
+          snapshot: snapshot,
+          networkConfig: evmNetworkConfigs[network]!,
+        )
+        .first;
+    final prepared = service.prepareTransfer(
+      snapshot: snapshot,
+      fromAddress: sender,
+      toAddress: recipient,
+      amountText: '0.1',
+      asset: asset,
+    );
+    final signed = service.signPreparedTransfer(
+      preparedTransfer: prepared,
+      walletMaterial: walletMaterial,
+      nonce: 7,
+    );
+
+    await expectLater(
+      service.submitSignedTransfer(
+        signedTransfer: signed,
+        broadcaster: PublicRpcTransactionBroadcaster(
+          rpcTransport: _HostFailureTransport(),
+        ),
+      ),
+      throwsA(
+        isA<TransactionFailure>()
+            .having(
+              (error) => error.message,
+              'message',
+              contains('ethereum-rpc.publicnode.com'),
+            )
+            .having(
+              (error) => error.message,
+              'message',
+              contains('gateway.tenderly.co'),
+            )
+            .having((error) => error.message, 'message', contains('1rpc.io')),
+      ),
+    );
+  });
+
   test('reconciles nonce too low by re-fetching the nonce on retry', () async {
     final attempts = <SignedTransfer>[];
     final tracker = TransactionTracker(
@@ -213,6 +258,23 @@ class _AlreadyKnownTransport implements JsonRpcTransport {
       'jsonrpc': '2.0',
       'id': 1,
       'error': 'already known',
+    };
+  }
+}
+
+class _HostFailureTransport implements JsonRpcTransport {
+  @override
+  Future<Map<String, dynamic>> post({
+    required Uri uri,
+    required Map<String, dynamic> payload,
+  }) async {
+    return <String, dynamic>{
+      'jsonrpc': '2.0',
+      'id': 1,
+      'error': <String, dynamic>{
+        'code': -32000,
+        'message': 'rejected by ${uri.host}',
+      },
     };
   }
 }

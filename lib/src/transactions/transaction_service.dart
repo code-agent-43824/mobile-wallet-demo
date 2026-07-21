@@ -471,14 +471,14 @@ class LocalTransactionService implements TransactionService {
       nonce: nonce,
     );
 
-    var signedBytes = signTransactionRaw(
+    final signedBytes = signTransactionRaw(
       unsigned,
       credentials,
       chainId: preparedTransfer.networkConfig.chainId,
     );
-    if (unsigned.isEIP1559) {
-      signedBytes = prependTransactionType(0x02, signedBytes);
-    }
+    // web3dart's signTransactionRaw already returns an EIP-2718 envelope for
+    // EIP-1559 transactions, including the leading 0x02 type byte. Prefixing
+    // it again produces an invalid 0x02 0x02 ... payload that every RPC rejects.
 
     final rawTransactionHex = bytesToHex(signedBytes, include0x: true);
     final transactionHashHex = bytesToHex(
@@ -679,7 +679,7 @@ class PublicRpcTransactionBroadcaster implements TransactionBroadcaster {
   Future<SubmittedTransfer> submit({
     required SignedTransfer signedTransfer,
   }) async {
-    TransactionFailure? lastFailure;
+    final failures = <TransactionFailure>[];
 
     for (final rpcUrl in signedTransfer.networkConfig.rpcUrls) {
       final uri = Uri.parse(rpcUrl);
@@ -730,20 +730,28 @@ class PublicRpcTransactionBroadcaster implements TransactionBroadcaster {
           submittedAtUtc: DateTime.now().toUtc(),
         );
       } on TransactionFailure catch (error) {
-        lastFailure = error;
+        failures.add(error);
       } on BlockchainFailure catch (error) {
-        lastFailure = TransactionFailure(error.message);
+        failures.add(TransactionFailure(error.message));
       } catch (error) {
-        lastFailure = TransactionFailure(
-          'RPC ${uri.host} failed during raw submission: $error',
+        failures.add(
+          TransactionFailure(
+            'RPC ${uri.host} failed during raw submission: $error',
+          ),
         );
       }
     }
 
-    throw lastFailure ??
-        const TransactionFailure(
-          'No RPC endpoints are configured for submission.',
-        );
+    if (failures.isEmpty) {
+      throw const TransactionFailure(
+        'No RPC endpoints are configured for submission.',
+      );
+    }
+
+    throw TransactionFailure(
+      'All RPC endpoints rejected the signed transaction: '
+      '${failures.map((failure) => failure.message).join(' | ')}',
+    );
   }
 }
 

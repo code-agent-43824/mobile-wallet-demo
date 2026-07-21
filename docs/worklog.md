@@ -18,6 +18,26 @@ Entry template:
 
 ---
 
+## 2026-07-21 — Fix malformed EIP-1559 raw transaction submission — branch fix/eip1559-double-prefix — done
+- Plan: diagnose and fix the owner's first live Sepolia broadcast from v1.34. The balance/preview path now
+  succeeds, but every RPC rejects the signed payload and the UI only surfaces the final fallback's ZAN quota
+  error. Verify the serializer contract, remove any duplicate typed-transaction envelope, add a regression
+  that proves the raw bytes contain exactly one EIP-1559 type marker, improve fallback failure reporting so a
+  final provider quota does not hide earlier RPC causes, bump the functional-step version, and run the full
+  validation/CI flow.
+- Done: confirmed the serializer contract in the pinned web3dart 3.0.3 source: `signTransactionRaw` already
+  returns the complete EIP-2718 bytes beginning `0x02`. The app prepended another `0x02`, so every locally
+  signed EIP-1559 transaction was emitted as invalid `0x0202...`. A safe live RPC replay proved the
+  distinction: the correctly framed already-mined Sepolia transaction parsed and returned `nonce too low`,
+  while the same bytes with the app's extra marker returned `rlp: expected input list for
+  types.DynamicFeeTx`. Removed the duplicate prefix. Added a raw-envelope regression (exactly one type byte,
+  then the RLP list) and an all-fallback failure-reporting regression; the broadcaster now preserves every
+  provider cause instead of letting the last 1RPC/ZAN quota error hide earlier parse failures. Bumped to
+  `v1.35.0+46`. Local validation: format clean, analyze clean, all 143 tests passed.
+- Next / open: owner installs v1.35 and repeats the 0.09 Sepolia transfer; confirm the resulting transaction
+  hash/receipt on-chain. GitHub Actions validates the platform builds after push.
+- Refs: owner dogfood screenshot (v1.34.0+45); this commit.
+
 ## 2026-07-21 — Fix stale balance after network switch/refresh — branch fix/network-balance-refresh — done
 - Plan: fix the live Sepolia send failure reproduced by the owner: the dashboard currently keeps the previous
   network's snapshot while a new network loads, permits out-of-order refreshes to overwrite the selected network,

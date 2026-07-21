@@ -128,6 +128,9 @@ void main() {
       );
 
       expect(signed.rawTransactionHex, startsWith('0x02'));
+      expect(signed.rawTransactionHex, isNot(startsWith('0x0202')));
+      expect(signed.rawTransactionBytes[0], 0x02);
+      expect(signed.rawTransactionBytes[1], greaterThanOrEqualTo(0xc0));
       expect(signed.transactionHashHex, hasLength(66));
       expect(signed.signingNote, contains('PIN нужен только один раз'));
     },
