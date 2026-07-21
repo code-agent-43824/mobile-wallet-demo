@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-07-21 — WalletConnect capabilities + safe contract preview — branch fix/walletconnect-capabilities-preview — code-complete (local validation green; CI pending)
+## 2026-07-21 — WalletConnect capabilities + safe contract preview — branch fix/walletconnect-capabilities-preview — done (CI green)
 - Plan: harden the live Uniswap flow after owner dogfood confirmed v1.36 persistence/signing but surfaced
   repeated `wallet_getCapabilities` approval cards. Implement EIP-5792 capability discovery as an authorized,
   read-only auto-response (no UI/PIN) for the built-in Mainnet/Sepolia EOA account, and stop advertising
@@ -41,10 +41,12 @@ Entry template:
   namespace filtering/rejection, live estimation, dApp-field preservation, revert blocking, no fixed offline
   fallbacks, preview UI, and disabled approval on simulation failure. PublicNode Sepolia was also probed safely:
   `eth_call`, `eth_estimateGas`, `eth_maxPriorityFeePerGas`, and latest-block base fee all returned valid data.
-  Format/analyze are clean and all 160 tests pass; CI follows before merge.
-- Next / open: push/merge to `main`, require all platform jobs green, then owner
+  Format/analyze are clean and all 160 tests pass. GitHub Actions run 29871378887 is fully green: Validate,
+  Android APK, iOS Simulator, unsigned iOS Device, and Windows x64.
+- Next / open: owner
   reconnects Uniswap (fresh namespace) and verifies silent capability probing plus a real contract-call preview.
-- Refs: owner Android/Uniswap dogfood; EIP-5792; this branch; `wallet_connect_preflight.dart`.
+- Refs: commit `b39a0ed`; CI run `29871378887`; owner Android/Uniswap dogfood; EIP-5792;
+  `wallet_connect_preflight.dart`.
 
 ## 2026-07-21 — Harden WalletConnect request routing and Android vault persistence — branch fix/walletconnect-vault-persistence — done (CI green)
 - Plan: fix the owner's Android dogfood failures where WalletConnect signing intermittently reports
