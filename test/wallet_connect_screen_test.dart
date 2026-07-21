@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/app.dart';
@@ -7,6 +9,49 @@ import 'package:mobile_wallet_demo/src/key_storage/phone_secure_vault.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
 import 'package:mobile_wallet_demo/src/qr/qr_scanner.dart';
 import 'package:mobile_wallet_demo/src/walletconnect/wallet_connect_service.dart';
+import 'package:mobile_wallet_demo/src/walletconnect/wallet_connect_preflight.dart';
+
+class _SuccessfulPreflight implements WalletConnectTransactionPreflight {
+  const _SuccessfulPreflight();
+
+  @override
+  Future<WalletConnectTransactionPreview> inspect({
+    required WalletConnectRequest request,
+    required String walletAddress,
+  }) async {
+    return WalletConnectTransactionPreview(
+      requestId: request.id,
+      topic: request.topic,
+      chainId: request.chainId,
+      network: EvmNetwork.ethereumMainnet,
+      fromAddress: walletAddress,
+      toAddress: '0x2222222222222222222222222222222222222222',
+      valueWei: BigInt.zero,
+      data: Uint8List.fromList(<int>[0x12, 0x34, 0x56, 0x78, 0xaa]),
+      gasLimit: 120000,
+      maxFeePerGasWei: BigInt.from(5000000000),
+      maxPriorityFeePerGasWei: BigInt.from(1000000000),
+      providerLabel: 'fake-rpc',
+      wasSimulated: true,
+      gasWasEstimated: true,
+      feesWereEstimated: true,
+    );
+  }
+}
+
+class _FailingPreflight implements WalletConnectTransactionPreflight {
+  const _FailingPreflight();
+
+  @override
+  Future<WalletConnectTransactionPreview> inspect({
+    required WalletConnectRequest request,
+    required String walletAddress,
+  }) {
+    throw const WalletConnectPreflightFailure(
+      'eth_call отклонён: execution reverted: expired',
+    );
+  }
+}
 
 /// 9.4b: the Connections screen end-to-end through the real widget tree, driven
 /// by the injected [FakeWalletConnectService].
@@ -148,6 +193,7 @@ void main() {
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
         walletConnectService: service,
+        walletConnectPreflight: const _SuccessfulPreflight(),
       ),
     );
     await tester.pumpAndSettle();
@@ -171,6 +217,10 @@ void main() {
 
     expect(find.text('Входящий запрос на подпись'), findsOneWidget);
     expect(find.text('Метод: eth_sendTransaction'), findsOneWidget);
+    expect(find.text('Тип: вызов смарт-контракта'), findsOneWidget);
+    expect(find.textContaining('selector 0x12345678'), findsOneWidget);
+    expect(find.textContaining('Gas limit: 120000'), findsOneWidget);
+    expect(find.text('Симуляция: успешна (fake-rpc)'), findsOneWidget);
 
     final reject = find.text('Отклонить запрос');
     await tester.ensureVisible(reject);
@@ -217,6 +267,48 @@ void main() {
     expect(find.text('Входящий запрос на подпись'), findsNothing);
     expect(service.respondedErrors, isEmpty);
     expect(service.respondedResults.single.result, isNull);
+  });
+
+  testWidgets('connections screen: failed simulation blocks signing', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final service = FakeWalletConnectService();
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _FakeBlockchainProvider(),
+        walletConnectService: service,
+        walletConnectPreflight: const _FailingPreflight(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _createUnlock(tester);
+    await _openConnections(tester);
+
+    service.simulateRequest(
+      topic: 'topic-1',
+      method: 'eth_sendTransaction',
+      chainId: 'eip155:11155111',
+      params: const <Object?>[
+        <String, Object?>{
+          'from': '0x1111111111111111111111111111111111111111',
+          'to': '0x2222222222222222222222222222222222222222',
+          'data': '0x12345678',
+        },
+      ],
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Подписание заблокировано:'), findsOneWidget);
+    expect(find.textContaining('execution reverted: expired'), findsOneWidget);
+    final approve = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Одобрить и подписать'),
+    );
+    expect(approve.onPressed, isNull);
+    expect(find.text('Подтвердите операцию'), findsNothing);
   });
 
   testWidgets('connections screen: a malformed AirGap payload shows an error', (

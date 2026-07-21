@@ -15,11 +15,14 @@ class WalletFlowController extends ChangeNotifier {
     required BiometricAuthGateway biometricAuthGateway,
     WalletConnectService walletConnectService =
         const UnavailableWalletConnectService(),
+    WalletConnectTransactionPreflight walletConnectPreflight =
+        const RequestFieldsWalletConnectTransactionPreflight(),
     TransactionService? transactionService,
     TransactionBroadcaster? transactionBroadcaster,
     NonceProvider? nonceProvider,
     QrScanner qrScanner = const UnavailableQrScanner(),
   }) : _walletConnectService = walletConnectService,
+       _walletConnectPreflight = walletConnectPreflight,
        _qrScanner = qrScanner,
        _transactionService =
            transactionService ??
@@ -74,11 +77,20 @@ class WalletFlowController extends ChangeNotifier {
       _notify();
     });
     _walletConnectRequestSub = _walletConnectService.requests.listen((request) {
+      const codec = WalletConnectV2RequestCodec();
+      if (codec.isCapabilitiesMethod(request.method)) {
+        unawaited(_autoRespondCapabilities(request));
+        return;
+      }
       final alreadyQueued = _pendingRequests.any(
         (queued) => queued.id == request.id && queued.topic == request.topic,
       );
       if (!alreadyQueued) {
+        final wasEmpty = _pendingRequests.isEmpty;
         _pendingRequests.addLast(request);
+        if (wasEmpty) {
+          unawaited(_preparePendingRequestPreview());
+        }
       }
       _notify();
     });
@@ -89,6 +101,7 @@ class WalletFlowController extends ChangeNotifier {
   late final ExternalDeviceDemoBackend _externalDeviceBackend;
   late final WalletBackendRegistry _backendRegistry;
   final WalletConnectService _walletConnectService;
+  final WalletConnectTransactionPreflight _walletConnectPreflight;
   final QrScanner _qrScanner;
   final TransactionService _transactionService;
   final TransactionBroadcaster _transactionBroadcaster;
@@ -115,6 +128,9 @@ class WalletFlowController extends ChangeNotifier {
   final ListQueue<WalletConnectRequest> _pendingRequests =
       ListQueue<WalletConnectRequest>();
   bool _isHandlingWalletConnectRequest = false;
+  WalletConnectTransactionPreview? _pendingRequestPreview;
+  String? _pendingRequestPreviewError;
+  bool _isPendingRequestPreviewLoading = false;
   String? _airGapResponsePayload;
   List<WalletConnectSession> _walletConnectSessions =
       const <WalletConnectSession>[];
@@ -172,6 +188,13 @@ class WalletFlowController extends ChangeNotifier {
       _pendingRequests.isEmpty ? null : _pendingRequests.first;
 
   int get pendingRequestCount => _pendingRequests.length;
+
+  WalletConnectTransactionPreview? get pendingRequestPreview =>
+      _pendingRequestPreview;
+
+  String? get pendingRequestPreviewError => _pendingRequestPreviewError;
+
+  bool get isPendingRequestPreviewLoading => _isPendingRequestPreviewLoading;
 
   /// The most recent AirGap `airgap-sig:` response payload, if any.
   String? get airGapResponsePayload => _airGapResponsePayload;
@@ -579,12 +602,26 @@ class WalletFlowController extends ChangeNotifier {
         });
         return;
       }
+      final transactionPreview = codec.isTransactionMethod(request.method)
+          ? _pendingRequestPreview
+          : null;
+      if (codec.isTransactionMethod(request.method) &&
+          transactionPreview == null) {
+        _errorMessage =
+            _pendingRequestPreviewError ??
+            'Дождитесь безопасной проверки транзакции через RPC.';
+        return;
+      }
       await _withFreshlyUnlockedMaterial(
         pin: pin,
         useBiometrics: useBiometrics,
         action: () async {
           final signer = _activeTransactionSigner();
-          await coordinator.handleRequest(request: request, signer: signer);
+          await coordinator.handleRequest(
+            request: request,
+            signer: signer,
+            transactionPreview: transactionPreview,
+          );
           _removePendingRequest(request);
         },
       );
@@ -615,13 +652,78 @@ class WalletFlowController extends ChangeNotifier {
       transactionService: _transactionService,
       broadcaster: _transactionBroadcaster,
       nonceProvider: _nonceProvider,
+      preflight: _walletConnectPreflight,
     );
+  }
+
+  Future<void> _autoRespondCapabilities(WalletConnectRequest request) async {
+    try {
+      await _walletConnectCoordinator().handleRequest(
+        request: request,
+        walletAddress: _summary?.address,
+      );
+    } catch (error) {
+      _errorMessage = 'WalletConnect capabilities: $error';
+      _notify();
+    }
+  }
+
+  Future<void> _preparePendingRequestPreview() async {
+    final request = pendingRequest;
+    const codec = WalletConnectV2RequestCodec();
+    if (request == null || !codec.isTransactionMethod(request.method)) {
+      _pendingRequestPreview = null;
+      _pendingRequestPreviewError = null;
+      _isPendingRequestPreviewLoading = false;
+      _notify();
+      return;
+    }
+    final address = _summary?.address;
+    if (address == null) {
+      _pendingRequestPreview = null;
+      _pendingRequestPreviewError = 'Кошелёк не инициализирован.';
+      _isPendingRequestPreviewLoading = false;
+      _notify();
+      return;
+    }
+
+    _pendingRequestPreview = null;
+    _pendingRequestPreviewError = null;
+    _isPendingRequestPreviewLoading = true;
+    _notify();
+    try {
+      final preview = await _walletConnectPreflight.inspect(
+        request: request,
+        walletAddress: address,
+      );
+      if (pendingRequest?.id != request.id ||
+          pendingRequest?.topic != request.topic) {
+        return;
+      }
+      _pendingRequestPreview = preview;
+    } catch (error) {
+      if (pendingRequest?.id != request.id ||
+          pendingRequest?.topic != request.topic) {
+        return;
+      }
+      _pendingRequestPreviewError = error.toString();
+    } finally {
+      if (pendingRequest?.id == request.id &&
+          pendingRequest?.topic == request.topic) {
+        _isPendingRequestPreviewLoading = false;
+        _notify();
+      }
+    }
   }
 
   void _removePendingRequest(WalletConnectRequest request) {
     _pendingRequests.removeWhere(
       (queued) => queued.id == request.id && queued.topic == request.topic,
     );
+    _pendingRequestPreview = null;
+    _pendingRequestPreviewError = null;
+    _isPendingRequestPreviewLoading = false;
+    unawaited(_preparePendingRequestPreview());
   }
 
   /// Runs [action] with the active backend transiently unlocked for a single

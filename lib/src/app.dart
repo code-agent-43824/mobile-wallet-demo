@@ -13,6 +13,7 @@ import 'transactions/transaction_service.dart';
 import 'transactions/hardened_transaction_service.dart';
 import 'wallet_flow_screen.dart';
 import 'walletconnect/reown_wallet_connect_service.dart';
+import 'walletconnect/wallet_connect_preflight.dart';
 import 'walletconnect/wallet_connect_service.dart';
 import 'walletconnect/wc_config.dart';
 import 'widgets/version_banner.dart';
@@ -54,6 +55,7 @@ class MobileWalletDemoApp extends StatelessWidget {
     JsonRpcTransport? trackingTransport,
     BiometricAuthGateway? biometricAuthGateway,
     WalletConnectService? walletConnectService,
+    WalletConnectTransactionPreflight? walletConnectPreflight,
     QrScanner? qrScanner,
   }) : _store = store,
        _blockchainProvider = blockchainProvider,
@@ -63,6 +65,7 @@ class MobileWalletDemoApp extends StatelessWidget {
        _trackingTransport = trackingTransport,
        _biometricAuthGateway = biometricAuthGateway,
        _walletConnectService = walletConnectService,
+       _walletConnectPreflight = walletConnectPreflight,
        _qrScanner = qrScanner;
 
   final SecureKeyValueStore? _store;
@@ -73,11 +76,13 @@ class MobileWalletDemoApp extends StatelessWidget {
   final JsonRpcTransport? _trackingTransport;
   final BiometricAuthGateway? _biometricAuthGateway;
   final WalletConnectService? _walletConnectService;
+  final WalletConnectTransactionPreflight? _walletConnectPreflight;
   final QrScanner? _qrScanner;
 
   @override
   Widget build(BuildContext context) {
     final effectiveStore = _store ?? FlutterSecureKeyValueStore();
+    final effectiveRpcTransport = _trackingTransport ?? HttpJsonRpcTransport();
     final theme = ThemeData(
       colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2D6CDF)),
       scaffoldBackgroundColor: const Color(0xFFF5F7FB),
@@ -116,11 +121,16 @@ class MobileWalletDemoApp extends StatelessWidget {
         transactionBroadcaster:
             _transactionBroadcaster ?? PublicRpcTransactionBroadcaster(),
         nonceProvider: _nonceProvider ?? PublicRpcNonceProvider(),
-        trackingTransport: _trackingTransport ?? HttpJsonRpcTransport(),
+        trackingTransport: effectiveRpcTransport,
         biometricAuthGateway:
             _biometricAuthGateway ?? defaultBiometricAuthGateway(),
         walletConnectService:
             _walletConnectService ?? _defaultWalletConnectService(),
+        walletConnectPreflight:
+            _walletConnectPreflight ??
+            PublicRpcWalletConnectTransactionPreflight(
+              rpcTransport: effectiveRpcTransport,
+            ),
         qrScanner: _qrScanner ?? _defaultQrScanner(),
       ),
     );

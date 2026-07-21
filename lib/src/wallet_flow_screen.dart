@@ -21,6 +21,7 @@ import 'transactions/hardened_transaction_service.dart';
 import 'transactions/transaction_service.dart';
 import 'transactions/transaction_tracker.dart';
 import 'walletconnect/wallet_connect_inbound.dart';
+import 'walletconnect/wallet_connect_preflight.dart';
 import 'walletconnect/wallet_connect_service.dart';
 import 'walletconnect/wallet_connect_v2.dart';
 
@@ -56,6 +57,7 @@ class WalletFlowScreen extends StatefulWidget {
     required this.trackingTransport,
     required this.biometricAuthGateway,
     required this.walletConnectService,
+    required this.walletConnectPreflight,
     required this.qrScanner,
     super.key,
   });
@@ -68,6 +70,7 @@ class WalletFlowScreen extends StatefulWidget {
   final JsonRpcTransport trackingTransport;
   final BiometricAuthGateway biometricAuthGateway;
   final WalletConnectService walletConnectService;
+  final WalletConnectTransactionPreflight walletConnectPreflight;
   final QrScanner qrScanner;
 
   @override
@@ -84,6 +87,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       store: widget.store,
       biometricAuthGateway: widget.biometricAuthGateway,
       walletConnectService: widget.walletConnectService,
+      walletConnectPreflight: widget.walletConnectPreflight,
       transactionService: widget.transactionService,
       transactionBroadcaster: widget.transactionBroadcaster,
       nonceProvider: widget.nonceProvider,
@@ -279,6 +283,10 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           sessions: controller.walletConnectSessions,
           pendingProposal: controller.pendingProposal,
           pendingRequest: controller.pendingRequest,
+          pendingRequestPreview: controller.pendingRequestPreview,
+          pendingRequestPreviewError: controller.pendingRequestPreviewError,
+          isPendingRequestPreviewLoading:
+              controller.isPendingRequestPreviewLoading,
           airGapResponsePayload: controller.airGapResponsePayload,
           walletAddress: controller.summary?.address,
           isQrCameraAvailable: controller.isQrCameraAvailable,

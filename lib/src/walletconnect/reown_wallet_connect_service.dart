@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:reown_walletkit/reown_walletkit.dart';
 
+import '../blockchain/network_config.dart';
 import 'wallet_connect_service.dart';
+import 'wallet_connect_v2.dart';
 import 'wc_config.dart';
 
 /// Real relay-backed [WalletConnectService] over `reown_walletkit` (Phase 9
@@ -250,11 +252,7 @@ class ReownWalletConnectService implements WalletConnectService {
   WalletConnectSessionProposal _mapProposal(int id, ProposalData data) {
     final chains = <String>{};
     final methods = <String>{};
-    final merged = <String, RequiredNamespace>{
-      ...data.requiredNamespaces,
-      ...data.optionalNamespaces,
-    };
-    merged.forEach((key, ns) {
+    void collect(String key, RequiredNamespace ns) {
       final nsChains = ns.chains;
       if (nsChains != null) {
         chains.addAll(nsChains);
@@ -262,7 +260,10 @@ class ReownWalletConnectService implements WalletConnectService {
         chains.add(key);
       }
       methods.addAll(ns.methods);
-    });
+    }
+
+    data.requiredNamespaces.forEach(collect);
+    data.optionalNamespaces.forEach(collect);
     return WalletConnectSessionProposal(
       id: id,
       pairingTopic: data.pairingTopic,
@@ -313,26 +314,100 @@ class ReownWalletConnectService implements WalletConnectService {
   Map<String, Namespace> _approvedNamespaces(
     ProposalData data,
     List<String> accounts,
-  ) {
-    final merged = <String, RequiredNamespace>{
-      ...data.requiredNamespaces,
-      ...data.optionalNamespaces,
+  ) => const WalletConnectNamespacePolicy().build(
+    requiredNamespaces: data.requiredNamespaces,
+    optionalNamespaces: data.optionalNamespaces,
+    accounts: accounts,
+  );
+}
+
+/// Pure namespace policy kept outside the relay client so required rejection
+/// and optional filtering are regression-testable without a live pairing.
+class WalletConnectNamespacePolicy {
+  const WalletConnectNamespacePolicy();
+
+  Map<String, Namespace> build({
+    required Map<String, RequiredNamespace> requiredNamespaces,
+    required Map<String, RequiredNamespace> optionalNamespaces,
+    required List<String> accounts,
+  }) {
+    final supportedChains = <String>{
+      for (final config in evmNetworkConfigs.values) 'eip155:${config.chainId}',
     };
-    final result = <String, Namespace>{};
-    merged.forEach((key, ns) {
-      final nsChains = ns.chains ?? <String>[if (key.contains(':')) key];
-      final nsAccounts = accounts.where((account) {
-        final parts = account.split(':');
-        final chain = parts.length >= 2 ? '${parts[0]}:${parts[1]}' : account;
-        return account.startsWith('$key:') || nsChains.contains(chain);
-      }).toList();
-      result[key] = Namespace(
-        accounts: nsAccounts,
-        methods: ns.methods,
-        events: ns.events,
-        chains: ns.chains,
-      );
+    final supportedMethods = WalletConnectV2RequestCodec.supportedMethods;
+    final approved = <String, _ApprovedNamespace>{};
+
+    requiredNamespaces.forEach((key, namespace) {
+      final chains = _namespaceChains(key, namespace);
+      final unsupportedChains = chains.difference(supportedChains);
+      final unsupportedMethods = namespace.methods
+          .where((method) => !supportedMethods.contains(method))
+          .toList();
+      if (unsupportedChains.isNotEmpty || unsupportedMethods.isNotEmpty) {
+        throw WalletConnectServiceException(
+          'dApp требует неподдерживаемые WalletConnect возможности: '
+          'сети ${unsupportedChains.join(', ')}, '
+          'методы ${unsupportedMethods.join(', ')}.',
+        );
+      }
+      approved
+          .putIfAbsent(key, _ApprovedNamespace.new)
+          .add(
+            chains: chains,
+            methods: namespace.methods,
+            events: namespace.events,
+          );
     });
-    return result;
+
+    optionalNamespaces.forEach((key, namespace) {
+      final chains = _namespaceChains(
+        key,
+        namespace,
+      ).intersection(supportedChains);
+      final methods = namespace.methods
+          .where(supportedMethods.contains)
+          .toList();
+      if (chains.isEmpty || methods.isEmpty) {
+        return;
+      }
+      approved
+          .putIfAbsent(key, _ApprovedNamespace.new)
+          .add(chains: chains, methods: methods, events: namespace.events);
+    });
+
+    return <String, Namespace>{
+      for (final entry in approved.entries)
+        entry.key: Namespace(
+          accounts: accounts.where((account) {
+            final parts = account.split(':');
+            final chain = parts.length >= 2
+                ? '${parts[0]}:${parts[1]}'
+                : account;
+            return entry.value.chains.contains(chain);
+          }).toList(),
+          methods: entry.value.methods.toList(),
+          events: entry.value.events.toList(),
+          chains: entry.value.chains.toList(),
+        ),
+    };
+  }
+
+  Set<String> _namespaceChains(String key, RequiredNamespace namespace) =>
+      (namespace.chains ?? <String>[if (key.contains(':')) key]).toSet();
+}
+
+class _ApprovedNamespace {
+  final Set<String> chains = <String>{};
+  final Set<String> methods = <String>{};
+  final Set<String> events = <String>{};
+
+  void add({
+    required Iterable<String> chains,
+    required Iterable<String> methods,
+    required Iterable<String> events,
+  }) {
+    this.chains.addAll(chains);
+    this.methods.addAll(methods);
+    this.events.addAll(events);
   }
 }

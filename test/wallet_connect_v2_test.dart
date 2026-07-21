@@ -50,6 +50,27 @@ PreparedTransfer buildPrepared({bool erc20 = false}) {
 }
 
 void main() {
+  test('advertised method catalog is limited to implemented methods', () {
+    expect(
+      WalletConnectV2RequestCodec.supportedMethods,
+      containsAll(<String>{
+        'eth_sendTransaction',
+        'personal_sign',
+        'eth_signTypedData_v4',
+        'wallet_switchEthereumChain',
+        'wallet_getCapabilities',
+      }),
+    );
+    expect(
+      WalletConnectV2RequestCodec.supportedMethods,
+      isNot(contains('wallet_sendCalls')),
+    );
+    expect(
+      WalletConnectV2RequestCodec.supportedMethods,
+      isNot(contains('wallet_addEthereumChain')),
+    );
+  });
+
   test('encodes a native transfer as an eth_signTransaction request', () {
     final request = const WalletConnectV2RequestCodec().encodeSignTransaction(
       preparedTransfer: buildPrepared(),

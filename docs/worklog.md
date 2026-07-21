@@ -18,6 +18,34 @@ Entry template:
 
 ---
 
+## 2026-07-21 — WalletConnect capabilities + safe contract preview — branch fix/walletconnect-capabilities-preview — code-complete (local validation green; CI pending)
+- Plan: harden the live Uniswap flow after owner dogfood confirmed v1.36 persistence/signing but surfaced
+  repeated `wallet_getCapabilities` approval cards. Implement EIP-5792 capability discovery as an authorized,
+  read-only auto-response (no UI/PIN) for the built-in Mainnet/Sepolia EOA account, and stop advertising
+  unsupported optional methods/chains in approved WalletConnect namespaces. Replace inbound transaction fixed
+  gas/fee fallbacks with live RPC simulation/`eth_estimateGas` plus EIP-1559 fee discovery whenever the dApp
+  omits those fields. Build a pre-auth inbound transaction preview that exposes contract target, calldata
+  selector/size, value, gas limit, max fee, and maximum fee; surface simulation/revert failures before the user
+  can unlock/sign. Preserve explicit dApp gas/fee values after validating/simulating the call. Add service,
+  controller, coordinator, and widget regressions; bump the functional-step version and run full CI.
+- Done: v1.37.0+48. `wallet_getCapabilities` is now an authorized EIP-5792 read-only path that returns
+  explicit `atomic: unsupported` EOA capabilities for requested built-in chains and never enters the approval
+  queue or unlocks the vault. The Reown namespace policy rejects unsupported required chains/methods and strips
+  unsupported optional ones instead of advertising methods the wallet later rejects. Added
+  `PublicRpcWalletConnectTransactionPreflight`: every incoming transaction runs `eth_call`; omitted gas comes
+  from `eth_estimateGas` with a visible 20% safety margin, and omitted EIP-1559 fees come from live priority/base
+  fee RPCs. The immutable preview is bound to request id/topic/chain and revalidated against from/to/value/data
+  before signing. The approval card shows contract-vs-transfer, destination, native value, calldata bytes and
+  4-byte selector, gas source, max/priority fee, maximum network fee, and the simulation provider; a failed
+  simulation disables signing before PIN. Added regressions for ten capability probes, exact capability shape,
+  namespace filtering/rejection, live estimation, dApp-field preservation, revert blocking, no fixed offline
+  fallbacks, preview UI, and disabled approval on simulation failure. PublicNode Sepolia was also probed safely:
+  `eth_call`, `eth_estimateGas`, `eth_maxPriorityFeePerGas`, and latest-block base fee all returned valid data.
+  Format/analyze are clean and all 160 tests pass; CI follows before merge.
+- Next / open: push/merge to `main`, require all platform jobs green, then owner
+  reconnects Uniswap (fresh namespace) and verifies silent capability probing plus a real contract-call preview.
+- Refs: owner Android/Uniswap dogfood; EIP-5792; this branch; `wallet_connect_preflight.dart`.
+
 ## 2026-07-21 — Harden WalletConnect request routing and Android vault persistence — branch fix/walletconnect-vault-persistence — done (CI green)
 - Plan: fix the owner's Android dogfood failures where WalletConnect signing intermittently reports
   `Wallet vault is not initialized yet` even though the same wallet is loaded, and where a wallet appears

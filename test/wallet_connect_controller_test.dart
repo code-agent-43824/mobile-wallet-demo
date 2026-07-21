@@ -268,6 +268,37 @@ void main() {
   });
 
   test(
+    'capability probes are auto-answered without entering the queue',
+    () async {
+      final service = FakeWalletConnectService();
+      final controller = await buildUnlocked(service);
+      final address = controller.summary!.address;
+
+      for (var index = 0; index < 10; index++) {
+        service.simulateRequest(
+          topic: 'topic-1',
+          method: 'wallet_getCapabilities',
+          chainId: 'eip155:11155111',
+          params: <Object?>[
+            address,
+            const <String>['0xaa36a7'],
+          ],
+        );
+      }
+      await pumpEventQueue();
+
+      expect(controller.pendingRequest, isNull);
+      expect(controller.pendingRequestCount, 0);
+      expect(controller.errorMessage, isNull);
+      expect(service.respondedErrors, isEmpty);
+      expect(service.respondedResults, hasLength(10));
+
+      controller.dispose();
+      await service.dispose();
+    },
+  );
+
+  test(
     'loaded wallet summary keeps signing bound to its own backend',
     () async {
       final service = FakeWalletConnectService();

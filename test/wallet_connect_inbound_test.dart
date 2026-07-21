@@ -86,6 +86,36 @@ WalletConnectInboundCoordinator _coordinator(FakeWalletConnectService service) {
 
 void main() {
   test(
+    'wallet_getCapabilities returns EOA capabilities without signer',
+    () async {
+      final service = FakeWalletConnectService();
+      final request = service.simulateRequest(
+        topic: 'topic-1',
+        method: 'wallet_getCapabilities',
+        params: const <Object?>[
+          _walletAddress,
+          <String>['0x1', '0xaa36a7', '0x89'],
+        ],
+      );
+
+      await _coordinator(
+        service,
+      ).handleRequest(request: request, walletAddress: _walletAddress);
+
+      expect(service.respondedErrors, isEmpty);
+      expect(service.respondedResults.single.id, request.id);
+      expect(service.respondedResults.single.result, <String, Object?>{
+        '0x1': const <String, Object?>{
+          'atomic': <String, Object?>{'status': 'unsupported'},
+        },
+        '0xaa36a7': const <String, Object?>{
+          'atomic': <String, Object?>{'status': 'unsupported'},
+        },
+      });
+    },
+  );
+
+  test(
     'wallet_switchEthereumChain accepts built-in Sepolia without signer',
     () async {
       final service = FakeWalletConnectService();

@@ -101,6 +101,18 @@ class WalletConnectV2RequestCodec {
   static const String signTypedDataV4Method = 'eth_signTypedData_v4';
   static const String signTypedDataV3Method = 'eth_signTypedData_v3';
   static const String switchEthereumChainMethod = 'wallet_switchEthereumChain';
+  static const String getCapabilitiesMethod = 'wallet_getCapabilities';
+
+  static const Set<String> supportedMethods = <String>{
+    signTransactionMethod,
+    sendTransactionMethod,
+    personalSignMethod,
+    ethSignMethod,
+    signTypedDataV4Method,
+    signTypedDataV3Method,
+    switchEthereumChainMethod,
+    getCapabilitiesMethod,
+  };
 
   /// Whether [method] is a transaction request this codec can decode.
   bool isTransactionMethod(String method) =>
@@ -117,6 +129,33 @@ class WalletConnectV2RequestCodec {
   /// Whether [method] changes dApp chain context without accessing a key.
   bool isChainSwitchMethod(String method) =>
       method == switchEthereumChainMethod;
+
+  /// Whether [method] is the read-only EIP-5792 capability query.
+  bool isCapabilitiesMethod(String method) => method == getCapabilitiesMethod;
+
+  /// Decodes EIP-5792 `[address, [chainIds]?]`. Chain ids stay as canonical
+  /// hex strings because that is also how the response object is keyed.
+  ({String address, List<String>? chainIds}) decodeGetCapabilities(
+    List<Object?> params,
+  ) {
+    if (params.isEmpty || params.first is! String) {
+      throw const WalletConnectCodecException(
+        'wallet_getCapabilities требует адрес кошелька.',
+      );
+    }
+    final address = params.first! as String;
+    List<String>? chainIds;
+    if (params.length > 1 && params[1] != null) {
+      final rawChains = params[1];
+      if (rawChains is! List || rawChains.any((value) => value is! String)) {
+        throw const WalletConnectCodecException(
+          'wallet_getCapabilities требует массив chainId.',
+        );
+      }
+      chainIds = rawChains.cast<String>();
+    }
+    return (address: address, chainIds: chainIds);
+  }
 
   /// Decodes EIP-3326 / EIP-1193 `[{chainId: "0x..."}]` parameters.
   int decodeSwitchEthereumChainId(List<Object?> params) {

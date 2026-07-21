@@ -11,6 +11,9 @@ class _ConnectionsStage extends StatefulWidget {
     required this.sessions,
     required this.pendingProposal,
     required this.pendingRequest,
+    required this.pendingRequestPreview,
+    required this.pendingRequestPreviewError,
+    required this.isPendingRequestPreviewLoading,
     required this.airGapResponsePayload,
     required this.walletAddress,
     required this.isQrCameraAvailable,
@@ -34,6 +37,9 @@ class _ConnectionsStage extends StatefulWidget {
   final List<WalletConnectSession> sessions;
   final WalletConnectSessionProposal? pendingProposal;
   final WalletConnectRequest? pendingRequest;
+  final WalletConnectTransactionPreview? pendingRequestPreview;
+  final String? pendingRequestPreviewError;
+  final bool isPendingRequestPreviewLoading;
   final String? airGapResponsePayload;
   final String? walletAddress;
   final bool isQrCameraAvailable;
@@ -217,6 +223,9 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
           const SizedBox(height: 24),
           _RequestCard(
             request: request,
+            preview: widget.pendingRequestPreview,
+            previewError: widget.pendingRequestPreviewError,
+            isPreviewLoading: widget.isPendingRequestPreviewLoading,
             onApprove: _approveRequest,
             onReject: widget.onRejectRequest,
           ),
@@ -374,11 +383,17 @@ class _ProposalCard extends StatelessWidget {
 class _RequestCard extends StatelessWidget {
   const _RequestCard({
     required this.request,
+    required this.preview,
+    required this.previewError,
+    required this.isPreviewLoading,
     required this.onApprove,
     required this.onReject,
   });
 
   final WalletConnectRequest request;
+  final WalletConnectTransactionPreview? preview;
+  final String? previewError;
+  final bool isPreviewLoading;
   final Future<void> Function() onApprove;
   final Future<void> Function() onReject;
 
@@ -431,6 +446,17 @@ class _RequestCard extends StatelessWidget {
     }
   }
 
+  String _formatUnits(BigInt value, int decimals) {
+    final negative = value.isNegative;
+    final digits = value.abs().toString().padLeft(decimals + 1, '0');
+    final whole = digits.substring(0, digits.length - decimals);
+    final fraction = digits
+        .substring(digits.length - decimals)
+        .replaceFirst(RegExp(r'0+$'), '');
+    final rendered = fraction.isEmpty ? whole : '$whole.$fraction';
+    return negative ? '-$rendered' : rendered;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -443,6 +469,11 @@ class _RequestCard extends StatelessWidget {
     final message = _messageText();
     final typedData = _typedDataSummary();
     final chainSwitchTarget = _chainSwitchTarget();
+    const codec = WalletConnectV2RequestCodec();
+    final isTransaction = codec.isTransactionMethod(request.method);
+    final canApproveTransaction =
+        !isTransaction ||
+        (!isPreviewLoading && previewError == null && preview != null);
 
     return Container(
       width: double.infinity,
@@ -472,13 +503,72 @@ class _RequestCard extends StatelessWidget {
           if (value != null) Text('Сумма (wei): $value'),
           if (message != null) Text('Сообщение: $message'),
           if (typedData != null) Text('EIP-712: $typedData'),
+          if (isPreviewLoading) ...[
+            const SizedBox(height: 8),
+            const Row(
+              children: [
+                SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 8),
+                Expanded(child: Text('Симулируем транзакцию через RPC…')),
+              ],
+            ),
+          ],
+          if (previewError != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Подписание заблокировано: $previewError',
+              style: TextStyle(color: theme.colorScheme.error),
+            ),
+          ],
+          if (preview case final WalletConnectTransactionPreview safe) ...[
+            // The request's network, not the dashboard selector, defines the
+            // native unit for this WalletConnect operation.
+            const SizedBox(height: 8),
+            Text(
+              safe.isContractCall
+                  ? 'Тип: вызов смарт-контракта'
+                  : 'Тип: перевод без calldata',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            Text('Адрес назначения: ${safe.toAddress}'),
+            Text(
+              'Сумма: ${_formatUnits(safe.valueWei, 18)} '
+              '${evmNetworkConfigs[safe.network]!.nativeSymbol}',
+            ),
+            if (safe.isContractCall)
+              Text(
+                'Calldata: ${safe.data.length} байт; '
+                'selector ${safe.calldataSelector ?? 'отсутствует'}',
+              ),
+            Text(
+              'Gas limit: ${safe.gasLimit}'
+              '${safe.gasWasEstimated ? ' (оценён RPC + 20%)' : ' (задан dApp)'}',
+            ),
+            Text(
+              'Max fee: ${_formatUnits(safe.maxFeePerGasWei, 9)} gwei; '
+              'priority: ${_formatUnits(safe.maxPriorityFeePerGasWei, 9)} gwei',
+            ),
+            Text(
+              'Максимальная комиссия: '
+              '${_formatUnits(safe.maximumNetworkFeeWei, 18)} '
+              '${evmNetworkConfigs[safe.network]!.nativeSymbol}',
+            ),
+            Text(
+              safe.wasSimulated
+                  ? 'Симуляция: успешна (${safe.providerLabel})'
+                  : 'Симуляция: тестовый/offline preflight',
+            ),
+          ],
           const SizedBox(height: 12),
           Wrap(
             spacing: 12,
             runSpacing: 8,
             children: [
               FilledButton(
-                onPressed: onApprove,
+                onPressed: canApproveTransaction ? onApprove : null,
                 child: Text(
                   const WalletConnectV2RequestCodec().isChainSwitchMethod(
                         request.method,

@@ -34,7 +34,8 @@
 - Контракты для `KeyStorageBackend`, модель выбора backend и совместимый signing/auth foundation под будущий внешний hardware backend
 - Demo runtime path для внешнего backend: simulated external device, отдельная UX-ветка и отдельный auth/signing путь без реального NFC SDK
 - WalletConnect v2 wallet-side flow: QR pairing, queued inbound transaction/message/typed-data requests,
-  `wallet_switchEthereumChain` для Mainnet/Sepolia и локальная подпись после подтверждения
+  `wallet_switchEthereumChain` для Mainnet/Sepolia, бесшумный EIP-5792 `wallet_getCapabilities` и локальная
+  подпись после RPC-симуляции/безопасного gas+fee preview
 - Android vault persistence: crash-safe migration/current secure-storage implementation, synchronous durable writes,
   recovery from a stale backend-selection record и отключённый Auto Backup для keystore-зашифрованных данных
 - Unit- и widget-тесты для ключевых flow
@@ -43,7 +44,7 @@
 
 ## Версионирование
 
-- Текущая версия: `v1.36.0+47`
+- Текущая версия: `v1.37.0+48`
 - По договорённости в этом проекте дальше повышаем minor-версию с каждым функциональным шагом
 
 ## Что покрывает текущий этап
