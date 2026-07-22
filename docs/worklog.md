@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-07-22 — Harden live camera QR recognition — branch fix/camera-qr-recognition — done (CI pending)
+## 2026-07-22 — Harden live camera QR recognition — branch fix/camera-qr-recognition — done (CI green)
 - Plan: improve the Android live scanner after owner dogfood proved that the same dense MetaMask
   `eth-sign-request` decodes from a screenshot but is intermittent through the camera. Analyze the full camera
   frame instead of cropping native detection to the visual guide, request a high-resolution Android stream,
@@ -30,11 +30,12 @@ Entry template:
   default and enables auto-zoom; the centred guide grows from 70% to 84% of the short edge but remains a pure
   overlay. Added a headless regression for QR-only/no-duplicates/high-resolution/auto-zoom controller settings
   and recorded the successful v1.38 owner AirGap dogfood plus its intermittent camera behavior. Format and
-  analyze are clean; all 162 tests pass locally.
-- Next / open: CI must build Android, iOS Simulator/device, and Windows; then owner retests the same dense
-  MetaMask signing QR on Android v1.39. Real-camera recognition still requires a physical-device check.
+  analyze are clean; all 162 tests pass locally. GitHub Actions run 29898130602 is fully green across
+  Validate, Android APK, iOS Simulator, unsigned iOS Device, and Windows x64.
+- Next / open: owner retests the same dense MetaMask signing QR on Android v1.39. Real-camera recognition still
+  requires a physical-device check.
 - Refs: owner Android/MetaMask AirGap dogfood; `lib/src/qr/camera_qr_scanner.dart`;
-  `test/camera_qr_scanner_test.dart`.
+  `test/camera_qr_scanner_test.dart`; commit `62b60c4`; CI run `29898130602`.
 
 ## 2026-07-21 — Phase 12 MetaMask AirGap QR flow — branch feat/metamask-airgap-qr — done (CI green)
 - Plan: complete only the initial EIP-4527 AirGap signer flow needed for real MetaMask + dApp dogfood on
