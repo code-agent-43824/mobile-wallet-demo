@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-07-22 — Mirror official Rutoken Android application lifecycle — branch fix/rutoken-application-lifecycle — in progress
+## 2026-07-22 — Mirror official Rutoken Android application lifecycle — branch fix/rutoken-application-lifecycle — done (CI green)
 - Plan: v1.42 physical retest still times out, proving that adding `C_WaitForSlotEvent` alone did not reproduce
   the working reference. Compare the complete startup order. The remaining material divergence is transport
   attachment timing: the official app calls `RtPcscBridge.setAppContext` and `attachToLifecycle` from its custom
@@ -33,10 +33,13 @@ Entry template:
   runtime before Android creates MainActivity. MainActivity now only retrieves the pre-created runtime, registers
   its PKCS#11 start/stop observer, and exposes the Flutter channel. Removed all bridge attachment from the lazy
   runtime, corrected the SPI permission-removal namespace to match the official manifest, added ordering/source
-  regressions, recorded the v1.42 failure, and bumped to v1.43.0+54. Format/analyze are clean and all 175 tests pass.
-- Next / open: require Android/full CI, then owner retests v1.43 on the same phone/token. Do not infer xpub/signature
+  regressions, recorded the v1.42 failure, and bumped to v1.43.0+54. Format/analyze are clean and all 175 tests
+  pass. Actions run 29946400325 is green for Validate, Android APK, both iOS builds, and Windows; the custom
+  Application, manifest merge, Kotlin code, and APK artifact therefore compile successfully.
+- Next / open: owner retests v1.43 on the same phone/token. Do not infer xpub/signature
   behavior until detection is physically confirmed.
-- Refs: owner v1.42 Android dogfood; official `RutokenDemoWalletApplication` and `MainActivity`.
+- Refs: owner v1.42 Android dogfood; official `RutokenDemoWalletApplication` and `MainActivity`; PR #3; squash
+  commit `7c23037`; CI 29946400325.
 
 ## 2026-07-22 — Fix physical Rutoken NFC discovery — branch fix/rutoken-slot-events — done (CI green)
 - Plan: owner dogfood on the same Android phone/token proves the official demo detects the Rutoken while Wallet
