@@ -1,4 +1,22 @@
-# Repo review — 2026-06-11 (quick audit by Fable, for the next agent)
+# Historical repo review — 2026-06-11 (v1.18 snapshot)
+
+> **Superseded as execution guidance.** This file preserves a point-in-time audit for history. Use
+> `docs/development-plan.md` (NOW / NEXT / LATER and Phase 10) for current direction and `CLAUDE.md` for the
+> current architecture.
+
+## Outcome as of v1.39
+
+- The recommended `WalletFlowController` extraction shipped in v1.19; the UI is now a thin listener over a
+  widget-free controller.
+- WalletConnect, per-operation authentication, live request preflight, and MetaMask-compatible EIP-4527 AirGap
+  shipped and were owner-dogfooded on mobile.
+- The project remains intentionally single-account and Russian-only.
+- The test-fidelity ceiling remains: native secure storage, live RPC/relay/camera, and future NFC need a shared
+  physical-device/manual validation matrix in addition to fake-based automated tests.
+- The next milestone is the real Rutoken custody backend. It requires non-exporting custody contracts before
+  native integration; the Phase 7 demo contract is not the production hardware contract.
+
+## Original review (preserved verbatim below)
 
 Scope: a deliberately shallow but honest pass over goals, code quality, docs, and results
 at v1.18.0+29 (`main`, CI green). Use this to prioritize work; not a security audit.

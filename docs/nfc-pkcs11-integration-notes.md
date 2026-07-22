@@ -413,48 +413,45 @@ EVM specifics are ours to add on top of the device’s raw `r‖s`:
 
 ---
 
-## 8. How this maps onto the existing code
+## 8. How this changes the existing architecture
 
-| Today (simulation) | Phase 10 (real) |
+The Phase 7 simulation proves UI/DI seams, but its secret-bearing contract is not suitable for real hardware.
+`ExternalDeviceDemoBackend` wraps a `PhoneSecureVault`, `unlock()` returns `WalletMaterial`, and the demo PKCS#11
+adapter exposes only canned operation results. Phase 10 therefore starts with contract redesign, not an
+implementation swap.
+
+| Today (simulation) | Phase 10 target |
 | --- | --- |
-| `key_storage/external_device_pkcs11.dart` — `ExternalDevicePkcs11Adapter` + `DemoExternalDevicePkcs11Adapter` (canned `probeSession`/`readPublicAddress`/`signTransactionPreview`). | A **real adapter** with the same interface, backed by FFI/platform-channel to `wtpkcs11ecp` + the PC-SC/NFC bridge. Keep the interface; swap the impl (same DI pattern as the rest of the app). |
-| `key_storage/external_device_demo_backend.dart` — wraps a `PhoneSecureVault` delegate + mock lifecycle (`isDeviceAvailable`, `simulateDeviceUnavailable`, `reconnectDevice`, `disconnectSession`, `_beginPkcs11Session`). | Real `ExternalDeviceKeyStorageBackend`: `createWallet`/`importWallet`/`unlock`/sign call the adapter (§5). Lifecycle becomes **NFC presence + `C_OpenSession`/`C_Login`**; `unlock(pin)` → `C_Login(CKU_USER, pin)`. |
-| Signing seam `auth/wallet_operation_auth.dart` — `WalletTransactionSigner` (async), today wraps local EIP-1559 signing. | A `Pkcs11TransactionSigner` doing §7.2/§7.3 against the token and returning a `SignedTransfer` via `assembleSignedTransfer`. Contract already async + backend-agnostic — **no interface change**. |
-| `ExternalDevicePkcs11OperationKind` (`probeSession`/`readPublicAddress`/`signTransactionPreview`). | Maps to real ops: probe→`C_OpenSession`/find token; readPublicAddress→§5.3; signTransactionPreview→§5.4+§7. Consider adding `createKeyPair`/`importKey`/`readMnemonic`. |
+| `KeyStorageBackend.unlock()` returns mnemonic/private-key-bearing `WalletMaterial`. | Public account lookup is separate from a transient authenticated signer session. Only the phone-vault implementation may use local material internally. |
+| `ExternalDeviceDemoBackend` wraps a prefixed `PhoneSecureVault`. | Real hardware backend owns no local seed copy and never returns mnemonic/private key to Dart. |
+| `ExternalDevicePkcs11Adapter.performOperation()` returns a demo status/message. | Native adapter exposes typed session, public-key/xpub, provisioning, and raw-signature operations with error/cancellation mapping. |
+| `WalletTransactionSigner` is async and backend-agnostic. | Keep this useful consumer seam, but have the backend/session provide it after fresh device authentication. |
+| AirGap account export derives from an in-memory mnemonic. | Request an explicit public account-xpub capability; derive `crypto-hdkey` from public device data only. |
 
-**Rules to keep** (`CLAUDE.md`): `abstract interface class` → nullable ctor arg on
-`MobileWalletDemoApp` defaulting to prod → fake for tests. The
-`KeyStorageBackend` / `ExternalDeviceKeyStorageBackend` contracts
-(create/import/unlock/biometrics/lock + `isDeviceAvailable`) **don’t change** —
-Phase 10 is an implementation swap behind them.
+Keep the project DI convention (`abstract interface class`, production default, injected fake), but do not
+preserve an interface merely because the simulation already uses it. No hardware implementation may satisfy a
+local-secret contract by copying token secrets into app memory.
 
----
+## 9. Corrected Phase 10 chunking
 
-## 9. Suggested Phase 10 chunking
+- **10.0 — prerequisites and transport spike:** obtain the exact token and distributable SDKs; on a physical
+  Android device prove vendor-stack initialization, discovery, login, one public read, and teardown. Choose FFI
+  vs a platform channel to the vendor-native stacks. The app does not hand-roll APDU transport.
+- **10.1 — custody contracts:** public account descriptor, authenticated transient signer session, and optional
+  public xpub capability; adapt phone vault and fakes before native work.
+- **10.2 — EVM signature assembly:** keccak/digest rules, raw `r‖s`, low-s, recovery id/y-parity, legacy and
+  typed envelopes; assert fake-device output matches local reference output byte-for-byte.
+- **10.3 — Android adapter:** NFC/PC-SC lifecycle, PKCS#11 init/session/login/public-key/sign operations, typed
+  failures, cancellation, and teardown.
+- **10.4 — provisioning/export:** key generation/import according to token policy, address, xpub/chain code, and
+  one-time mnemonic display only if the device explicitly supports it.
+- **10.5 — signing matrix:** own-send; WalletConnect transaction, personal message, and EIP-712; EIP-4527
+  AirGap transaction.
+- **10.6 — UX and iOS:** real tap/PIN/progress/cooldown/retry UI, removal of mock controls, then the equivalent
+  vendor iOS adapter and physical-device matrix.
 
-Small, reviewable steps that keep `main` green (mirrors Phase 9).
-
-- **10.0 — Transport decision & spike.** FFI to `wtpkcs11ecp` vs. a
-  platform-channel to the native stacks (iOS `RtPcscWrapper`; Android
-  `pkcs11wrapper`/`pkcs11jna`/`rtpcscbridge` + the `.so`). Note: native blobs are
-  proprietary, arm64-only, **physical device required**. Record the decision in
-  the dev plan.
-- **10.1 — Pure-Dart crypto utils** (no device): keccak256 RLP digest, low-s/EIP-2,
-  recovery-id, secp256k1 OID, DER `CKA_EC_POINT` → `X‖Y`. Known-vector tests.
-- **10.2 — `Pkcs11TransactionSigner` on a fake adapter** that returns a known
-  `r‖s`; assert byte-identical output to the local signer for identical inputs.
-- **10.3 — Real adapter behind `ExternalDevicePkcs11Adapter`**: init / token
-  discovery / NFC session / `C_Login(USER, devicePin)` / teardown, wired into
-  `ExternalDeviceDemoBackend`’s lifecycle. Manual/dogfood (no CI token).
-- **10.4 — keygen / import / address** (§5.1–5.3) incl. one-time mnemonic display
-  via `CKA_VENDOR_BIP39_MNEMONIC`.
-- **10.5 — end-to-end device sign** for own-sends **and** Phase 9 inbound WC
-  requests (compose with `WalletConnectInboundCoordinator`).
-- **10.6 — UX:** real NFC presence/affordances + cooldown handling in the
-  external-device branch of `WalletFlowScreen` / `WalletFlowController`.
-
----
-
+The authoritative exit criteria are in `docs/development-plan.md`. In particular, success/error/cancel/NFC-loss
+must all close the authenticated session, and no seed or private key may enter Dart models, logs, or errors.
 ## 10. Open questions to confirm on a real token
 
 (Several earlier questions are now **answered**: mechanism hex values = §3;

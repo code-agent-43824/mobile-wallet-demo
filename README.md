@@ -1,6 +1,15 @@
 # mobile-wallet-demo
 
-Минимальный демо-проект Flutter для будущего мобильного криптокошелька.
+Flutter-демо single-account EVM-кошелька с рабочим phone vault, WalletConnect и
+MetaMask-совместимым AirGap signer.
+
+**Сейчас:** v1.39 поддерживает Mainnet/Sepolia, локальные переводы, wallet-side WalletConnect,
+EIP-4527/BC-UR AirGap и авторизацию на каждую операцию. **Следующий milestone:** реальный
+неэкспортирующий Rutoken custody backend для Android/iOS, использующий те же own-send,
+WalletConnect и AirGap flows. Подробная карта NOW / NEXT / LATER и критерии готовности — в
+[`docs/development-plan.md`](docs/development-plan.md).
+Live/native release evidence is tracked separately in
+[`docs/device-test-matrix.md`](docs/device-test-matrix.md).
 
 ## Что уже есть
 
@@ -60,7 +69,7 @@
 - one-time показ seed-фразы после создания нового кошелька
 - хранение seed в зашифрованном виде
 - derivation первого EVM-адреса (`m/44'/60'/0'/0/0`)
-- locked / unlocked state для приложения
+- read-only dashboard без авторизации; PIN/биометрия запрашиваются для каждой private-key операции
 - biometric unlock после PIN setup: реальный на Android/iOS, имитационный на Windows
 - выбор между Ethereum Mainnet и Sepolia
 - read-only чтение нативного баланса и base fee из публичных RPC
@@ -69,7 +78,7 @@
 - read-only экран recent transaction history
 - локальный cache fallback для последнего успешного blockchain snapshot
 - send preparation screen с address validation, amount entry, asset selection и preview gas/fee
-- локальная EIP-1559 подпись native/ERC-20 transfer после одного auth flow на операцию
+- локальная EIP-1559 подпись native/ERC-20 transfer после свежего auth flow на каждую операцию
 - загрузка nonce через public RPC перед подписанием
 - raw transaction submission abstraction с публичным RPC broadcaster
 - видимые UI-состояния отправки: pending / success / failure

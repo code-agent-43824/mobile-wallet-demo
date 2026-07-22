@@ -8,6 +8,15 @@ Flutter demo of a mobile EVM crypto wallet targeting Android, iOS, and Windows x
 
 `docs/development-plan.md` is the canonical roadmap and source of truth for scope and phase status. Phases 0–7 are complete (Phase 7 = the simulated external-device **custody** foundation; no real NFC/SDK). Phase 9 makes this a wallet-side WalletConnect receiver and is device-validated on Android through a confirmed Sepolia broadcast; v1.37 adds EIP-5792 capability discovery plus live simulation/gas/fee preflight. Phase 12 is complete in v1.38: the app is a MetaMask-compatible EIP-4527 QR signer for Mainnet/Sepolia transactions, with account export, multipart camera scan, decoded transaction preview, per-operation auth, and signature QR. v1.39 hardens dense live-camera QR recognition with full-frame analysis, high requested Android resolution, and Android auto-zoom. The earlier custom AirGap codec and outbound signer direction are removed.
 
+The current north star is a single-account EVM wallet whose next milestone is a real, non-exporting Rutoken
+custody backend for Android/iOS. Phase 10 requires a custody-contract redesign before native integration: a
+hardware backend must expose public account metadata and transient authenticated signing, never
+`WalletMaterial`/mnemonic/private-key material. See the NOW / NEXT / LATER section and Phase 10 Definition of
+Done in `docs/development-plan.md`.
+
+Use `docs/device-test-matrix.md` for physical-device and live-service evidence; do not turn simulator or fake
+coverage into hardware/security claims.
+
 ## Multi-agent working agreement
 
 This repo is worked on by multiple coding agents (Claude Code and others), sometimes in parallel — so **document first, then code, then record**:
@@ -53,7 +62,7 @@ Code lives under `lib/src/`, split into layers: `auth/`, `blockchain/`, `key_sto
 
 `KeyStorageBackend` (`key_storage/key_storage_backend.dart`) is the core contract (create/import/unlock/biometrics/lock). Two implementations, selected at runtime via `WalletBackendRegistry` (persists the choice in the secure store):
 
-- **`PhoneSecureVault`** — the real backend. Implements the **"Phone Secure Vault" model** (see development-plan.md "Core architectural decision"): it deliberately does *not* use a non-exportable secure-enclave key, because the product must show/import a seed phrase. Instead the BIP-39 seed is encrypted at rest with AES-GCM-256 under a random data-encryption key (DEK); the DEK is wrapped by a PIN-derived key (PBKDF2, 600k iterations); the PIN is never persisted, and repeated wrong PINs trigger a temporary unlock lockout. A single EVM address is derived at `m/44'/60'/0'/0/0`. Biometric unlock keeps the DEK in a dedicated `BiometricSecretStore` (`key_storage/biometric_secret_store.dart`) gated by `local_auth`, rather than co-locating a key with the seed ciphertext. `PinUnlockSession` provides a 5-minute unlock TTL so each high-level operation prompts for auth at most once.
+- **`PhoneSecureVault`** — the real backend. Implements the **"Phone Secure Vault" model** (see development-plan.md "Core architectural decision"): it deliberately does *not* use a non-exportable secure-enclave key, because the product must show/import a seed phrase. Instead the BIP-39 seed is encrypted at rest with AES-GCM-256 under a random data-encryption key (DEK); the DEK is wrapped by a PIN-derived key (PBKDF2, 600k iterations); the PIN is never persisted, and repeated wrong PINs trigger a temporary unlock lockout. A single EVM address is derived at `m/44'/60'/0'/0/0`. Biometric unlock keeps the DEK in a dedicated `BiometricSecretStore` (`key_storage/biometric_secret_store.dart`) gated by `local_auth`, rather than co-locating a key with the seed ciphertext. `PinUnlockSession` remains an internal primitive, but the controller deliberately requests fresh authorization for every private-key operation and calls `lock()` in `finally`. This releases references; immutable Dart strings cannot be claimed to be securely zeroized.
 - **`ExternalDeviceDemoBackend`** — implements `ExternalDeviceKeyStorageBackend` (adds `isDeviceAvailable()`). It is a *simulation*: it wraps a `PhoneSecureVault` delegate backed by a `PrefixedSecureKeyValueStore`, and layers on mock device lifecycle (online/offline, reconnect, session disconnect) and mock PKCS#11 session/operation contracts (`external_device_pkcs11.dart`). No real NFC.
 
 ### Blockchain: read-only with fallback + cache
@@ -68,13 +77,18 @@ Code lives under `lib/src/`, split into layers: `auth/`, `blockchain/`, `key_sto
 
 The wallet receives signing requests. WalletConnect uses `WalletConnectV2RequestCodec`, the `WalletConnectService` seam, and the real mobile `ReownWalletConnectService`; requests are queued, capability probes are auto-answered, and transaction calls are simulated/estimated before the summary-bound backend signs and broadcasts. AirGap uses EIP-4527 over BC-UR instead: `Eip4527Codec` + `AccountExportDeriver` export a MetaMask-compatible account xpub, `UrQrEncoder` / `UrQrAssembler` display and scan single/multipart fountain QR, `Eip4527TransactionPreviewDecoder` verifies and displays the exact Mainnet/Sepolia transaction bytes, and `Eip4527InboundCoordinator` returns an `eth-signature` QR after per-operation auth. MetaMask remains responsible for assembling and broadcasting. The obsolete custom `airgap-tx:` codec/coordinator and paste UI were removed in v1.38. The shared UI is the `connections` stage (`wallet_flow_screen_connections.dart`).
 
-### UI: one stateful state-machine screen, split across part files
+### UI: widget-free controller plus thin screen and part files
 
-`WalletFlowScreen` (`wallet_flow_screen.dart`, ~560 lines) is the `StatefulWidget` orchestrator driven by the `WalletFlowStage` enum (`loading → welcome → createWallet/importWallet → showSeed → biometricPrompt → locked → unlocked`). It owns the `PhoneSecureVault`, `ExternalDeviceDemoBackend`, and `WalletBackendRegistry` instances and branches its UX when the active backend is the external device. The presentational stage widgets stay library-private but live in `part` files of the same library: `wallet_flow_screen_widgets.dart` (shared leaf widgets + header), `wallet_flow_screen_onboarding.dart` (welcome/pin/import/seed/biometric/locked stages), and `wallet_flow_screen_unlocked.dart` (the unlocked dashboard + send/sign/track section). The `part` files share the orchestrator's imports — add new imports to `wallet_flow_screen.dart`.
+`WalletFlowController` owns the state machine, custody/backend instances, dependencies, and domain actions.
+`WalletFlowScreen` listens to it and composes the current stage; it does not own the vault lifecycle. The
+presentational widgets remain library-private in `wallet_flow_screen_widgets.dart`,
+`wallet_flow_screen_onboarding.dart`, `wallet_flow_screen_unlocked.dart`, and
+`wallet_flow_screen_connections.dart`. Part files share imports from `wallet_flow_screen.dart`; add UI imports
+there. New domain collaborators belong in the controller/composition root and should stay injectable for tests.
 
 ## Conventions & gotchas
 
-- **The app version is duplicated across several files — keep them in sync.** `pubspec.yaml` (`version:`) is the source; `lib/src/app_version.dart` (`appVersion`/`appVersionLabel`) must match, `test/widget_test.dart` asserts the on-screen `appVersionLabel`, and both `README.md` and the `docs/development-plan.md` "Current stopping point" also state it. When bumping, update all of them. Project convention (per README) is to **bump the minor version with each functional step**.
+- **The app version is duplicated across several files — keep them in sync.** `pubspec.yaml` (`version:`) is the source; `lib/src/app_version.dart` (`appVersion`/`appVersionLabel`) must match, `test/widget_test.dart` asserts the on-screen `appVersionLabel`, and both `README.md` and the `docs/development-plan.md` NOW snapshot also state it. When bumping, update all of them. Project convention (per README) is to **bump the minor version with each functional step**.
 - **Commit messages** follow Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `style:`.
 - **UI text and many error messages are Russian.** Widget tests locate elements by Russian strings — keep them consistent when editing UI.
 - Keep `docs/development-plan.md` phase status in sync when completing roadmap items (existing `docs:` commits do this).

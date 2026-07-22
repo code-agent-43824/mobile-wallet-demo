@@ -18,6 +18,27 @@ Entry template:
 
 ---
 
+## 2026-07-22 — Reconcile current roadmap and Phase 10 — branch docs/reconcile-current-roadmap — done
+- Plan: make the documentation an unambiguous execution map without changing application code or version.
+  Add a concise north star plus NOW / NEXT / LATER, replace the oversized stopping-point paragraph, correct
+  stale WalletConnect/AirGap/auth/architecture claims, redesign the Phase 10 plan around a genuinely
+  non-exporting hardware-custody contract and vendor-native transport spike, define physical-device exit
+  criteria and the complete signing matrix, and mark the v1.18 repository review as historical. Reconcile
+  README, CLAUDE.md, and the NFC integration notes; then audit canonical docs for contradictory wording.
+- Done: replaced the oversized stopping-point paragraph with a concise north star and NOW / NEXT / LATER;
+  corrected stale protocol, per-operation-auth, UI-controller, project-id, AirGap, and validation claims; and
+  rebuilt Phase 10 around non-exporting custody contracts, a vendor-native transport spike, EVM signature
+  assembly, Android-first integration, the full signing matrix, and explicit physical-device exit criteria.
+  Reconciled README, CLAUDE.md, and the detailed NFC notes; marked the v1.18 repo review as historical; and
+  added `docs/device-test-matrix.md` to separate automated, simulator, live-service, camera, and future NFC
+  evidence. Canonical-doc stale-wording search and `git diff --check` pass. Documentation only: no app version
+  bump and no code/build/test run.
+- Next / open: owner retests dense MetaMask camera QR on Android v1.39. Phase 10 starts only after the exact
+  supported Rutoken and distributable vendor SDKs are available for the Android physical-device spike.
+- Refs: owner roadmap/code/documentation review; `docs/development-plan.md`;
+  `docs/nfc-pkcs11-integration-notes.md`; `docs/device-test-matrix.md`; `docs/repo-review.md`; `CLAUDE.md`;
+  `README.md`.
+
 ## 2026-07-22 — Harden live camera QR recognition — branch fix/camera-qr-recognition — done (CI green)
 - Plan: improve the Android live scanner after owner dogfood proved that the same dense MetaMask
   `eth-sign-request` decodes from a screenshot but is intermittent through the camera. Analyze the full camera
