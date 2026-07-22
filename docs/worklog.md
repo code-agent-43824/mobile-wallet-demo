@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-07-22 — Real Rutoken Android transport spike — branch feat/rutoken-android-transport — done (CI pending)
+## 2026-07-22 — Real Rutoken Android transport spike — branch feat/rutoken-android-transport — done (CI green)
 - Plan: incorporate the owner-supplied official Android v1.1 package without copying its blockchain-agnostic
   signing assumptions. First reconcile Phase 10 provisioning policy: support existing mnemonic/passphrase import
   and on-token generation followed by mandatory backup export; defer backup-less generation. Vendor the licensed
@@ -37,14 +37,15 @@ Entry template:
   Activity-stop teardown. Added a typed MethodChannel adapter that validates DER EC points, derives the EVM
   address/fingerprints from public data, and sends only 32-byte digests for signing. Added a non-mutating welcome
   diagnostic (NFC/PIN/xpub/sign/close), adapter/codec regressions, and bumped to v1.41.0+52. Local format/analyze
-  and all 173 tests pass.
-- Next / open: GitHub multi-platform CI must compile the Kotlin/vendor stack. Then the owner installs the ARM64
-  APK and runs “Проверить настоящий Рутокен”. Live signature length/shape, account chain-code readability,
+  and all 173 tests pass. CI run 29921402149 is green for Validate, Android APK, both iOS builds, and Windows;
+  the built APK was inspected and contains ARM64 `libwtpkcs11ecp.so`, `librtpcsc.so`, and `libjnidispatch.so`.
+- Next / open: the owner installs the Android artifact from run 29921402149 and runs “Проверить настоящий
+  Рутокен”. Live signature length/shape, account chain-code readability,
   NFC-loss behavior, cancellation, and precise PIN error mapping remain physical-device questions. Only after
   that check: both provisioning flows, production backend registration, and the full signing matrix.
 - Refs: Phase 10.0/10.3; owner archive SHA-256
   `b9ef7c7519c149688d12ed4a8953159c9d58279923edc73eeb3d55e8aa2f2bb3`; bundled `.so` SHA-256
-  `68189f52194197969edafe6df47012315bd8320c9cfcf60070b7cacda2c2b70f`.
+  `68189f52194197969edafe6df47012315bd8320c9cfcf60070b7cacda2c2b70f`; PR #1; CI 29921402149.
 
 ## 2026-07-22 — Rutoken custody integration foundation — branch feat/rutoken-custody-foundation — done (CI green)
 - Plan: complete the library-independent preparation for Phase 10 without pretending that the native Rutoken
