@@ -42,4 +42,20 @@ void main() {
     expect(activitySource, contains('application as WalletDemoApplication'));
     expect(runtimeSource, isNot(contains('RtPcscBridge')));
   });
+
+  test('Rutoken master derivation uses the vendor nullable empty path', () {
+    final source = File(
+      'android/app/src/main/kotlin/com/example/mobile_wallet_demo/rutoken/'
+      'RutokenRuntime.kt',
+    ).readAsStringSync();
+
+    expect(source, contains('derivePublic(open.session, master, null)'));
+    expect(source, contains('path: LongArray?'));
+    expect(
+      source,
+      isNot(contains('derivePublic(open.session, master, longArrayOf())')),
+    );
+    expect(source, contains('makeAttribute(CKA_KEY_TYPE, CKK_VENDOR_BIP32)'));
+    expect(source, contains('no BIP32 ECDSA master key'));
+  });
 }

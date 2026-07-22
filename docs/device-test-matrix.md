@@ -16,7 +16,8 @@ Result values: `PASS`, `FAIL`, `PARTIAL`, `RETEST`, `BLOCKED`, or `NOT RUN`.
 | WalletConnect Sepolia broadcast + cold-start vault persistence | Android owner device | v1.36 / 2026-07-21 | PASS | Owner dogfood recorded in worklog; capture device/OS on next repetition. |
 | MetaMask EIP-4527 account import/signature return/Sepolia broadcast | Android owner device | v1.38 / 2026-07-22 | PASS | Broadcast appeared successful; transaction hash was not recorded. |
 | Dense MetaMask QR live camera after scanner hardening | Android physical device | v1.39 | NOT RUN | Owner retest pending; file/screenshot decode already passed. |
-| Rutoken custody/NFC discovery | Android owner device | v1.41–v1.42 / 2026-07-22 | FAIL | Official demo detects the same token on the same phone. v1.41 lacked `C_WaitForSlotEvent`; v1.42 added it but still attached the transport after Activity creation had begun. v1.43 moves the complete bridge bootstrap to `Application.onCreate`; owner retest pending. |
+| Rutoken custody/NFC discovery | Android owner device | v1.43 / 2026-07-22 | PASS | The same phone/card that timed out in v1.41–v1.42 is detected after moving the complete bridge bootstrap to `Application.onCreate`. An empty card then correctly reached the zero-master check. |
+| Rutoken public-material probe | Android owner device | v1.43 / 2026-07-22 | FAIL | A reference-provisioned card reached master public derivation, then JNA rejected Wallet Demo's non-null zero-length path. v1.44 mirrors the official nullable empty `DerivationPath()`; retest pending. |
 
 ## Phone-vault release checks
 
@@ -54,7 +55,7 @@ Add exact token model, firmware, SDK version, device/OS, and issue/evidence link
 
 | Check | Android | iOS | Acceptance |
 | --- | --- | --- | --- |
-| Vendor stack init, token discovery, login, public-key read, teardown | RETEST v1.43 | BLOCKED | One-tap lifecycle works without custom APDU handling. v1.43 mirrors both the official application bootstrap order and slot-event listener. |
+| Vendor stack init, token discovery, login, public-key read, teardown | RETEST v1.44 | BLOCKED | v1.43 physically passes discovery/login and reaches key lookup. v1.44 encodes the empty master derivation path as the vendor-required null pointer; public read and teardown need retest. |
 | Address + account xpub/chain code | BLOCKED | BLOCKED | Match independent derivation/reference vectors. |
 | Own-send | BLOCKED | BLOCKED | Device signs; valid low-s/recovery id; broadcast succeeds once. |
 | WalletConnect transaction | BLOCKED | BLOCKED | Preflight then tap+PIN; response/broadcast succeeds once. |
