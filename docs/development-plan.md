@@ -27,7 +27,7 @@ Current factual status of the project:
 milestone is an optional Rutoken custody backend for Android/iOS whose signing keys stay non-exporting after
 recoverable provisioning and which supports the same own-send, WalletConnect, and EIP-4527 AirGap flows.
 
-- **NOW — v1.41.0+52:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
+- **NOW — v1.42.0+53:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
   MetaMask-compatible EIP-4527 AirGap, per-operation authentication, hardened QR scanning, and the
   library-independent Rutoken custody/signature foundation plus real Android PC/SC + PKCS#11 transport are built.
 - **NEXT — Phase 10 physical validation/provisioning:** validate the read-only transport probe on the owner's
@@ -388,7 +388,7 @@ phone-vault path unchanged. Provisioning must preserve recoverability: support i
 backup and generating on-token with mandatory one-time backup export. A backup-less generation mode is deferred.
 
 Status: 🟡 In progress. Phase 10.1–10.2 are complete in v1.40. The Android 10.0/10.3 transport implementation
-is present in v1.41 and awaits physical validation; provisioning, production-backend wiring, full dogfood, and iOS remain.
+is present in v1.42 and awaits repeat physical validation; provisioning, production-backend wiring, full dogfood, and iOS remain.
 
 > **Reference:** `docs/nfc-pkcs11-integration-notes.md` contains the vendor mechanisms, native-stack setup,
 > Ethereum corrections, and physical-device questions. The existing demo adapter is a test double, not an
@@ -408,7 +408,7 @@ is present in v1.41 and awaits physical validation; provisioning, production-bac
 
 ### Chunk breakdown
 Small, reviewable steps; each chunk records plan and result in `docs/worklog.md`:
-- **10.0 — IMPLEMENTED, PHYSICAL CHECK PENDING (v1.41):** the exact Android v1.1 artifacts are vendored with
+- **10.0 — IMPLEMENTED, PHYSICAL RETEST PENDING (v1.42):** the exact Android v1.1 artifacts are vendored with
   license/checksum and the platform-channel approach is implemented. The welcome-screen diagnostic exercises
   token discovery, session login, public account/xpub read, raw signing, and teardown without mutating the token.
   The owner's physical-device run is still required. NFC APDUs remain owned by the vendor PC/SC bridge.
@@ -420,10 +420,13 @@ Small, reviewable steps; each chunk records plan and result in `docs/worklog.md`
   64-byte `r‖s`, enforce secp256k1 bounds/EIP-2 low-s, recover y-parity against the expected address, and build
   byte-identical EIP-155/EIP-1559 transactions plus personal/raw-digest/AirGap signatures. Fake native-session
   tests prove local parity and idempotent/error-path teardown.
-- **10.3 — IMPLEMENTED, PHYSICAL CHECK PENDING (v1.41):** official rtpcscbridge 1.4.0 + pkcs11wrapper 4.3.1 +
+- **10.3 — IMPLEMENTED, PHYSICAL RETEST PENDING (v1.42):** official rtpcscbridge 1.4.0 + pkcs11wrapper 4.3.1 +
   pkcs11jna 4.2.0 + JNA 5.17.0, ARM64 `libwtpkcs11ecp.so`, serialized Kotlin lifecycle/session/login,
   public-key + account-chain-code reads, session-only derived signing keys, `CKM_ECDSA`, MethodChannel adapter,
-  and success/error/Activity-stop teardown. Refine cancellation, NFC-loss and PIN error mapping from live evidence.
+  and success/error/Activity-stop teardown. The first v1.41 device run found that polling `C_GetSlotList` never
+  activated NFC discovery even though the official demo worked on the same phone/token; v1.42 now mirrors the
+  official concurrent blocking `C_WaitForSlotEvent` listener plus initial slot snapshot. Retest discovery, then
+  refine cancellation, NFC-loss and PIN error mapping from live evidence.
 - **10.4 — recoverable provisioning and public export:** implement both owner-required backup paths: (a) import
   an existing BIP-39 mnemonic/passphrase through short-lived mutable native buffers into the token, and (b)
   generate on-token with extractable mnemonic enabled and require one-time backup display/confirmation before
