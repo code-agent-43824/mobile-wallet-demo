@@ -74,6 +74,24 @@ class CameraQrScanner implements QrScanner {
   Future<String?> loadFromFile() => _fileDelegate.loadFromFile();
 }
 
+/// Creates the production camera controller with settings tuned for dense QR
+/// payloads. Public only so the native-scanner configuration can be regression
+/// tested without opening a camera in a headless widget test.
+@visibleForTesting
+MobileScannerController createCameraQrScannerController() {
+  return MobileScannerController(
+    formats: const <BarcodeFormat>[BarcodeFormat.qrCode],
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    // mobile_scanner otherwise defaults Android analysis to 640x480, which is
+    // too lossy for dense single-frame BC-UR payloads. The plugin selects the
+    // closest supported mode and rotates these dimensions with the display.
+    cameraResolution: const Size(1920, 1080),
+    // ML Kit can zoom towards a QR it detects but cannot yet decode. Unsupported
+    // platforms safely ignore this Android-only option.
+    autoZoom: true,
+  );
+}
+
 /// Full-screen camera scanner. Pops with the first decoded QR text, or null
 /// when the user backs out (the AppBar back button).
 class _CameraScannerScreen extends StatefulWidget {
@@ -89,10 +107,7 @@ class _CameraScannerScreen extends StatefulWidget {
 
 class _CameraScannerScreenState extends State<_CameraScannerScreen> {
   // QR only + noDuplicates: scan a single code, ignore other barcode types.
-  final MobileScannerController _controller = MobileScannerController(
-    formats: const <BarcodeFormat>[BarcodeFormat.qrCode],
-    detectionSpeed: DetectionSpeed.noDuplicates,
-  );
+  final MobileScannerController _controller = createCameraQrScannerController();
   late final UrQrAssembler? _urAssembler = widget.expectedUrType == null
       ? null
       : UrQrAssembler(expectedType: widget.expectedUrType);
@@ -157,10 +172,11 @@ class _CameraScannerScreenState extends State<_CameraScannerScreen> {
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          // A centred square scan window: detection is limited to it and the
-          // overlay dims everything around it, so it's clear where to aim.
+          // Keep a large centred guide for aiming, but analyze the full native
+          // camera frame. Cropping detection to this rectangle throws away
+          // useful pixels and made dense MetaMask BC-UR requests intermittent.
           final size = constraints.biggest;
-          final dimension = size.shortestSide * 0.7;
+          final dimension = size.shortestSide * 0.84;
           final scanWindow = Rect.fromCenter(
             center: size.center(Offset.zero),
             width: dimension,
@@ -172,7 +188,6 @@ class _CameraScannerScreenState extends State<_CameraScannerScreen> {
               MobileScanner(
                 controller: _controller,
                 onDetect: _onDetect,
-                scanWindow: scanWindow,
                 errorBuilder: (context, error) => const Center(
                   child: Padding(
                     padding: EdgeInsets.all(24),

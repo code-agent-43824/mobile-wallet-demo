@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:mobile_wallet_demo/src/qr/camera_qr_scanner.dart';
 import 'package:mobile_wallet_demo/src/qr/qr_scanner.dart';
 
@@ -10,6 +11,16 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('CameraQrScanner', () {
+    test('uses dense-QR camera settings without a low-resolution stream', () {
+      final controller = createCameraQrScannerController();
+      addTearDown(controller.dispose);
+
+      expect(controller.formats, const <BarcodeFormat>[BarcodeFormat.qrCode]);
+      expect(controller.detectionSpeed, DetectionSpeed.noDuplicates);
+      expect(controller.cameraResolution, const Size(1920, 1080));
+      expect(controller.autoZoom, isTrue);
+    });
+
     test('reports camera available and mirrors the file delegate', () {
       final scanner = CameraQrScanner(
         navigatorKey: GlobalKey<NavigatorState>(),
