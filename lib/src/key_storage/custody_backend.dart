@@ -15,8 +15,8 @@ class WalletAccountDescriptor {
 }
 
 /// Public account-level BIP-32 data used by EIP-4527 `crypto-hdkey` export.
-/// A Rutoken implementation reads these fields from the device; it must never
-/// reconstruct them by exporting a private key.
+/// For Rutoken this is software-retained provisioning metadata: the minimal
+/// PKCS#11 signing adapter does not expose an account xpub or chain code.
 class WalletAccountPublicKey {
   WalletAccountPublicKey({
     required this.account,
@@ -115,27 +115,16 @@ abstract interface class RutokenNativeAdapter {
     RutokenNativeSession session,
   );
 
-  Future<WalletAccountPublicKey> readAccountPublicKey(
-    RutokenNativeSession session,
-  );
-
   Future<RawEcdsaSignature> signDigest({
     required RutokenNativeSession session,
     required String derivationPath,
     required Uint8List digest,
   });
 
-  /// `CKM_VENDOR_BIP32_WITH_BIP39_KEY_PAIR_GEN`. [mnemonic] is populated only
-  /// when the token policy explicitly allows the one-time backup display.
-  Future<RutokenProvisioningResult> generateWallet({
-    required RutokenNativeSession session,
-    int mnemonicWordCount = 24,
-    String? passphrase,
-  });
-
   /// `C_CreateObject` import of the BIP-32 master private key + chain code
-  /// derived from the user-provided mnemonic. The adapter must not retain the
-  /// input buffers after the call.
+  /// derived in software from an imported or newly generated mnemonic. This is
+  /// the only provisioning primitive demonstrated by the Android reference.
+  /// The adapter must not retain the input buffers after the call.
   Future<WalletAccountDescriptor> importWallet({
     required RutokenNativeSession session,
     required Uint8List masterPrivateKey,
@@ -152,23 +141,19 @@ class RutokenNativeSession {
   final DateTime openedAtUtc;
 }
 
-class RutokenProvisioningResult {
-  const RutokenProvisioningResult({required this.account, this.mnemonic});
-
-  final WalletAccountDescriptor account;
-  final String? mnemonic;
-}
-
 /// Hardware backend implementation independent of Flutter platform channels.
 /// Inject a Kotlin/Swift-backed [RutokenNativeAdapter] when the vendor binaries
 /// arrive; tests inject a pure-Dart fake.
 class RutokenCustodyBackend implements WalletCustodyBackend {
   const RutokenCustodyBackend({
     required RutokenNativeAdapter adapter,
+    WalletAccountPublicKey? publicAccountMetadata,
     this.backendId = 'rutoken_nfc',
-  }) : _adapter = adapter;
+  }) : _adapter = adapter,
+       _publicAccountMetadata = publicAccountMetadata;
 
   final RutokenNativeAdapter _adapter;
+  final WalletAccountPublicKey? _publicAccountMetadata;
   final String backendId;
 
   @override
@@ -212,12 +197,13 @@ class RutokenCustodyBackend implements WalletCustodyBackend {
   Future<WalletAccountPublicKey> readAccountPublicKey({
     required String pin,
   }) async {
-    final native = await _adapter.openSession(pin: pin);
-    try {
-      return await _adapter.readAccountPublicKey(native);
-    } finally {
-      await _adapter.closeSession(native);
+    final metadata = _publicAccountMetadata;
+    if (metadata == null) {
+      throw StateError(
+        'Rutoken account xpub metadata is not provisioned on this phone.',
+      );
     }
+    return metadata;
   }
 }
 

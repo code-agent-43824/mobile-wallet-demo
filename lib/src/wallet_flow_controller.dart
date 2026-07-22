@@ -313,8 +313,9 @@ class WalletFlowController extends ChangeNotifier {
     }
   }
 
-  /// Read-only physical transport probe. It deliberately does not generate,
-  /// import or mutate keys: it verifies NFC/login, account public material,
+  /// Physical transport probe. It does not provision or mutate master keys: it
+  /// verifies NFC/login, the address public point, one per-operation child-key
+  /// derivation,
   /// one raw CKM_ECDSA operation and unconditional native-session teardown.
   Future<void> runRutokenTransportDiagnostic(String pin) async {
     final adapter = _rutokenNativeAdapter;
@@ -322,16 +323,19 @@ class WalletFlowController extends ChangeNotifier {
     await _runBusy('Поднеси Рутокен к NFC и удерживай его…', () async {
       final session = await adapter.openSession(pin: pin);
       try {
-        final account = await adapter.readAccountPublicKey(session);
+        final account = await adapter.readAccountDescriptor(session);
+        if (account == null) {
+          throw StateError('Рутокен не содержит ECDSA-кошелёк.');
+        }
         final digest = Uint8List.fromList(List<int>.generate(32, (i) => i));
         final signature = await adapter.signDigest(
           session: session,
-          derivationPath: account.account.derivationPath,
+          derivationPath: account.derivationPath,
           digest: digest,
         );
         _rutokenDiagnosticResult =
-            'Рутокен доступен: ${account.account.address}. '
-            'Account xpub прочитан, CKM_ECDSA вернул '
+            'Рутокен доступен: ${account.address}. '
+            'CKM_ECDSA вернул сырую подпись длиной '
             '${signature.toBytes().length} байта.';
       } finally {
         await adapter.closeSession(session);

@@ -18,6 +18,31 @@ Entry template:
 
 ---
 
+## 2026-07-22 — Constrain Rutoken to the reference raw-signer contract — branch fix/rutoken-example-signing-contract — done (local validation; CI pending)
+- Plan: owner dogfood on v1.45 reaches the next PKCS#11 boundary and fails with `CKR_KEY_TYPE_INCONSISTENT`.
+  Respect the owner's explicit scope correction: the token is a key custodian and raw ECDSA/EdDSA signer only;
+  all EVM hashing, recovery, low-s and transaction assembly remain software. Reconcile the probe line-for-line with
+  the supplied Android example. Stop querying derived account chain code (the demo never does this), make the
+  diagnostic read only the address public point, and reserve account xpub/chain-code for public metadata retained
+  by the app during provisioning. For signing, derive the per-operation child exactly like the example as a
+  `Pkcs11EcPrivateKeyObject` with its demonstrated template, call plain `CKM_ECDSA` on the already-computed digest,
+  and destroy the child in `finally`. Update contracts/UX/docs/tests, bump the functional version, and require full
+  CI before the next physical probe.
+- Done: removed the unsupported account-chain-code/xpub read from Kotlin, MethodChannel, and the
+  `RutokenNativeAdapter` contract. The diagnostic now derives only the address public point. Signing now mirrors
+  the supplied example exactly: `Pkcs11EcPrivateKeyObject`, the demonstrated BIP32/secp256k1 template with
+  `CKA_TOKEN=true`, plain `CKM_ECDSA` over a software-computed 32-byte digest, and child destruction in `finally`.
+  Rutoken xpub data is now explicitly software-retained provisioning metadata and never triggers a native call.
+  The unused native on-token generation seam was also removed: both planned recoverable onboarding paths will
+  use the reference example's raw `C_CreateObject` import after transient software mnemonic/master derivation.
+  EVM low-s/recovery/envelopes remain in Dart. UX, architecture notes, roadmap, and device matrix were corrected;
+  version is v1.46.0+57. Format/analyze are clean; 17 focused tests and all 181 tests pass locally.
+- Next / open: require full CI including Android Kotlin/APK before physical v1.46 retest. The physical test must
+  confirm address, raw signature length/shape, and teardown. Do not add token-side blockchain formatting or
+  undocumented attributes.
+- Refs: owner v1.45 Android dogfood and scope correction; supplied `deriveBip32PrivateKey` /
+  `signDataWithEcdsaDerivedKey` reference implementations.
+
 ## 2026-07-22 — Accept the Rutoken BIP32 EC-point representation — branch fix/rutoken-compressed-ec-point — done (CI green)
 - Plan: owner dogfood on v1.44 proves NFC discovery, login, BIP32 master lookup, and root/child public derivation now
   proceed far enough to return `CKA_EC_POINT`; Dart then rejects the returned point because it assumes every token

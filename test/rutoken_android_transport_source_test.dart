@@ -43,18 +43,15 @@ void main() {
     expect(runtimeSource, isNot(contains('RtPcscBridge')));
   });
 
-  test('Rutoken master derivation uses the vendor nullable empty path', () {
+  test('Rutoken address derivation uses only the explicit EVM child path', () {
     final source = File(
       'android/app/src/main/kotlin/com/example/mobile_wallet_demo/rutoken/'
       'RutokenRuntime.kt',
     ).readAsStringSync();
 
-    expect(source, contains('derivePublic(open.session, master, null)'));
-    expect(source, contains('path: LongArray?'));
-    expect(
-      source,
-      isNot(contains('derivePublic(open.session, master, longArrayOf())')),
-    );
+    expect(source, contains('path: LongArray'));
+    expect(source, isNot(contains('path: LongArray?')));
+    expect(source, contains('longArrayOf(hardened(44), hardened(60)'));
     expect(source, contains('makeAttribute(CKA_KEY_TYPE, CKK_VENDOR_BIP32)'));
     expect(source, contains('no BIP32 ECDSA master key'));
   });
@@ -71,5 +68,24 @@ void main() {
       source,
       isNot(contains('key.getByteArrayAttributeValue(session, CKA_EC_POINT)')),
     );
+  });
+
+  test('Rutoken signing mirrors the raw ECDSA reference flow only', () {
+    final runtime = File(
+      'android/app/src/main/kotlin/com/example/mobile_wallet_demo/rutoken/'
+      'RutokenRuntime.kt',
+    ).readAsStringSync();
+    final channel = File(
+      'android/app/src/main/kotlin/com/example/mobile_wallet_demo/rutoken/'
+      'RutokenMethodChannel.kt',
+    ).readAsStringSync();
+
+    expect(runtime, contains('Pkcs11EcPrivateKeyObject::class.java'));
+    expect(runtime, contains('makeAttribute(CKA_TOKEN, true)'));
+    expect(runtime, contains('Pkcs11Mechanism.make(CKM_ECDSA)'));
+    expect(runtime, contains('objectManager.destroyObject(derived)'));
+    expect(runtime, isNot(contains('CKA_VENDOR_BIP32_CHAINCODE')));
+    expect(channel, contains('"readAccountDescriptor"'));
+    expect(channel, isNot(contains('"readPublicMaterial"')));
   });
 }

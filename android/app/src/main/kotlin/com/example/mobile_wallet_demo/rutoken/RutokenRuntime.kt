@@ -18,9 +18,9 @@ import ru.rutoken.pkcs11wrapper.datatype.Pkcs11InitializeArgs
 import ru.rutoken.pkcs11wrapper.main.Pkcs11Session
 import ru.rutoken.pkcs11wrapper.mechanism.Pkcs11Mechanism
 import ru.rutoken.pkcs11wrapper.mechanism.parameter.CkVendorBip32DeriveParams
+import ru.rutoken.pkcs11wrapper.`object`.key.Pkcs11EcPrivateKeyObject
 import ru.rutoken.pkcs11wrapper.`object`.key.Pkcs11EcPublicKeyObject
 import ru.rutoken.pkcs11wrapper.`object`.key.Pkcs11PrivateKeyObject
-import ru.rutoken.pkcs11wrapper.rutoken.constant.RtPkcs11AttributeType.CKA_VENDOR_BIP32_CHAINCODE
 import ru.rutoken.pkcs11wrapper.rutoken.constant.RtPkcs11KeyType.CKK_VENDOR_BIP32
 import ru.rutoken.pkcs11wrapper.rutoken.constant.RtPkcs11MechanismType.CKM_VENDOR_BIP32_DERIVE_PRIVATE_FROM_PRIVATE
 import ru.rutoken.pkcs11wrapper.rutoken.constant.RtPkcs11MechanismType.CKM_VENDOR_BIP32_DERIVE_PUBLIC_FROM_PRIVATE
@@ -84,24 +84,9 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
         }
     }
 
-    fun readPublicMaterial(sessionId: String): Map<String, ByteArray> {
+    fun readAccountDescriptor(sessionId: String): Map<String, ByteArray> {
         val open = requireSession(sessionId)
         val master = findSingleMasterKey(open.session)
-        // The vendor wrapper represents the empty/master derivation path as a
-        // null pointer. A non-null LongArray(0) reaches JNA as a zero-byte
-        // allocation and fails before PKCS#11 with "allocation size must be
-        // greater than zero".
-        val masterPublic = derivePublic(open.session, master, null)
-        val parentPublic = derivePublic(
-            open.session,
-            master,
-            longArrayOf(hardened(44), hardened(60)),
-        )
-        val accountPublic = derivePublic(
-            open.session,
-            master,
-            longArrayOf(hardened(44), hardened(60), hardened(0)),
-        )
         val addressPublic = derivePublic(
             open.session,
             master,
@@ -109,18 +94,10 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
         )
         try {
             return mapOf(
-                "masterPublicKey" to ecPoint(open.session, masterPublic),
-                "parentPublicKey" to ecPoint(open.session, parentPublic),
-                "accountPublicKey" to ecPoint(open.session, accountPublic),
                 "addressPublicKey" to ecPoint(open.session, addressPublic),
-                "accountChainCode" to accountPublic
-                    .getByteArrayAttributeValue(open.session, CKA_VENDOR_BIP32_CHAINCODE)
-                    .byteArrayValue,
             )
         } finally {
-            listOf(masterPublic, parentPublic, accountPublic, addressPublic).forEach {
-                open.session.objectManager.destroyObject(it)
-            }
+            open.session.objectManager.destroyObject(addressPublic)
         }
     }
 
@@ -255,7 +232,7 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
     private fun derivePublic(
         session: RtPkcs11Session,
         master: Pkcs11PrivateKeyObject,
-        path: LongArray?,
+        path: LongArray,
     ): Pkcs11EcPublicKeyObject {
         val template = listOf(
             session.attributeFactory.makeAttribute(CKA_CLASS, CKO_PUBLIC_KEY),
@@ -279,17 +256,18 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
         session: RtPkcs11Session,
         master: Pkcs11PrivateKeyObject,
         path: LongArray,
-    ): Pkcs11PrivateKeyObject {
+    ): Pkcs11EcPrivateKeyObject {
         val template = listOf(
             session.attributeFactory.makeAttribute(CKA_CLASS, CKO_PRIVATE_KEY),
             session.attributeFactory.makeAttribute(CKA_PRIVATE, true),
-            // Session-only: a signing child must never persist on the token.
-            session.attributeFactory.makeAttribute(CKA_TOKEN, false),
+            // Match the vendor demo exactly. The per-operation child is
+            // destroyed in signDigest's finally block immediately after use.
+            session.attributeFactory.makeAttribute(CKA_TOKEN, true),
             session.attributeFactory.makeAttribute(CKA_KEY_TYPE, CKK_VENDOR_BIP32),
             session.attributeFactory.makeAttribute(CKA_EC_PARAMS, SECP256K1_OID),
         )
         return session.keyManager.deriveKey(
-            Pkcs11PrivateKeyObject::class.java,
+            Pkcs11EcPrivateKeyObject::class.java,
             Pkcs11Mechanism.make(
                 CKM_VENDOR_BIP32_DERIVE_PRIVATE_FROM_PRIVATE,
                 CkVendorBip32DeriveParams(path),

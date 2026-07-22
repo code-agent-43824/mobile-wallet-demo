@@ -1,4 +1,3 @@
-import 'package:bip32/bip32.dart' as bip32;
 import 'package:flutter/services.dart';
 import 'package:pointycastle/ecc/curves/secp256k1.dart';
 import 'package:web3dart/web3dart.dart' show bytesToHex, publicKeyToAddress;
@@ -24,7 +23,6 @@ class MethodChannelRutokenNativeAdapter implements RutokenNativeAdapter {
     : _channel = channel ?? const MethodChannel(_channelName);
 
   static const String _channelName = 'wallet_demo/rutoken';
-  static const String accountPath = "m/44'/60'/0'";
   static const String addressPath = "m/44'/60'/0'/0/0";
 
   final MethodChannel _channel;
@@ -46,38 +44,16 @@ class MethodChannelRutokenNativeAdapter implements RutokenNativeAdapter {
   @override
   Future<WalletAccountDescriptor?> readAccountDescriptor(
     RutokenNativeSession session,
-  ) async => (await readAccountPublicKey(session)).account;
-
-  @override
-  Future<WalletAccountPublicKey> readAccountPublicKey(
-    RutokenNativeSession session,
   ) async {
-    final response = await _invokeMap('readPublicMaterial', <String, Object?>{
-      'sessionId': session.id,
-    });
-    final master = RutokenEcPoint.decode(_bytes(response, 'masterPublicKey'));
-    final parent = RutokenEcPoint.decode(_bytes(response, 'parentPublicKey'));
-    final account = RutokenEcPoint.decode(_bytes(response, 'accountPublicKey'));
+    final response = await _invokeMap(
+      'readAccountDescriptor',
+      <String, Object?>{'sessionId': session.id},
+    );
     final address = RutokenEcPoint.decode(_bytes(response, 'addressPublicKey'));
-    final chainCode = _bytes(response, 'accountChainCode');
-    if (chainCode.length != 32) {
-      throw RutokenNativeException(
-        'Rutoken account chain code has ${chainCode.length} bytes; expected 32.',
-      );
-    }
-
-    return WalletAccountPublicKey(
-      account: WalletAccountDescriptor(
-        backendId: 'rutoken_nfc',
-        address: '0x${bytesToHex(publicKeyToAddress(address.uncompressedXY))}',
-        derivationPath: addressPath,
-      ),
-      accountPath: accountPath,
-      accountDepth: 3,
-      compressedPublicKey: account.compressed,
-      chainCode: chainCode,
-      sourceFingerprint: _fingerprint(master.compressed),
-      parentFingerprint: _fingerprint(parent.compressed),
+    return WalletAccountDescriptor(
+      backendId: 'rutoken_nfc',
+      address: '0x${bytesToHex(publicKeyToAddress(address.uncompressedXY))}',
+      derivationPath: addressPath,
     );
   }
 
@@ -101,15 +77,6 @@ class MethodChannelRutokenNativeAdapter implements RutokenNativeAdapter {
   @override
   Future<void> closeSession(RutokenNativeSession session) =>
       _invokeVoid('closeSession', <String, Object?>{'sessionId': session.id});
-
-  @override
-  Future<RutokenProvisioningResult> generateWallet({
-    required RutokenNativeSession session,
-    int mnemonicWordCount = 24,
-    String? passphrase,
-  }) => throw const RutokenNativeException(
-    'Rutoken provisioning is not enabled in the transport-spike build.',
-  );
 
   @override
   Future<WalletAccountDescriptor> importWallet({
@@ -168,11 +135,6 @@ class MethodChannelRutokenNativeAdapter implements RutokenNativeAdapter {
     final value = response[key];
     if (value is Uint8List) return value;
     throw RutokenNativeException("Rutoken response has no '$key' bytes.");
-  }
-
-  int _fingerprint(Uint8List compressedPublicKey) {
-    final node = bip32.BIP32.fromPublicKey(compressedPublicKey, Uint8List(32));
-    return node.fingerprint.buffer.asByteData().getUint32(0);
   }
 }
 

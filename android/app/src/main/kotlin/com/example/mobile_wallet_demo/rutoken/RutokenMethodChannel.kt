@@ -21,8 +21,8 @@ internal class RutokenMethodChannel(
             "openSession" -> execute(result) {
                 runtime.openSession(call.requiredString("pin"))
             }
-            "readPublicMaterial" -> execute(result) {
-                runtime.readPublicMaterial(call.requiredString("sessionId"))
+            "readAccountDescriptor" -> execute(result) {
+                runtime.readAccountDescriptor(call.requiredString("sessionId"))
             }
             "signDigest" -> execute(result) {
                 runtime.signDigest(
