@@ -5,9 +5,9 @@
 > signer in Phase 10. Read it together with `docs/development-plan.md`
 > (Phase 10) and `AGENTS.md`.
 >
-> **Status:** research/reference only. **No real PKCS#11 or NFC code exists yet**
-> — Phase 7 ships a *simulation* (`ExternalDeviceDemoBackend`). Nothing here is
-> wired in. Every constant/recipe below is now cross-checked against the **two
+> **Status:** reference plus Android transport implementation. v1.46 wires the
+> official Android PC/SC + PKCS#11 stack for a physical diagnostic; the selectable
+> production backend and provisioning UI are still pending. Every constant/recipe below is cross-checked against the **two
 > official Aktiv-Soft / Rutoken demo wallets** (iOS Swift + Android Kotlin) and
 > the vendor C headers they ship — see Provenance.
 
@@ -22,11 +22,11 @@ BIP32/BIP39 mechanisms** — *not* the generic `CKM_EC_KEY_PAIR_GEN` path:
 
 1. **Open an NFC session** (= the “tap”) and `C_Login(CKU_USER, devicePin)` (=
    the device second factor).
-2. **Create** a seed-backed key: `C_GenerateKeyPair(CKM_VENDOR_BIP32_WITH_BIP39_KEY_PAIR_GEN)`
-   → a `CKK_VENDOR_BIP32` master key that can be **shown/exported as a BIP-39
-   mnemonic** (our product must display the seed — this is the only mechanism
-   that allows it). **Import** instead via `C_CreateObject` from a 32-byte master
-   private key + 32-byte chain code (recipe §5.2).
+2. **Provision** only as the supplied Android example does: generate or import
+   the BIP-39 mnemonic in software, derive the 32-byte BIP32 master private key +
+   32-byte chain code, and store them with `C_CreateObject` (recipe §5.2). The
+   documented vendor `C_GenerateKeyPair` extension remains reference material,
+   not an implementation dependency for this milestone.
 3. **Derive** the account key at `m/44'/60'/0'/0/0` (ETH coin type 60):
    `CKM_VENDOR_BIP32_DERIVE_PRIVATE_FROM_PRIVATE` (sign) /
    `…DERIVE_PUBLIC_FROM_PRIVATE` (address).
@@ -57,9 +57,9 @@ must build **v / recovery id + low-s** yourself because `CKM_ECDSA` returns only
 **Vendor library:** `wtpkcs11ecp` (Aktiv/Rutoken PKCS#11 provider with crypto-wallet
 extensions), shipped as `wtpkcs11ecp.xcframework` (iOS arm64 + sim + macOS) and
 `libwtpkcs11ecp.so` (Android **arm64-v8a only**). These native blobs are
-**proprietary vendor redistributables** — do **not** vendor them into this repo;
-document and depend, don’t copy. A **physical token is required** (no simulator/
-emulator).
+vendor redistributables. The licensed Android ARM64 binary used by the transport
+spike is vendored with its notice and checksum; do not copy binaries without the
+matching redistribution terms. A **physical token is required** (no simulator/emulator).
 
 > The two demo apps **are** the content behind the previously-unreachable
 > owncloud links, so §§3–6 are now first-party, not inferred.
@@ -175,7 +175,7 @@ Generate a BIP32 master key (`C_GenerateKeyPair`). **No params.** Result:
 `CKK_VENDOR_BIP32` pair. ⚠️ No off-token BIP-39 backup → can’t show a seed; prefer
 4.2 for our product.
 
-### 4.2 `CKM_VENDOR_BIP32_WITH_BIP39_KEY_PAIR_GEN` (`0x80000009`) ← **create wallets**
+### 4.2 `CKM_VENDOR_BIP32_WITH_BIP39_KEY_PAIR_GEN` (`0x80000009`) — documented, not used by this milestone
 Generate a BIP32 master key **recoverable off-token via a BIP-39 mnemonic**.
 ```c
 typedef struct CK_VENDOR_BIP32_WITH_BIP39_KEY_PAIR_GEN_PARAMS {
@@ -375,7 +375,7 @@ waiting on UI; gather inputs (PIN, tx) *before* the tap.
 ### 6.5 What this means for our Flutter app
 There is no Dart PKCS#11/PC-SC. Reproducing the stack = **wrap the two native
 stacks behind a platform channel / FFI**, one thin per-platform module each
-implementing the typed `RutokenNativeAdapter` session/account/xpub/provision/sign
+implementing the typed `RutokenNativeAdapter` session/account/provision/sign
 contract, and keep all of §6.2–§6.4
 *inside* those modules:
 - **iOS module** (Swift): bundle `RtPcscWrapper` + `wtpkcs11ecp.xcframework`,
@@ -386,7 +386,9 @@ contract, and keep all of §6.2–§6.4
   `C_Initialize`/`C_Finalize`, the `C_WaitForSlotEvent` presence loop.
 - Dart side: `RutokenCustodyBackend` calls the injected native adapter;
   `ExternalDigestWalletTransactionSigner` keeps Ethereum keccak/RLP/low-s/recovery-id
-  math (§7) in Dart. Per-platform NFC
+  math (§7) in Dart. Account xpub/chain-code, when needed for EIP-4527, is public
+  provisioning metadata retained by the app and is not queried through the native
+  adapter. Per-platform NFC
   config (entitlement/AIDs vs. gradle/jniLibs) is the bulk of chunk 10.0/10.3.
 
 ---
@@ -426,9 +428,9 @@ implementation swap.
 | --- | --- |
 | `KeyStorageBackend.unlock()` returns mnemonic/private-key-bearing `WalletMaterial`. | Public account lookup is separate from a transient authenticated signer session. Only the phone-vault implementation may use local material internally. |
 | `ExternalDeviceDemoBackend` wraps a prefixed `PhoneSecureVault`. | Real hardware backend owns no local seed copy and never returns mnemonic/private key to Dart. |
-| `ExternalDevicePkcs11Adapter.performOperation()` returns a demo status/message. | Native adapter exposes typed session, public-key/xpub, provisioning, and raw-signature operations with error/cancellation mapping. |
+| `ExternalDevicePkcs11Adapter.performOperation()` returns a demo status/message. | Native adapter exposes only the demonstrated typed session, public-key, provisioning, child-derivation, and raw-signature operations with error/cancellation mapping. |
 | `WalletTransactionSigner` is async and backend-agnostic. | Keep this useful consumer seam, but have the backend/session provide it after fresh device authentication. |
-| AirGap account export derives from an in-memory mnemonic. | Request an explicit public account-xpub capability; derive `crypto-hdkey` from public device data only. |
+| AirGap account export derives from an in-memory mnemonic. | Use public account-xpub metadata retained by the app during provisioning; do not invent a token-side xpub read. |
 
 Keep the project DI convention (`abstract interface class`, production default, injected fake), but do not
 preserve an interface merely because the simulation already uses it. No hardware implementation may satisfy a
@@ -439,15 +441,18 @@ local-secret contract by copying token secrets into app memory.
 - **10.0 — prerequisites and transport spike:** obtain the exact token and distributable SDKs; on a physical
   Android device prove vendor-stack initialization, discovery, login, one public read, and teardown. Choose FFI
   vs a platform channel to the vendor-native stacks. The app does not hand-roll APDU transport.
-- **10.1 — DONE (v1.40):** public account/xpub models, authenticated transient session, typed native adapter,
-  provisioning seams, and public-data-only `crypto-hdkey` export.
+- **10.1 — DONE (v1.40; corrected v1.46):** public account/xpub models, authenticated transient session, typed
+  native adapter, provisioning seams, and public-data-only `crypto-hdkey` export. The xpub model belongs to the
+  app-level capability, not the Rutoken native adapter.
 - **10.2 — DONE (v1.40):** keccak/digest rules, strict raw `r‖s`, low-s, recovered y-parity, legacy and typed
   envelopes; fake-device output matches the local reference byte-for-byte.
 - **10.3 — Android adapter:** NFC/PC-SC lifecycle, PKCS#11 init/session/login/public-key/sign operations, typed
   failures, cancellation, and teardown.
-- **10.4 — recoverable provisioning/export:** support existing BIP-39 mnemonic/passphrase import and on-token
-  generation with mandatory one-time mnemonic export/confirmation. Backup-less generation is explicitly
-  deferred. Address and xpub/chain-code export remain public-data operations independent of mnemonic access.
+- **10.4 — recoverable provisioning/export:** use only the example's `C_CreateObject` import. Support an existing
+  BIP-39 mnemonic/passphrase or generate a new mnemonic in software with mandatory one-time backup confirmation,
+  then transiently derive and import the raw master key + chain code. Backup-less creation is deferred. Retain
+  public xpub/chain-code metadata during provisioning for later AirGap export; normal signing must not query
+  undocumented derived-chain-code attributes from the token.
 - **10.5 — signing matrix:** own-send; WalletConnect transaction, personal message, and EIP-712; EIP-4527
   AirGap transaction.
 - **10.6 — UX and iOS:** real tap/PIN/progress/cooldown/retry UI, removal of mock controls, then the equivalent
@@ -455,7 +460,7 @@ local-secret contract by copying token secrets into app memory.
 
 The authoritative exit criteria are in `docs/development-plan.md`. In particular, success/error/cancel/NFC-loss
 must all close the authenticated session. No seed or private key may enter logs, errors, or long-lived Dart
-models; provisioning is the narrow exception for transient import and mandatory one-time generated backup.
+models; provisioning is the narrow exception for transient software generation/import and mandatory one-time backup.
 ## 10. Open questions to confirm on a real token
 
 (Several earlier questions are now **answered**: mechanism hex values = §3;

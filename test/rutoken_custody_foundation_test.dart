@@ -30,26 +30,41 @@ void main() {
       'opens, reads, signs, and closes exactly one native session',
       () async {
         final adapter = _FakeRutokenNativeAdapter();
-        final backend = RutokenCustodyBackend(adapter: adapter);
+        final backend = RutokenCustodyBackend(
+          adapter: adapter,
+          publicAccountMetadata: _publicAccountMetadata(),
+        );
 
         final publicAccount = await backend.readAccountPublicKey(pin: '1234');
         expect(publicAccount.account.address, _address);
-        expect(adapter.openCount, 1);
-        expect(adapter.closeCount, 1);
+        expect(adapter.openCount, 0, reason: 'xpub must not query the token');
+        expect(adapter.closeCount, 0);
 
         final session = await backend.openSigningSession(pin: '1234');
         final digest = keccak256(Uint8List.fromList(utf8.encode('rutoken')));
         final signature = await session.signDigest(digest);
         expect(signature.toBytes(), hasLength(64));
-        expect(adapter.openCount, 2);
-        expect(adapter.closeCount, 1);
+        expect(adapter.openCount, 1);
+        expect(adapter.closeCount, 0);
 
         await session.close();
         await session.close();
-        expect(adapter.closeCount, 2, reason: 'close must be idempotent');
+        expect(adapter.closeCount, 1, reason: 'close must be idempotent');
         expect(() => session.signDigest(digest), throwsA(isA<StateError>()));
       },
     );
+
+    test('does not synthesize or request missing xpub metadata', () async {
+      final adapter = _FakeRutokenNativeAdapter();
+      final backend = RutokenCustodyBackend(adapter: adapter);
+
+      await expectLater(
+        backend.readAccountPublicKey(pin: '1234'),
+        throwsA(isA<StateError>()),
+      );
+      expect(adapter.openCount, 0);
+      expect(adapter.closeCount, 0);
+    });
 
     test('closes native session when account discovery fails', () async {
       final adapter = _FakeRutokenNativeAdapter(hasAccount: false);
@@ -325,29 +340,6 @@ class _FakeRutokenNativeAdapter implements RutokenNativeAdapter {
   ) async => hasAccount ? account : null;
 
   @override
-  Future<WalletAccountPublicKey> readAccountPublicKey(
-    RutokenNativeSession session,
-  ) async {
-    final public = EthPrivateKey.fromHex(_privateKeyHex).publicKey;
-    return WalletAccountPublicKey(
-      account: account,
-      accountPath: "m/44'/60'/0'",
-      accountDepth: 3,
-      compressedPublicKey: Uint8List.fromList(public.getEncoded(true)),
-      chainCode: Uint8List(32),
-      sourceFingerprint: 0,
-      parentFingerprint: 0,
-    );
-  }
-
-  @override
-  Future<RutokenProvisioningResult> generateWallet({
-    required RutokenNativeSession session,
-    int mnemonicWordCount = 24,
-    String? passphrase,
-  }) async => const RutokenProvisioningResult(account: account);
-
-  @override
   Future<WalletAccountDescriptor> importWallet({
     required RutokenNativeSession session,
     required Uint8List masterPrivateKey,
@@ -369,6 +361,19 @@ class _FakeRutokenNativeAdapter implements RutokenNativeAdapter {
       s: _uint256(signature.s),
     );
   }
+}
+
+WalletAccountPublicKey _publicAccountMetadata() {
+  final public = EthPrivateKey.fromHex(_privateKeyHex).publicKey;
+  return WalletAccountPublicKey(
+    account: _FakeRutokenNativeAdapter.account,
+    accountPath: "m/44'/60'/0'",
+    accountDepth: 3,
+    compressedPublicKey: Uint8List.fromList(public.getEncoded(true)),
+    chainCode: Uint8List(32),
+    sourceFingerprint: 0,
+    parentFingerprint: 0,
+  );
 }
 
 Uint8List _uint256(BigInt value) {

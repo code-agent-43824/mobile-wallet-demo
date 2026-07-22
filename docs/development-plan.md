@@ -27,7 +27,7 @@ Current factual status of the project:
 milestone is an optional Rutoken custody backend for Android/iOS whose signing keys stay non-exporting after
 recoverable provisioning and which supports the same own-send, WalletConnect, and EIP-4527 AirGap flows.
 
-- **NOW — v1.45.0+56:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
+- **NOW — v1.46.0+57:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
   MetaMask-compatible EIP-4527 AirGap, per-operation authentication, hardened QR scanning, and the
   library-independent Rutoken custody/signature foundation plus real Android PC/SC + PKCS#11 transport are built.
 - **NEXT — Phase 10 physical validation/provisioning:** validate the read-only transport probe on the owner's
@@ -384,23 +384,25 @@ Owner decision (2026-06-16): finish these later, on demand. Recorded so they are
 ## Phase 10 — Real Rutoken custody backend
 Goal: replace the simulated external-device path with an optional Rutoken backend whose signing keys remain
 non-exporting after provisioning and which composes with every existing signing transport while keeping the
-phone-vault path unchanged. Provisioning must preserve recoverability: support importing an existing BIP-39
-backup and generating on-token with mandatory one-time backup export. A backup-less generation mode is deferred.
+phone-vault path unchanged. Provisioning must preserve recoverability using only the demonstrated import primitive:
+support importing an existing BIP-39 backup and generating a new mnemonic in software for mandatory one-time
+backup confirmation before importing its raw BIP32 master key + chain code. A backup-less mode is deferred.
 
 Status: 🟡 In progress. Phase 10.1–10.2 are complete in v1.40. The Android 10.0/10.3 transport implementation
-is present in v1.45 and awaits continued physical validation; provisioning, production-backend wiring, full dogfood, and iOS remain.
+is present in v1.46 and awaits continued physical validation; provisioning, production-backend wiring, full dogfood, and iOS remain.
 
 > **Reference:** `docs/nfc-pkcs11-integration-notes.md` contains the vendor mechanisms, native-stack setup,
 > Ethereum corrections, and physical-device questions. The existing demo adapter is a test double, not an
 > interface that the real SDK must preserve.
 
 ### Required architecture
-- Separate public account data from local secret material. Introduce an `AccountDescriptor`-style model for
-  address, derivation path, and optional account xpub metadata; keep `WalletMaterial` local to the phone vault.
+- Separate public account data from local secret material. Use an `AccountDescriptor` for the token-derived
+  address/path and keep optional account xpub metadata in software from provisioning; keep `WalletMaterial`
+  local to the phone vault.
 - Have the active backend provide a transient authenticated `WalletTransactionSigner` (or equivalent signer
   session). A real hardware backend never returns mnemonic, seed, or private key to Dart.
-- Model account-xpub/`crypto-hdkey` export as an explicit capability. Hardware export must use public device
-  data; it must not depend on an in-memory mnemonic.
+- Model account-xpub/`crypto-hdkey` export as an explicit software capability backed by public metadata retained
+  during provisioning. The minimal native adapter must not query undocumented derived chain-code/xpub attributes.
 - Keep authentication per operation. Open the NFC/device session, verify the device PIN, perform exactly the
   approved operation, and tear the session down on success, error, or cancellation.
 - Keep custody independent from transport: own-send, WalletConnect, and AirGap all request a signer from the
@@ -408,22 +410,22 @@ is present in v1.45 and awaits continued physical validation; provisioning, prod
 
 ### Chunk breakdown
 Small, reviewable steps; each chunk records plan and result in `docs/worklog.md`:
-- **10.0 — IMPLEMENTED, PHYSICAL VALIDATION IN PROGRESS (v1.45):** the exact Android v1.1 artifacts are vendored with
+- **10.0 — IMPLEMENTED, PHYSICAL VALIDATION IN PROGRESS (v1.46):** the exact Android v1.1 artifacts are vendored with
   license/checksum and the platform-channel approach is implemented. The welcome-screen diagnostic exercises
-  token discovery, session login, public account/xpub read, raw signing, and teardown without mutating the token.
+  token discovery, session login, public address derivation, raw signing, and teardown without changing the master key.
   Owner dogfood confirms that v1.43 detects the NFC token and reaches key lookup. Public derivation/signing remain
   under physical validation. NFC APDUs remain owned by the vendor PC/SC bridge.
-- **10.1 — DONE (v1.40):** secret-free `WalletAccountDescriptor`, account-level public-xpub data,
+- **10.1 — DONE (v1.40; native boundary corrected v1.46):** secret-free `WalletAccountDescriptor`, account-level public-xpub data,
   `CustodySigningSession`, `WalletCustodyBackend`, and typed `RutokenNativeAdapter` contracts for session,
-  public account, raw signing, generation, import, and guaranteed close. EIP-4527 account export now accepts
-  public device data without a mnemonic.
+  public account, raw signing, generation, import, and guaranteed close. For Rutoken, EIP-4527 account export
+  consumes public metadata retained by software during provisioning; it is not a native xpub-read operation.
 - **10.2 — DONE (v1.40):** `ExternalDigestWalletTransactionSigner` + `EvmSignatureAssembler` validate raw
   64-byte `r‖s`, enforce secp256k1 bounds/EIP-2 low-s, recover y-parity against the expected address, and build
   byte-identical EIP-155/EIP-1559 transactions plus personal/raw-digest/AirGap signatures. Fake native-session
   tests prove local parity and idempotent/error-path teardown.
-- **10.3 — IMPLEMENTED, PHYSICAL RETEST PENDING (v1.45):** official rtpcscbridge 1.4.0 + pkcs11wrapper 4.3.1 +
+- **10.3 — IMPLEMENTED, PHYSICAL RETEST PENDING (v1.46):** official rtpcscbridge 1.4.0 + pkcs11wrapper 4.3.1 +
   pkcs11jna 4.2.0 + JNA 5.17.0, ARM64 `libwtpkcs11ecp.so`, serialized Kotlin lifecycle/session/login,
-  public-key + account-chain-code reads, session-only derived signing keys, `CKM_ECDSA`, MethodChannel adapter,
+  public-key read, per-operation derived signing keys, raw `CKM_ECDSA`, MethodChannel adapter,
   and success/error/Activity-stop teardown. The first v1.41 device run found that polling `C_GetSlotList` never
   activated NFC discovery even though the official demo worked on the same phone/token; v1.42 now mirrors the
   official concurrent blocking `C_WaitForSlotEvent` listener plus initial slot snapshot, but detection still
@@ -436,13 +438,18 @@ Small, reviewable steps; each chunk records plan and result in `docs/worklog.md`
   for an empty token. Owner dogfood on v1.44 passed that boundary and returned `CKA_EC_POINT`, which exposed an
   overly narrow Dart assumption that every token emits an uncompressed 65-byte point. v1.45 now derives the
   official `Pkcs11EcPublicKeyObject`, reads `getEcPointAttributeValue`, and validates/normalizes both compressed
-  33-byte and uncompressed 65-byte SEC1 points, either raw or DER OCTET STRING-wrapped, before EVM address/xpub
-  use. Retest public data, chain code and raw signature, then refine cancellation, NFC-loss and PIN error mapping.
-- **10.4 — recoverable provisioning and public export:** implement both owner-required backup paths: (a) import
-  an existing BIP-39 mnemonic/passphrase through short-lived mutable native buffers into the token, and (b)
-  generate on-token with extractable mnemonic enabled and require one-time backup display/confirmation before
-  onboarding can finish. Do not expose backup-less/non-extractable generation in this milestone. Implement
-  address derivation plus public account xpub/chain-code export independently of secret backup material.
+  33-byte and uncompressed 65-byte SEC1 points, either raw or DER OCTET STRING-wrapped. Owner dogfood on v1.45
+  then reached `CKR_KEY_TYPE_INCONSISTENT`: the app was querying a derived account chain-code attribute that the
+  supplied example never reads. v1.46 removes that operation from the native contract and mirrors the reference
+  signing path exactly: derive `Pkcs11EcPrivateKeyObject` with the demonstrated template, sign the software-built
+  32-byte digest with plain `CKM_ECDSA`, and destroy the child in `finally`. Retest address + raw signature, then
+  refine cancellation, NFC-loss and PIN error mapping.
+- **10.4 — recoverable provisioning and public export:** implement both owner-required UX paths through the
+  reference example's `C_CreateObject` import only: (a) derive the raw BIP32 master + chain code from an existing
+  BIP-39 mnemonic/passphrase in short-lived software buffers, or (b) generate a new mnemonic in software, require
+  one-time backup display/confirmation, derive the same raw inputs, and import them. Do not expose backup-less
+  creation or invoke undocumented token generation/export behavior. Persist the public account xpub/chain-code
+  metadata needed for AirGap at provisioning time; do not query it from the token during normal operation.
 - **10.5 — complete signing matrix:** validate own-send; WalletConnect transaction, `personal_sign`, and EIP-712;
   and EIP-4527 AirGap transaction signing through the real device backend.
 - **10.6 — UX and iOS:** replace mock device controls with tap/PIN/progress/cooldown/retry UX, then port the
@@ -451,9 +458,10 @@ Small, reviewable steps; each chunk records plan and result in `docs/worklog.md`
 ### Definition of Done
 - During normal use and signing, seed/private key never leave the token; logs, errors, persisted platform-channel
   payloads, and long-lived Dart models contain no secret material. Provisioning is the explicit narrow exception:
-  an imported mnemonic is handled transiently, while on-token generation may return its mnemonic exactly for the
-  mandatory user backup flow. Neither path persists plaintext backup material after confirmation.
-- Address, derivation path, account xpub/chain code, and signatures match independent reference vectors.
+  both imported and newly generated mnemonic material are handled transiently in software for the explicit
+  provisioning flow. Neither path persists plaintext backup material after confirmation.
+- Address, derivation path, software-retained account xpub/chain-code metadata, and signatures match independent
+  reference vectors.
 - Device signatures are byte-compatible with the local EVM assembly rules, including low-s and recovery id.
 - Each operation requires one explicit tap/session plus one device-PIN authorization; no authorization leaks
   into the next operation.

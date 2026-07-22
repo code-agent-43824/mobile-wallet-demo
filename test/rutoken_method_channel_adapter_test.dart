@@ -78,14 +78,8 @@ void main() {
         switch (call.method) {
           case 'openSession':
             return <String, Object?>{'sessionId': 'native-1'};
-          case 'readPublicMaterial':
-            return <String, Object?>{
-              'masterPublicKey': derPoint,
-              'parentPublicKey': derPoint,
-              'accountPublicKey': derPoint,
-              'addressPublicKey': derPoint,
-              'accountChainCode': Uint8List.fromList(List<int>.filled(32, 7)),
-            };
+          case 'readAccountDescriptor':
+            return <String, Object?>{'addressPublicKey': derPoint};
           case 'signDigest':
             return Uint8List.fromList(List<int>.generate(64, (index) => index));
           case 'closeSession':
@@ -96,7 +90,7 @@ void main() {
 
       final adapter = MethodChannelRutokenNativeAdapter(channel: channel);
       final session = await adapter.openSession(pin: '12345678');
-      final publicAccount = await adapter.readAccountPublicKey(session);
+      final account = await adapter.readAccountDescriptor(session);
       final signature = await adapter.signDigest(
         session: session,
         derivationPath: MethodChannelRutokenNativeAdapter.addressPath,
@@ -105,13 +99,11 @@ void main() {
       await adapter.closeSession(session);
 
       expect(session.id, 'native-1');
-      expect(publicAccount.account.address, hasLength(42));
-      expect(publicAccount.compressedPublicKey.length, 33);
-      expect(publicAccount.chainCode, everyElement(7));
+      expect(account?.address, hasLength(42));
       expect(signature.toBytes(), List<int>.generate(64, (index) => index));
       expect(calls.map((call) => call.method), <String>[
         'openSession',
-        'readPublicMaterial',
+        'readAccountDescriptor',
         'signDigest',
         'closeSession',
       ]);
@@ -124,6 +116,8 @@ void main() {
         0,
       ]);
       expect(signArguments['digest'], hasLength(32));
+
+      expect(calls, hasLength(4));
     },
   );
 }

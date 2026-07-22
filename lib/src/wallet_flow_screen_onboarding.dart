@@ -72,8 +72,9 @@ class _WelcomeStage extends StatelessWidget {
           const _SectionTitle('Физический Рутокен'),
           const SizedBox(height: 8),
           const Text(
-            'Диагностика ничего не создаёт и не удаляет: проверяет NFC, PIN, '
-            'публичный account xpub и одну подпись тестового digest.',
+            'Диагностика не изменяет мастер-ключи: проверяет NFC, PIN, '
+            'публичный адрес и одну сырую подпись тестового digest. '
+            'Дочерний ключ создаётся на время операции и сразу удаляется.',
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
