@@ -3,7 +3,7 @@
 Flutter-демо single-account EVM-кошелька с рабочим phone vault, WalletConnect и
 MetaMask-совместимым AirGap signer.
 
-**Сейчас:** v1.44 поддерживает Mainnet/Sepolia, локальные переводы, wallet-side WalletConnect,
+**Сейчас:** v1.45 поддерживает Mainnet/Sepolia, локальные переводы, wallet-side WalletConnect,
 EIP-4527/BC-UR AirGap и авторизацию на каждую операцию. **Следующий milestone:** реальный
 Rutoken custody backend для Android/iOS. Android vendor stack уже подключён и готов к первой
 безопасной физической диагностике; после неё следуют два восстанавливаемых provisioning flow и
@@ -62,7 +62,7 @@ Live/native release evidence is tracked separately in
 
 ## Версионирование
 
-- Текущая версия: `v1.44.0+55`
+- Текущая версия: `v1.45.0+56`
 - По договорённости в этом проекте дальше повышаем minor-версию с каждым функциональным шагом
 
 ## Что покрывает текущий этап

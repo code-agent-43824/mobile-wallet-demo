@@ -58,4 +58,18 @@ void main() {
     expect(source, contains('makeAttribute(CKA_KEY_TYPE, CKK_VENDOR_BIP32)'));
     expect(source, contains('no BIP32 ECDSA master key'));
   });
+
+  test('Rutoken derives and reads the official EC public-key object type', () {
+    final source = File(
+      'android/app/src/main/kotlin/com/example/mobile_wallet_demo/rutoken/'
+      'RutokenRuntime.kt',
+    ).readAsStringSync();
+
+    expect(source, contains('Pkcs11EcPublicKeyObject::class.java'));
+    expect(source, contains('key.getEcPointAttributeValue(session)'));
+    expect(
+      source,
+      isNot(contains('key.getByteArrayAttributeValue(session, CKA_EC_POINT)')),
+    );
+  });
 }

@@ -1,5 +1,6 @@
 import 'package:bip32/bip32.dart' as bip32;
 import 'package:flutter/services.dart';
+import 'package:pointycastle/ecc/curves/secp256k1.dart';
 import 'package:web3dart/web3dart.dart' show bytesToHex, publicKeyToAddress;
 
 import 'custody_backend.dart';
@@ -175,8 +176,8 @@ class MethodChannelRutokenNativeAdapter implements RutokenNativeAdapter {
   }
 }
 
-/// Validates PKCS#11's DER OCTET STRING wrapper and normalizes a secp256k1
-/// public point without depending on the vendor's presentation details.
+/// Validates PKCS#11's optional DER OCTET STRING wrapper and normalizes either
+/// compressed or uncompressed SEC1 secp256k1 public points.
 class RutokenEcPoint {
   const RutokenEcPoint._({
     required this.compressed,
@@ -188,23 +189,41 @@ class RutokenEcPoint {
 
   static RutokenEcPoint decode(Uint8List encoded) {
     final raw = _unwrapOctetString(encoded);
-    if (raw.length != 65 || raw.first != 0x04) {
+    if (!_isCompressed(raw) && !_isUncompressed(raw)) {
       throw RutokenNativeException(
-        'Rutoken EC point must be an uncompressed 65-byte secp256k1 point.',
+        'Rutoken EC point has unsupported SEC1 encoding '
+        '(${raw.length} bytes, prefix ${_prefix(raw)}).',
       );
     }
-    final xy = Uint8List.sublistView(raw, 1);
-    final compressed = Uint8List(33)
-      ..[0] = raw.last.isEven ? 0x02 : 0x03
-      ..setRange(1, 33, raw, 1);
+
+    Uint8List compressed;
+    Uint8List uncompressed;
+    try {
+      final point = ECCurve_secp256k1().curve.decodePoint(raw);
+      if (point == null || point.isInfinity) {
+        throw const FormatException('Point is not on secp256k1.');
+      }
+      compressed = Uint8List.fromList(point.getEncoded(true));
+      uncompressed = Uint8List.fromList(point.getEncoded(false));
+    } catch (_) {
+      throw const RutokenNativeException(
+        'Rutoken EC point is not a valid secp256k1 public key.',
+      );
+    }
+
+    if (!_isCompressed(compressed) || !_isUncompressed(uncompressed)) {
+      throw const RutokenNativeException(
+        'Rutoken EC point normalization returned an invalid secp256k1 key.',
+      );
+    }
     return RutokenEcPoint._(
       compressed: compressed,
-      uncompressedXY: Uint8List.fromList(xy),
+      uncompressedXY: Uint8List.sublistView(uncompressed, 1),
     );
   }
 
   static Uint8List _unwrapOctetString(Uint8List encoded) {
-    if (encoded.length == 65 && encoded.first == 0x04) return encoded;
+    if (_isCompressed(encoded) || _isUncompressed(encoded)) return encoded;
     if (encoded.length < 3 || encoded.first != 0x04) {
       throw const RutokenNativeException('Invalid DER EC-point wrapper.');
     }
@@ -225,6 +244,16 @@ class RutokenEcPoint {
     }
     return Uint8List.sublistView(encoded, offset);
   }
+
+  static bool _isCompressed(Uint8List value) =>
+      value.length == 33 && (value.first == 0x02 || value.first == 0x03);
+
+  static bool _isUncompressed(Uint8List value) =>
+      value.length == 65 && value.first == 0x04;
+
+  static String _prefix(Uint8List value) => value.isEmpty
+      ? 'none'
+      : '0x${value.first.toRadixString(16).padLeft(2, '0')}';
 }
 
 class RutokenDerivationPath {

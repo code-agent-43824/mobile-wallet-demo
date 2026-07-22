@@ -14,7 +14,7 @@ void main() {
     messenger.setMockMethodCallHandler(channel, null);
   });
 
-  test('normalizes DER EC point and parses hardened BIP32 path', () {
+  test('normalizes uncompressed DER EC point and hardened BIP32 path', () {
     final raw = _generatorPoint();
     final point = RutokenEcPoint.decode(
       Uint8List.fromList(<int>[0x04, raw.length, ...raw]),
@@ -30,6 +30,41 @@ void main() {
       0,
       0,
     ]);
+  });
+
+  test('normalizes raw and DER-wrapped compressed secp256k1 points', () {
+    final uncompressed = _generatorPoint();
+    final compressed = Uint8List.fromList(<int>[
+      0x02,
+      ...uncompressed.sublist(1, 33),
+    ]);
+
+    for (final encoded in <Uint8List>[
+      compressed,
+      Uint8List.fromList(<int>[0x04, compressed.length, ...compressed]),
+    ]) {
+      final point = RutokenEcPoint.decode(encoded);
+      expect(point.compressed, compressed);
+      expect(point.uncompressedXY, uncompressed.sublist(1));
+    }
+  });
+
+  test('rejects compressed bytes that are not a secp256k1 point', () {
+    final invalid = Uint8List.fromList(<int>[
+      0x02,
+      ...List<int>.filled(32, 0xff),
+    ]);
+
+    expect(
+      () => RutokenEcPoint.decode(invalid),
+      throwsA(
+        isA<RutokenNativeException>().having(
+          (error) => error.message,
+          'message',
+          contains('not a valid secp256k1 public key'),
+        ),
+      ),
+    );
   });
 
   test(
