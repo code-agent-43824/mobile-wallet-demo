@@ -18,6 +18,26 @@ Entry template:
 
 ---
 
+## 2026-07-22 — Mirror official Rutoken Android application lifecycle — branch fix/rutoken-application-lifecycle — in progress
+- Plan: v1.42 physical retest still times out, proving that adding `C_WaitForSlotEvent` alone did not reproduce
+  the working reference. Compare the complete startup order. The remaining material divergence is transport
+  attachment timing: the official app calls `RtPcscBridge.setAppContext` and `attachToLifecycle` from its custom
+  `Application.onCreate`, before any Activity lifecycle callbacks; Wallet Demo constructs the bridge lazily from
+  `MainActivity.configureFlutterEngine`, after `super.onCreate` has already begun Activity creation. Move the
+  transport bootstrap and runtime creation into a custom application class, keep PKCS#11 init/finalize on the
+  Activity start/stop observer, and make MainActivity retrieve that pre-created runtime. Align the merged SPI
+  permission removal with the reference, add source-level ordering regressions, record the failed v1.42 evidence,
+  bump the functional version, and require Android/full CI before another physical retest.
+- Done: implemented a custom `WalletDemoApplication` that performs the exact reference bootstrap sequence in
+  `Application.onCreate`: set bridge context, attach the NFC-only transport lifecycle, then construct the token
+  runtime before Android creates MainActivity. MainActivity now only retrieves the pre-created runtime, registers
+  its PKCS#11 start/stop observer, and exposes the Flutter channel. Removed all bridge attachment from the lazy
+  runtime, corrected the SPI permission-removal namespace to match the official manifest, added ordering/source
+  regressions, recorded the v1.42 failure, and bumped to v1.43.0+54. Format/analyze are clean and all 175 tests pass.
+- Next / open: require Android/full CI, then owner retests v1.43 on the same phone/token. Do not infer xpub/signature
+  behavior until detection is physically confirmed.
+- Refs: owner v1.42 Android dogfood; official `RutokenDemoWalletApplication` and `MainActivity`.
+
 ## 2026-07-22 — Fix physical Rutoken NFC discovery — branch fix/rutoken-slot-events — done (CI green)
 - Plan: owner dogfood on the same Android phone/token proves the official demo detects the Rutoken while Wallet
   Demo v1.41 times out after 30 seconds. Reconcile the native lifecycle against the supplied reference and replace

@@ -8,12 +8,13 @@
         tools:node="remove" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"
         tools:node="remove" />
-    <uses-permission android:name="ru.rutoken.permission.USE_SPI"
+    <uses-permission android:name="android.permission.USE_SPI"
+        tools:ignore="SystemPermissionTypo"
         tools:node="remove" />
 
     <application
         android:label="Wallet Demo"
-        android:name="${applicationName}"
+        android:name=".WalletDemoApplication"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher">
         <activity

@@ -14,4 +14,32 @@ void main() {
     expect(source, contains('presentTokens = currentTokens()'));
     expect(source, isNot(contains('Thread.sleep(TOKEN_POLL_MILLIS)')));
   });
+
+  test('Rutoken transport attaches from Application before MainActivity', () {
+    final applicationSource = File(
+      'android/app/src/main/kotlin/com/example/mobile_wallet_demo/'
+      'WalletDemoApplication.kt',
+    ).readAsStringSync();
+    final activitySource = File(
+      'android/app/src/main/kotlin/com/example/mobile_wallet_demo/'
+      'MainActivity.kt',
+    ).readAsStringSync();
+    final runtimeSource = File(
+      'android/app/src/main/kotlin/com/example/mobile_wallet_demo/rutoken/'
+      'RutokenRuntime.kt',
+    ).readAsStringSync();
+    final manifest = File(
+      'android/app/src/main/AndroidManifest.xml',
+    ).readAsStringSync();
+
+    final setContext = applicationSource.indexOf('RtPcscBridge.setAppContext');
+    final attach = applicationSource.indexOf('attachToLifecycle');
+    final createRuntime = applicationSource.indexOf('RutokenRuntime.get()');
+    expect(setContext, greaterThanOrEqualTo(0));
+    expect(attach, greaterThan(setContext));
+    expect(createRuntime, greaterThan(attach));
+    expect(manifest, contains('android:name=".WalletDemoApplication"'));
+    expect(activitySource, contains('application as WalletDemoApplication'));
+    expect(runtimeSource, isNot(contains('RtPcscBridge')));
+  });
 }

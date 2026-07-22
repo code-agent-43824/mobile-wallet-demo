@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Flutter demo of a mobile EVM crypto wallet targeting Android, iOS, and Windows x64. It supports the full onboarding/auth shell, an encrypted on-device key vault, read-only blockchain access (Ethereum Mainnet + Sepolia), and end-to-end EIP-1559 signing/sending. Android v1.42 includes the first real Rutoken NFC/PKCS#11 transport, a read-only physical diagnostic, and the physical-device fix that listens to the vendor PC/SC `C_WaitForSlotEvent` stream instead of polling only the current slot list. The user-facing wallet backend remains simulated until physical validation and provisioning are complete. UI strings are in Russian; tests assert on those exact strings.
+Flutter demo of a mobile EVM crypto wallet targeting Android, iOS, and Windows x64. It supports the full onboarding/auth shell, an encrypted on-device key vault, read-only blockchain access (Ethereum Mainnet + Sepolia), and end-to-end EIP-1559 signing/sending. Android v1.43 includes the first real Rutoken NFC/PKCS#11 transport and a read-only physical diagnostic. Its startup now mirrors the official demo: the PC/SC bridge attaches from a custom `Application.onCreate` before any Activity callbacks, then PKCS#11 follows the Activity lifecycle and a blocking `C_WaitForSlotEvent` listener drives token presence. The user-facing wallet backend remains simulated until physical validation and provisioning are complete. UI strings are in Russian; tests assert on those exact strings.
 
 `docs/development-plan.md` is the canonical roadmap and source of truth for scope and phase status. Phases 0–7 are complete (Phase 7 = the simulated external-device **custody** foundation; no real NFC/SDK). Phase 9 makes this a wallet-side WalletConnect receiver and is device-validated on Android through a confirmed Sepolia broadcast; v1.37 adds EIP-5792 capability discovery plus live simulation/gas/fee preflight. Phase 12 is complete in v1.38: the app is a MetaMask-compatible EIP-4527 QR signer for Mainnet/Sepolia transactions, with account export, multipart camera scan, decoded transaction preview, per-operation auth, and signature QR. v1.39 hardens dense live-camera QR recognition with full-frame analysis, high requested Android resolution, and Android auto-zoom. The earlier custom AirGap codec and outbound signer direction are removed.
 
@@ -15,7 +15,8 @@ hardware backend must expose public account metadata and transient authenticated
 `key_storage/custody_backend.dart` defines public account/xpub/session/`RutokenNativeAdapter` contracts, while
 `auth/external_digest_signer.dart` turns raw device `r‖s` into low-s recoverable EVM signatures and byte-exact
 legacy/EIP-1559/message/AirGap output. v1.41 adds the official Android PC/SC + PKCS#11/JNA stack and Kotlin
-platform-channel adapter; v1.42 corrects NFC discovery to mirror the official blocking slot-event listener.
+platform-channel adapter; v1.42 adds the official blocking slot-event listener, and v1.43 moves transport
+attachment to `Application.onCreate` so it cannot miss the first Activity lifecycle callbacks.
 Further physical Android validation, recoverable
 provisioning, production backend registration, and the Swift implementation are next. See the NOW / NEXT
 / LATER section and Phase 10 Definition of Done in `docs/development-plan.md`.

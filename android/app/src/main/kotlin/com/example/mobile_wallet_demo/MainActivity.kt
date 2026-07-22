@@ -11,7 +11,9 @@ import io.flutter.embedding.android.FlutterFragmentActivity
 // biometrics fails with "local_auth plugin requires activity to be a
 // FragmentActivity".
 class MainActivity : FlutterFragmentActivity() {
-    private val rutokenRuntime by lazy { RutokenRuntime.get(application) }
+    private val rutokenRuntime by lazy {
+        (application as WalletDemoApplication).rutokenRuntime
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
