@@ -100,7 +100,7 @@ internal class RutokenRuntime private constructor(application: Application) : De
         val masterPublic = derivePublic(open.session, master, longArrayOf())
         val parentPublic = derivePublic(open.session, master, path(44u, 60u))
         val accountPublic = derivePublic(open.session, master, path(44u, 60u, 0u))
-        val addressPublic = derivePublic(open.session, master, path(44, 60, 0, 0u, 0u))
+        val addressPublic = derivePublic(open.session, master, path(44u, 60u, 0u, 0u, 0u))
         try {
             return mapOf(
                 "masterPublicKey" to ecPoint(open.session, masterPublic),
