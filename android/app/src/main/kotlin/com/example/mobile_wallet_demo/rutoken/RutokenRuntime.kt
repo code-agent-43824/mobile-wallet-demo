@@ -1,6 +1,5 @@
 package com.example.mobile_wallet_demo.rutoken
 
-import android.app.Application
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import java.util.UUID
@@ -28,16 +27,13 @@ import ru.rutoken.pkcs11wrapper.rutoken.constant.RtPkcs11MechanismType.CKM_VENDO
 import ru.rutoken.pkcs11wrapper.rutoken.constant.RtPkcs11MechanismType.CKM_VENDOR_BIP32_DERIVE_PUBLIC_FROM_PRIVATE
 import ru.rutoken.pkcs11wrapper.rutoken.main.RtPkcs11Session
 import ru.rutoken.pkcs11wrapper.rutoken.main.RtPkcs11Token
-import ru.rutoken.rtpcscbridge.RtPcscBridge
-import ru.rutoken.rttransport.InitParameters
-import ru.rutoken.rttransport.TokenInterface
 
 /**
  * Serializes every PKCS#11 call on one thread and binds module lifetime to the
  * foreground Activity. The runtime owns all login/session guards; Dart only
  * receives opaque UUIDs.
  */
-internal class RutokenRuntime private constructor(application: Application) : DefaultLifecycleObserver {
+internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
     private val executor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "wallet-demo-rutoken").apply { isDaemon = true }
     }
@@ -50,17 +46,6 @@ internal class RutokenRuntime private constructor(application: Application) : De
     private var presentTokens = emptyMap<Long, RtPkcs11Token>()
     private var slotEventGeneration = 0L
     private var initialized = false
-
-    init {
-        RtPcscBridge.setAppContext(application)
-        RtPcscBridge.getTransportExtension().attachToLifecycle(
-            application,
-            true,
-            InitParameters.Builder()
-                .setEnabledTokenInterfaces(TokenInterface.NFC)
-                .build(),
-        )
-    }
 
     override fun onStart(owner: LifecycleOwner) {
         executor.execute { initializeIfNeeded() }
@@ -337,9 +322,9 @@ internal class RutokenRuntime private constructor(application: Application) : De
 
         @Volatile private var instance: RutokenRuntime? = null
 
-        fun get(application: Application): RutokenRuntime =
+        fun get(): RutokenRuntime =
             instance ?: synchronized(this) {
-                instance ?: RutokenRuntime(application).also { instance = it }
+                instance ?: RutokenRuntime().also { instance = it }
             }
     }
 }
