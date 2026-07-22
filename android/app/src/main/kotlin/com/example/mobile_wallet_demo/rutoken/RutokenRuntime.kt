@@ -98,9 +98,21 @@ internal class RutokenRuntime private constructor(application: Application) : De
         val open = requireSession(sessionId)
         val master = findSingleMasterKey(open.session)
         val masterPublic = derivePublic(open.session, master, longArrayOf())
-        val parentPublic = derivePublic(open.session, master, path(44u, 60u))
-        val accountPublic = derivePublic(open.session, master, path(44u, 60u, 0u))
-        val addressPublic = derivePublic(open.session, master, path(44u, 60u, 0u, 0u, 0u))
+        val parentPublic = derivePublic(
+            open.session,
+            master,
+            longArrayOf(hardened(44), hardened(60)),
+        )
+        val accountPublic = derivePublic(
+            open.session,
+            master,
+            longArrayOf(hardened(44), hardened(60), hardened(0)),
+        )
+        val addressPublic = derivePublic(
+            open.session,
+            master,
+            longArrayOf(hardened(44), hardened(60), hardened(0), 0, 0),
+        )
         try {
             return mapOf(
                 "masterPublicKey" to ecPoint(open.session, masterPublic),
@@ -230,8 +242,10 @@ internal class RutokenRuntime private constructor(application: Application) : De
     private fun ecPoint(session: Pkcs11Session, key: Pkcs11PublicKeyObject): ByteArray =
         key.getByteArrayAttributeValue(session, CKA_EC_POINT).byteArrayValue
 
-    private fun path(vararg indices: UInt): LongArray =
-        indices.map { (it.toLong() or HARDENED) }.toLongArray()
+    private fun hardened(index: Long): Long {
+        require(index in 0 until HARDENED)
+        return index or HARDENED
+    }
 
     private data class OpenSession(
         val session: RtPkcs11Session,
