@@ -88,7 +88,11 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
     fun readPublicMaterial(sessionId: String): Map<String, ByteArray> {
         val open = requireSession(sessionId)
         val master = findSingleMasterKey(open.session)
-        val masterPublic = derivePublic(open.session, master, longArrayOf())
+        // The vendor wrapper represents the empty/master derivation path as a
+        // null pointer. A non-null LongArray(0) reaches JNA as a zero-byte
+        // allocation and fails before PKCS#11 with "allocation size must be
+        // greater than zero".
+        val masterPublic = derivePublic(open.session, master, null)
         val parentPublic = derivePublic(
             open.session,
             master,
@@ -240,8 +244,11 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
             session.attributeFactory.makeAttribute(CKA_KEY_TYPE, CKK_VENDOR_BIP32),
         )
         val keys = session.objectManager.findObjectsAtOnce(Pkcs11PrivateKeyObject::class.java, template)
+        check(keys.isNotEmpty()) {
+            "Rutoken contains no BIP32 ECDSA master key; create or import a wallet first."
+        }
         check(keys.size == 1) {
-            "Expected exactly one BIP32 master private key on Rutoken, found ${keys.size}."
+            "Rutoken contains ${keys.size} BIP32 ECDSA master keys; Wallet Demo currently supports exactly one."
         }
         return keys.single()
     }
@@ -249,7 +256,7 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
     private fun derivePublic(
         session: RtPkcs11Session,
         master: Pkcs11PrivateKeyObject,
-        path: LongArray,
+        path: LongArray?,
     ): Pkcs11PublicKeyObject {
         val template = listOf(
             session.attributeFactory.makeAttribute(CKA_CLASS, CKO_PUBLIC_KEY),
