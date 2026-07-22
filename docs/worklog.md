@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-07-22 — Fix empty BIP32 master derivation path — branch fix/rutoken-null-master-path — in progress (local green)
+## 2026-07-22 — Fix empty BIP32 master derivation path — branch fix/rutoken-null-master-path — done (CI green)
 - Plan: owner dogfood confirms that v1.43 now detects the same NFC Rutoken that the official demo detects. An empty
   token correctly has no BIP32 master key, but should report that as a provisioning requirement rather than an
   invariant failure. After the owner creates the reference ECDSA/BIP32 and EdDSA pairs, public-material reading
@@ -33,9 +33,12 @@ Entry template:
   Improved empty-token and multiple-BIP32-wallet diagnostics while retaining the `CKK_VENDOR_BIP32` lookup that
   excludes the companion EdDSA pair. Added a source regression, recorded v1.43 discovery as physical PASS and
   its public-material probe as FAIL, and bumped to v1.44.0+55. Format/analyze are clean and all 176 tests pass.
-- Next / open: require Android/full CI, then retest public-key/chain-code/signature on the same physical token. Do
-  not infer those later stages from NFC discovery alone.
-- Refs: owner v1.43 Android dogfood; official `DerivationPath` and `deriveBip32PublicKey` implementation.
+  Actions run 29949794999 is green for Validate, Android APK, both iOS builds, and Windows; the nullable Kotlin/
+  JNA call therefore compiles and the v1.44 Android artifact is available for physical retest.
+- Next / open: retest public-key/chain-code/signature on the same physical token. Do not infer those later stages
+  from NFC discovery alone.
+- Refs: owner v1.43 Android dogfood; official `DerivationPath` and `deriveBip32PublicKey` implementation; PR #4;
+  squash commit `22fe4d5`; CI 29949794999.
 
 ## 2026-07-22 — Mirror official Rutoken Android application lifecycle — branch fix/rutoken-application-lifecycle — done (CI green)
 - Plan: v1.42 physical retest still times out, proving that adding `C_WaitForSlotEvent` alone did not reproduce
