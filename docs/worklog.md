@@ -18,6 +18,24 @@ Entry template:
 
 ---
 
+## 2026-07-22 — Fix physical Rutoken NFC discovery — branch fix/rutoken-slot-events — in progress
+- Plan: owner dogfood on the same Android phone/token proves the official demo detects the Rutoken while Wallet
+  Demo v1.41 times out after 30 seconds. Reconcile the native lifecycle against the supplied reference and replace
+  Wallet Demo's `C_GetSlotList` polling with the vendor-demonstrated blocking `C_WaitForSlotEvent` listener plus
+  an initial present-slot snapshot. Keep slot watching concurrent with serialized session operations, wake timed
+  waiters on insertion/removal/lifecycle teardown, and preserve unconditional session/module cleanup. Add a
+  source-level regression for the native discovery contract, record the failed physical evidence, bump the
+  functional version, run all local checks and Android/full CI, then provide a new APK for the same-device retest.
+- Done: root cause isolated to a concrete divergence from the supplied official app: v1.41 repeatedly called
+  `C_GetSlotList`, while the working reference starts a concurrent blocking `C_WaitForSlotEvent` generator and
+  uses those insertion/removal events to maintain token presence. Replaced polling with that event contract plus
+  an initial slot snapshot and a generation-guarded monitor that wakes session opens and lifecycle teardown.
+  Added a native-source regression, recorded the v1.41 physical failure, and bumped to v1.42.0+53. Format/analyze
+  are clean and all 174 Flutter tests pass. The host has no Android SDK, so native compilation moves to CI.
+- Next / open: require Android/full CI, then repeat the same phone/token probe. Discovery is the only failure fixed
+  in this chunk; public-key/chain-code/raw-signature behavior remains live evidence after the token is detected.
+- Refs: owner v1.41 Android dogfood; official `TokenManager` / `SlotEventProvider` / `SlotEventGenerator`.
+
 ## 2026-07-22 — Real Rutoken Android transport spike — branch feat/rutoken-android-transport — done (CI green)
 - Plan: incorporate the owner-supplied official Android v1.1 package without copying its blockchain-agnostic
   signing assumptions. First reconcile Phase 10 provisioning policy: support existing mnemonic/passphrase import
