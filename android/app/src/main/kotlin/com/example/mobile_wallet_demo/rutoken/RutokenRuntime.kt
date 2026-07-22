@@ -7,7 +7,6 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import ru.rutoken.pkcs11wrapper.constant.standard.Pkcs11AttributeType.CKA_CLASS
 import ru.rutoken.pkcs11wrapper.constant.standard.Pkcs11AttributeType.CKA_EC_PARAMS
-import ru.rutoken.pkcs11wrapper.constant.standard.Pkcs11AttributeType.CKA_EC_POINT
 import ru.rutoken.pkcs11wrapper.constant.standard.Pkcs11AttributeType.CKA_KEY_TYPE
 import ru.rutoken.pkcs11wrapper.constant.standard.Pkcs11AttributeType.CKA_PRIVATE
 import ru.rutoken.pkcs11wrapper.constant.standard.Pkcs11AttributeType.CKA_TOKEN
@@ -19,8 +18,8 @@ import ru.rutoken.pkcs11wrapper.datatype.Pkcs11InitializeArgs
 import ru.rutoken.pkcs11wrapper.main.Pkcs11Session
 import ru.rutoken.pkcs11wrapper.mechanism.Pkcs11Mechanism
 import ru.rutoken.pkcs11wrapper.mechanism.parameter.CkVendorBip32DeriveParams
+import ru.rutoken.pkcs11wrapper.`object`.key.Pkcs11EcPublicKeyObject
 import ru.rutoken.pkcs11wrapper.`object`.key.Pkcs11PrivateKeyObject
-import ru.rutoken.pkcs11wrapper.`object`.key.Pkcs11PublicKeyObject
 import ru.rutoken.pkcs11wrapper.rutoken.constant.RtPkcs11AttributeType.CKA_VENDOR_BIP32_CHAINCODE
 import ru.rutoken.pkcs11wrapper.rutoken.constant.RtPkcs11KeyType.CKK_VENDOR_BIP32
 import ru.rutoken.pkcs11wrapper.rutoken.constant.RtPkcs11MechanismType.CKM_VENDOR_BIP32_DERIVE_PRIVATE_FROM_PRIVATE
@@ -257,7 +256,7 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
         session: RtPkcs11Session,
         master: Pkcs11PrivateKeyObject,
         path: LongArray?,
-    ): Pkcs11PublicKeyObject {
+    ): Pkcs11EcPublicKeyObject {
         val template = listOf(
             session.attributeFactory.makeAttribute(CKA_CLASS, CKO_PUBLIC_KEY),
             session.attributeFactory.makeAttribute(CKA_PRIVATE, false),
@@ -266,7 +265,7 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
             session.attributeFactory.makeAttribute(CKA_EC_PARAMS, SECP256K1_OID),
         )
         return session.keyManager.deriveKey(
-            Pkcs11PublicKeyObject::class.java,
+            Pkcs11EcPublicKeyObject::class.java,
             Pkcs11Mechanism.make(
                 CKM_VENDOR_BIP32_DERIVE_PUBLIC_FROM_PRIVATE,
                 CkVendorBip32DeriveParams(path),
@@ -300,8 +299,8 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
         )
     }
 
-    private fun ecPoint(session: Pkcs11Session, key: Pkcs11PublicKeyObject): ByteArray =
-        key.getByteArrayAttributeValue(session, CKA_EC_POINT).byteArrayValue
+    private fun ecPoint(session: Pkcs11Session, key: Pkcs11EcPublicKeyObject): ByteArray =
+        key.getEcPointAttributeValue(session).byteArrayValue
 
     private fun hardened(index: Long): Long {
         require(index in 0 until HARDENED)
