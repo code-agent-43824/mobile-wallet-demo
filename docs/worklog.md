@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-07-22 — Constrain Rutoken to the reference raw-signer contract — branch fix/rutoken-example-signing-contract — done (local validation; CI pending)
+## 2026-07-22 — Constrain Rutoken to the reference raw-signer contract — branch fix/rutoken-example-signing-contract — done (CI green)
 - Plan: owner dogfood on v1.45 reaches the next PKCS#11 boundary and fails with `CKR_KEY_TYPE_INCONSISTENT`.
   Respect the owner's explicit scope correction: the token is a key custodian and raw ECDSA/EdDSA signer only;
   all EVM hashing, recovery, low-s and transaction assembly remain software. Reconcile the probe line-for-line with
@@ -36,12 +36,13 @@ Entry template:
   The unused native on-token generation seam was also removed: both planned recoverable onboarding paths will
   use the reference example's raw `C_CreateObject` import after transient software mnemonic/master derivation.
   EVM low-s/recovery/envelopes remain in Dart. UX, architecture notes, roadmap, and device matrix were corrected;
-  version is v1.46.0+57. Format/analyze are clean; 17 focused tests and all 181 tests pass locally.
-- Next / open: require full CI including Android Kotlin/APK before physical v1.46 retest. The physical test must
-  confirm address, raw signature length/shape, and teardown. Do not add token-side blockchain formatting or
-  undocumented attributes.
+  version is v1.46.0+57. Format/analyze are clean; 17 focused tests and all 181 tests pass locally. PR #6 was
+  squash-merged as `4efb7d4`; Actions run 29957221589 is fully green for Validate, Android APK, both iOS builds,
+  and Windows x64, including compilation of the changed Kotlin PKCS#11 path.
+- Next / open: physically retest the v1.46 Android artifact. The test must confirm address, raw signature
+  length/shape, and teardown. Do not add token-side blockchain formatting or undocumented attributes.
 - Refs: owner v1.45 Android dogfood and scope correction; supplied `deriveBip32PrivateKey` /
-  `signDataWithEcdsaDerivedKey` reference implementations.
+  `signDataWithEcdsaDerivedKey` reference implementations; PR #6; squash `4efb7d4`; CI 29957221589.
 
 ## 2026-07-22 — Accept the Rutoken BIP32 EC-point representation — branch fix/rutoken-compressed-ec-point — done (CI green)
 - Plan: owner dogfood on v1.44 proves NFC discovery, login, BIP32 master lookup, and root/child public derivation now
