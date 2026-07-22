@@ -16,7 +16,7 @@ Result values: `PASS`, `FAIL`, `PARTIAL`, `RETEST`, `BLOCKED`, or `NOT RUN`.
 | WalletConnect Sepolia broadcast + cold-start vault persistence | Android owner device | v1.36 / 2026-07-21 | PASS | Owner dogfood recorded in worklog; capture device/OS on next repetition. |
 | MetaMask EIP-4527 account import/signature return/Sepolia broadcast | Android owner device | v1.38 / 2026-07-22 | PASS | Broadcast appeared successful; transaction hash was not recorded. |
 | Dense MetaMask QR live camera after scanner hardening | Android physical device | v1.39 | NOT RUN | Owner retest pending; file/screenshot decode already passed. |
-| Rutoken custody/NFC | Android/iOS physical device | Phase 10 | BLOCKED | Needs exact supported token and distributable vendor SDKs. |
+| Rutoken custody/NFC | Android/iOS physical device | Phase 10 | BLOCKED | Physical token is available; native vendor binary packages are pending. |
 
 ## Phone-vault release checks
 

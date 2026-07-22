@@ -11,8 +11,11 @@ Flutter demo of a mobile EVM crypto wallet targeting Android, iOS, and Windows x
 The current north star is a single-account EVM wallet whose next milestone is a real, non-exporting Rutoken
 custody backend for Android/iOS. Phase 10 requires a custody-contract redesign before native integration: a
 hardware backend must expose public account metadata and transient authenticated signing, never
-`WalletMaterial`/mnemonic/private-key material. See the NOW / NEXT / LATER section and Phase 10 Definition of
-Done in `docs/development-plan.md`.
+`WalletMaterial`/mnemonic/private-key material. v1.40 adds this library-independent seam:
+`key_storage/custody_backend.dart` defines public account/xpub/session/`RutokenNativeAdapter` contracts, while
+`auth/external_digest_signer.dart` turns raw device `r‖s` into low-s recoverable EVM signatures and byte-exact
+legacy/EIP-1559/message/AirGap output. Native Kotlin/Swift implementations are the next step. See the NOW / NEXT
+/ LATER section and Phase 10 Definition of Done in `docs/development-plan.md`.
 
 Use `docs/device-test-matrix.md` for physical-device and live-service evidence; do not turn simulator or fake
 coverage into hardware/security claims.

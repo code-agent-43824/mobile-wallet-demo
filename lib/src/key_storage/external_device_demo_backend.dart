@@ -1,6 +1,12 @@
 import 'dart:async';
+import 'dart:typed_data';
+
+import 'package:bip32/bip32.dart' as bip32;
+import 'package:bip39/bip39.dart' as bip39;
+import 'package:web3dart/web3dart.dart' show EthPrivateKey, sign;
 
 import '../auth/biometric_auth.dart';
+import 'custody_backend.dart';
 import 'external_device_pkcs11.dart';
 import 'key_storage_backend.dart';
 import 'phone_secure_vault.dart';
@@ -48,7 +54,8 @@ class ExternalDeviceDemoRuntimeState {
   final ExternalDevicePkcs11SessionSnapshot? session;
 }
 
-class ExternalDeviceDemoBackend implements ExternalDeviceKeyStorageBackend {
+class ExternalDeviceDemoBackend
+    implements ExternalDeviceKeyStorageBackend, WalletCustodyBackend {
   ExternalDeviceDemoBackend({
     required SecureKeyValueStore store,
     ExternalDevicePkcs11Adapter? pkcs11Adapter,
@@ -162,6 +169,61 @@ class ExternalDeviceDemoBackend implements ExternalDeviceKeyStorageBackend {
           : DateTime.tryParse(connectedAtRaw),
       lastError: lastError,
       session: session,
+    );
+  }
+
+  @override
+  Future<WalletAccountDescriptor> readAccountDescriptor({
+    required String pin,
+  }) async {
+    final session = await openSigningSession(pin: pin);
+    try {
+      return session.account;
+    } finally {
+      await session.close();
+    }
+  }
+
+  @override
+  Future<WalletAccountPublicKey> readAccountPublicKey({
+    required String pin,
+  }) async {
+    final material = await unlock(pin: pin);
+    try {
+      final seed = bip39.mnemonicToSeed(material.mnemonic);
+      final master = bip32.BIP32.fromSeed(seed);
+      final accountNode = master.derivePath("m/44'/60'/0'");
+      return WalletAccountPublicKey(
+        account: WalletAccountDescriptor(
+          backendId: backendId,
+          address: material.address,
+          derivationPath: "m/44'/60'/0'/0/0",
+        ),
+        accountPath: "m/44'/60'/0'",
+        accountDepth: accountNode.depth,
+        compressedPublicKey: Uint8List.fromList(accountNode.publicKey),
+        chainCode: Uint8List.fromList(accountNode.chainCode),
+        sourceFingerprint: _asUint32(master.fingerprint),
+        parentFingerprint: accountNode.parentFingerprint,
+      );
+    } finally {
+      await _closeCustodySession();
+    }
+  }
+
+  @override
+  Future<CustodySigningSession> openSigningSession({
+    required String pin,
+  }) async {
+    final material = await unlock(pin: pin);
+    return _DemoCustodySigningSession(
+      account: WalletAccountDescriptor(
+        backendId: backendId,
+        address: material.address,
+        derivationPath: "m/44'/60'/0'/0/0",
+      ),
+      privateKey: EthPrivateKey.fromHex(material.privateKeyHex).privateKey,
+      closeSession: _closeCustodySession,
     );
   }
 
@@ -336,6 +398,15 @@ class ExternalDeviceDemoBackend implements ExternalDeviceKeyStorageBackend {
     await _store.delete(_lastOperationAtKey);
   }
 
+  Future<void> _closeCustodySession() async {
+    _delegate.lock();
+    await _store.delete(_connectedAtKey);
+    await _clearPkcs11SessionMetadata();
+  }
+
+  int _asUint32(Uint8List fingerprint) =>
+      fingerprint.buffer.asByteData().getUint32(0);
+
   ExternalDevicePkcs11OperationKind? _parseCommandKind(String? rawValue) {
     if (rawValue == null) {
       return null;
@@ -348,5 +419,55 @@ class ExternalDeviceDemoBackend implements ExternalDeviceKeyStorageBackend {
     }
 
     return null;
+  }
+}
+
+class _DemoCustodySigningSession implements CustodySigningSession {
+  _DemoCustodySigningSession({
+    required this.account,
+    required Uint8List privateKey,
+    required Future<void> Function() closeSession,
+  }) : _privateKey = Uint8List.fromList(privateKey),
+       _closeSession = closeSession;
+
+  @override
+  final WalletAccountDescriptor account;
+  final Uint8List _privateKey;
+  final Future<void> Function() _closeSession;
+  bool _closed = false;
+
+  @override
+  Future<RawEcdsaSignature> signDigest(Uint8List digest) async {
+    if (_closed) {
+      throw StateError('Demo custody session is closed.');
+    }
+    if (digest.length != 32) {
+      throw ArgumentError('Expected a 32-byte digest.');
+    }
+    final signature = sign(digest, _privateKey);
+    return RawEcdsaSignature(
+      r: _uint256(signature.r),
+      s: _uint256(signature.s),
+    );
+  }
+
+  @override
+  Future<void> close() async {
+    if (_closed) {
+      return;
+    }
+    _closed = true;
+    _privateKey.fillRange(0, _privateKey.length, 0);
+    await _closeSession();
+  }
+
+  Uint8List _uint256(BigInt value) {
+    final out = Uint8List(32);
+    var remaining = value;
+    for (var i = 31; i >= 0; i--) {
+      out[i] = (remaining & BigInt.from(0xff)).toInt();
+      remaining >>= 8;
+    }
+    return out;
   }
 }

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:bip32/bip32.dart' as bip32;
 import 'package:bip39/bip39.dart' as bip39;
 
+import '../key_storage/custody_backend.dart';
 import 'eip4527.dart';
 
 /// Derives the EIP-4527 / BC-UR account-export ([CryptoHDKey]) an online wallet
@@ -46,6 +47,26 @@ class AccountExportDeriver {
         depth: account.depth,
       ),
       parentFingerprint: account.parentFingerprint,
+      name: name,
+    );
+  }
+
+  /// Builds the same export from public data supplied by a non-exporting
+  /// custody backend (Rutoken). No mnemonic/private key is needed in Dart.
+  CryptoHDKey deriveFromPublicAccount({
+    required WalletAccountPublicKey publicAccount,
+    String? name,
+  }) {
+    return CryptoHDKey(
+      keyData: publicAccount.compressedPublicKey,
+      chainCode: publicAccount.chainCode,
+      useInfo: const CoinInfo(type: 60),
+      origin: CryptoKeypath.parse(
+        publicAccount.accountPath,
+        sourceFingerprint: publicAccount.sourceFingerprint,
+        depth: publicAccount.accountDepth,
+      ),
+      parentFingerprint: publicAccount.parentFingerprint,
       name: name,
     );
   }

@@ -16,7 +16,8 @@ Current factual status of the project:
 - ✅ Phase 7 is completed as a foundation layer: backend selection model, backend-compatible signing/auth contracts, demo external-device runtime path, mock device lifecycle, and mock PKCS#11 session/operation contracts are in place; real NFC SDK integration is intentionally still out of scope for this phase
 - ✅ Phase 8 — only the WC v2 codec (`WalletConnectV2RequestCodec`) and the vault `TransactionService.assembleSignedTransfer` seam survive. The obsolete custom AirGap codec was removed in Phase 12.5; the **outbound** direction originally shipped by Phase 8 was removed in chunk 9.0
 - ✅ Phase 9 (real **wallet-side** inbound signing — WalletConnect v2 + AirGap — plus a connections screen and an incoming-request approval flow) is **feature-complete**. WalletConnect is device-validated on Android through a confirmed Sepolia broadcast; AirGap now uses the MetaMask-compatible EIP-4527 / BC-UR implementation completed in Phase 12
-- ⏳ Phase 10 (custody/NFC refinement — tap-to-confirm + device PIN as a real second factor, composed with own-sends and inbound requests) is **planned** — see the "Phase 10" section below
+- 🟡 Phase 10 is **in progress**: library-independent custody contracts and EVM raw-signature assembly are
+  complete; native Android/iOS vendor adapters and physical-device wiring remain
 - ✅ Phase 11 is complete: read-only app open plus fresh authentication for every private-key operation
 - ✅ Phase 12 is complete: MetaMask-compatible EIP-4527 / BC-UR AirGap signer
 
@@ -26,11 +27,12 @@ Current factual status of the project:
 milestone is an optional, non-exporting Rutoken custody backend for Android/iOS that supports the same own-send,
 WalletConnect, and EIP-4527 AirGap flows without exposing seed or private-key material to Dart.
 
-- **NOW — v1.39.0+50:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
-  MetaMask-compatible EIP-4527 AirGap, per-operation authentication, and hardened mobile QR scanning are built.
-- **NEXT — Phase 10:** obtain the target token and distributable vendor SDKs, validate the native transport on a
-  physical Android device, redesign custody contracts for a non-exporting signer, then implement and dogfood the
-  real hardware backend. Android is first; iOS follows after the shared contract and signing assembly are proven.
+- **NOW — v1.40.0+51:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
+  MetaMask-compatible EIP-4527 AirGap, per-operation authentication, hardened QR scanning, and the
+  library-independent Rutoken custody/signature foundation are built.
+- **NEXT — Phase 10 native adapter:** add the vendor binary packages, validate the PC/SC + PKCS#11 lifecycle on
+  the owner's physical Rutoken/Android device, implement the Kotlin adapter, and dogfood the complete signing
+  matrix. iOS follows after Android proves the shared contract against real device output.
 - **LATER:** optional lock-on-open privacy, broader device/platform integration tests, and only then additional
   chains/accounts if product scope changes. They are not Phase 10 prerequisites.
 
@@ -383,7 +385,8 @@ Owner decision (2026-06-16): finish these later, on demand. Recorded so they are
 Goal: replace the simulated external-device path with an optional, non-exporting Rutoken backend that composes
 with every existing signing transport while keeping the phone-vault path unchanged.
 
-Status: ⏳ Planned. Phase 9, Phase 11, and Phase 12 are already complete; Phase 10 is the next milestone.
+Status: 🟡 In progress. Phase 10.1–10.2 are complete in v1.40; vendor-native adapters, provisioning UI, and
+physical-device validation remain.
 
 > **Reference:** `docs/nfc-pkcs11-integration-notes.md` contains the vendor mechanisms, native-stack setup,
 > Ethereum corrections, and physical-device questions. The existing demo adapter is a test double, not an
@@ -407,12 +410,14 @@ Small, reviewable steps; each chunk records plan and result in `docs/worklog.md`
   SDK artifacts; prove token discovery, session open/login, one public-key read, and teardown on a physical
   Android device. Decide FFI vs a Flutter platform channel to the vendor-native stacks. Do not hand-roll NFC
   APDUs; the vendor PC/SC and PKCS#11 bridge owns that layer.
-- **10.1 — custody contract redesign:** introduce public account descriptors, transient authenticated signer
-  sessions, and an optional public account-xpub capability. Adapt phone vault and demo fakes first; remove the
-  assumption that every backend can return `WalletMaterial`.
-- **10.2 — EVM signature assembly:** implement/test digest handling, raw `r‖s` normalization, EIP-2 low-s,
-  recovery-id/y-parity, and legacy/EIP-2718 envelopes. A fake device signer must be byte-compatible with the
-  local signer for the same key and payload.
+- **10.1 — DONE (v1.40):** secret-free `WalletAccountDescriptor`, account-level public-xpub data,
+  `CustodySigningSession`, `WalletCustodyBackend`, and typed `RutokenNativeAdapter` contracts for session,
+  public account, raw signing, generation, import, and guaranteed close. EIP-4527 account export now accepts
+  public device data without a mnemonic.
+- **10.2 — DONE (v1.40):** `ExternalDigestWalletTransactionSigner` + `EvmSignatureAssembler` validate raw
+  64-byte `r‖s`, enforce secp256k1 bounds/EIP-2 low-s, recover y-parity against the expected address, and build
+  byte-identical EIP-155/EIP-1559 transactions plus personal/raw-digest/AirGap signatures. Fake native-session
+  tests prove local parity and idempotent/error-path teardown.
 - **10.3 — Android real adapter:** implement vendor initialization, NFC lifecycle, slot/session/login, public-key
   lookup, signing, error mapping, cancellation, and guaranteed teardown behind the new contracts.
 - **10.4 — provisioning and public export:** implement token-supported create/import, address derivation, public
@@ -523,6 +528,9 @@ Two interactions (app = signer):
 - `v1.29` — Phase 9 chunk 9.9c (camera polish): a centred-square scan window (`ScanWindowOverlay` dims the surround + draws a rounded border; detection limited to the window via `MobileScanner.scanWindow`) and an AppBar torch toggle (`controller.toggleTorch()` via a `ValueListenableBuilder` on the controller's `TorchState`, hidden when unavailable). Records the 9.2 owner dogfood (connect/disconnect + `personal_sign` validated on device; tx pending test funds) and reconciles the plan/CLAUDE.md/worklog to Phase 9 = feature-complete
 - `v1.38` — Phase 12 completion: MetaMask-compatible EIP-4527/BC-UR AirGap account export, animated multipart QR scanning, Mainnet/Sepolia transaction preview and signing, signature QR, and removal of the custom `airgap-tx:` implementation
 - `v1.39` — Android camera QR hardening after AirGap dogfood: analyze the full frame instead of a 70% crop, request a 1920×1080 stream, enable ML Kit auto-zoom, enlarge the overlay-only aim guide, and regression-test the scanner configuration
+- `v1.40` — Phase 10.1–10.2 library-independent Rutoken foundation: non-exporting custody/native-adapter
+  contracts, public account-xpub export, raw `r‖s` validation/low-s/recovery, and byte-identical legacy,
+  EIP-1559, personal/digest, and AirGap signing on a fake native adapter
 
 ## Current non-goals and validation limits
 - no hardware-device SDK implementation yet

@@ -396,6 +396,40 @@ void main() {
     await service.dispose();
   });
 
+  test('external demo signs through the secret-free custody session', () async {
+    final service = FakeWalletConnectService();
+    final controller = WalletFlowController(
+      store: InMemorySecureKeyValueStore(),
+      biometricAuthGateway: const SimulatedBiometricAuthGateway(),
+      walletConnectService: service,
+      transactionService: const LocalTransactionService(),
+    );
+    await controller.loadInitialState();
+    await controller.selectBackend('external_nfc_demo_device');
+    controller.goToCreateWallet();
+    await controller.createWallet(pin: '5678');
+    controller.finishSeedBackup();
+    await controller.completeBiometricChoice(false);
+    final address = controller.summary!.address;
+
+    service.simulateRequest(
+      topic: 'topic-rutoken-foundation',
+      method: 'personal_sign',
+      params: <Object?>['0x637573746f6479', address],
+    );
+    await pumpEventQueue();
+    await controller.approvePendingRequest(pin: '5678');
+
+    expect(controller.errorMessage, isNull);
+    expect(service.respondedErrors, isEmpty);
+    expect(service.respondedResults.single.result, isA<String>());
+    expect(controller.material, isNull);
+    expect(controller.externalRuntimeState?.hasActiveSession, isFalse);
+
+    controller.dispose();
+    await service.dispose();
+  });
+
   test('reject incoming request responds with an error', () async {
     final service = FakeWalletConnectService();
     final controller = await buildUnlocked(service);

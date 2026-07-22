@@ -5,6 +5,7 @@ import 'package:bip39/bip39.dart' as bip39;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/airgap/account_export.dart';
 import 'package:mobile_wallet_demo/src/airgap/eip4527.dart';
+import 'package:mobile_wallet_demo/src/key_storage/custody_backend.dart';
 import 'package:web3dart/web3dart.dart' show EthPrivateKey, bytesToHex;
 
 // Hardhat/Anvil account #0 — the same wallet material the rest of the suite
@@ -79,6 +80,26 @@ void main() {
       final ur = _codec.encodeHdKey(accountExport);
       expect(ur, startsWith('ur:crypto-hdkey/'));
       expect(ur, _expectedUr);
+    });
+
+    test('builds the identical export from hardware public data only', () {
+      final hardwareExport = _deriver.deriveFromPublicAccount(
+        publicAccount: WalletAccountPublicKey(
+          account: const WalletAccountDescriptor(
+            backendId: 'rutoken_nfc',
+            address: _walletAddress,
+            derivationPath: "m/44'/60'/0'/0/0",
+          ),
+          accountPath: "m/44'/60'/0'",
+          accountDepth: 3,
+          compressedPublicKey: Uint8List.fromList(accountExport.keyData),
+          chainCode: Uint8List.fromList(accountExport.chainCode!),
+          sourceFingerprint: _masterFingerprint,
+          parentFingerprint: _parentFingerprint,
+        ),
+      );
+
+      expect(_codec.encodeHdKey(hardwareExport), _expectedUr);
     });
 
     test('round-trips through encode/decode', () {

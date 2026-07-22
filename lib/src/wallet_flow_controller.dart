@@ -621,11 +621,10 @@ class WalletFlowController extends ChangeNotifier {
             'Дождитесь безопасной проверки транзакции через RPC.';
         return;
       }
-      await _withFreshlyUnlockedMaterial(
+      await _withFreshlyAuthorizedSigner(
         pin: pin,
         useBiometrics: useBiometrics,
-        action: () async {
-          final signer = _activeTransactionSigner();
+        action: (signer) async {
           await coordinator.handleRequest(
             request: request,
             signer: signer,
@@ -735,22 +734,41 @@ class WalletFlowController extends ChangeNotifier {
     unawaited(_preparePendingRequestPreview());
   }
 
-  /// Runs [action] with the active backend transiently unlocked for a single
-  /// private-key operation, then ALWAYS re-locks and wipes the in-memory key.
+  /// Runs [action] with one transient signer. Hardware custody provides a
+  /// secret-free [CustodySigningSession]; the phone vault keeps its existing
+  /// local-material implementation behind this orchestration boundary.
   ///
   /// Auth is collected per call (no session reuse): [useBiometrics] takes the
   /// biometric fast-path, otherwise [pin] is required. Runs behind the busy
   /// overlay and through [_runGuarded] so wrong-PIN/lockout/offline
   /// [VaultFailure]s surface via [errorMessage]. The `finally` lock+wipe runs
   /// even if [action] throws, so the key never outlives the operation.
-  Future<void> _withFreshlyUnlockedMaterial({
+  Future<void> _withFreshlyAuthorizedSigner({
     String? pin,
     bool useBiometrics = false,
     String busyMessage = 'Разблокируем для подписи…',
-    required Future<void> Function() action,
+    required Future<void> Function(WalletTransactionSigner signer) action,
   }) async {
     await _runBusy(busyMessage, () async {
+      CustodySigningSession? custodySession;
       try {
+        final backend = activeBackend;
+        if (backend is WalletCustodyBackend) {
+          if (useBiometrics) {
+            throw const BiometricUnavailableFailure();
+          }
+          final custodyBackend = backend as WalletCustodyBackend;
+          final openedSession = await custodyBackend.openSigningSession(
+            pin: pin!,
+          );
+          custodySession = openedSession;
+          _lastUnlockAuthMethod = WalletAuthMethod.externalDevice;
+          final operation = walletOperationAuthorizer.authorizeCustodySession(
+            session: openedSession,
+          );
+          await action(operation.signer);
+          return;
+        }
         if (useBiometrics) {
           _material = await activeBackend.unlockWithBiometrics();
           _lastUnlockAuthMethod = WalletAuthMethod.biometric;
@@ -761,13 +779,23 @@ class WalletFlowController extends ChangeNotifier {
               ? WalletAuthMethod.externalDevice
               : WalletAuthMethod.pin;
         }
-        await action();
+        final operation = walletOperationAuthorizer
+            .authorizeUnlockedLocalSigning(
+              backend: backend,
+              walletMaterial: _material,
+              authMethod: _lastUnlockAuthMethod,
+            );
+        await action(operation.signer);
       } finally {
-        activeBackend.lock();
-        _material = null;
-        if (activeBackend is ExternalDeviceDemoBackend) {
-          _externalRuntimeState = await _externalDeviceBackend
-              .loadRuntimeState();
+        try {
+          await custodySession?.close();
+        } finally {
+          activeBackend.lock();
+          _material = null;
+          if (activeBackend is ExternalDeviceDemoBackend) {
+            _externalRuntimeState = await _externalDeviceBackend
+                .loadRuntimeState();
+          }
         }
       }
     });
@@ -802,23 +830,10 @@ class WalletFlowController extends ChangeNotifier {
     }
 
     HardenedSubmitResult? result;
-    await _withFreshlyUnlockedMaterial(
+    await _withFreshlyAuthorizedSigner(
       pin: pin,
       useBiometrics: useBiometrics,
-      action: () async {
-        // The external device session must be open for the mock PKCS#11 sign
-        // op; it runs while we hold a fresh unlock (the finally re-locks).
-        final backend = activeBackend;
-        if (backend is ExternalDeviceDemoBackend) {
-          await backend.performPkcs11Operation(
-            ExternalDevicePkcs11Operation(
-              kind: ExternalDevicePkcs11OperationKind.signTransactionPreview,
-              payload: '$amountText ${asset.symbol} -> $toAddress',
-            ),
-          );
-        }
-
-        final signer = _activeTransactionSigner();
+      action: (signer) async {
         result = await transactionService.submitAuthorizedTransferFlow(
           snapshot: snapshot,
           fromAddress: fromAddress,
@@ -835,50 +850,48 @@ class WalletFlowController extends ChangeNotifier {
     return result;
   }
 
-  /// Builds a signer for the active backend, reading the transiently-set
-  /// [_material]; throws [VaultFailure] when the backend is locked or the
-  /// material is unavailable. Only valid inside [_withFreshlyUnlockedMaterial].
-  WalletTransactionSigner _activeTransactionSigner() {
-    final backend = activeBackend;
-    if (backend is ExternalDeviceKeyStorageBackend) {
-      return walletOperationAuthorizer
-          .authorizeUnlockedExternalDeviceSigning(
-            backend: backend,
-            walletMaterial: _material,
-          )
-          .signer;
-    }
-    return walletOperationAuthorizer
-        .authorizeUnlockedLocalSigning(
-          backend: backend,
-          walletMaterial: _material,
-          authMethod: _lastUnlockAuthMethod,
-        )
-        .signer;
-  }
-
   /// Exports only the account-level extended PUBLIC key as `crypto-hdkey`, for
   /// MetaMask's QR hardware-wallet account import.
   Future<void> prepareAirGapAccountExport({
     String? pin,
     bool useBiometrics = false,
   }) async {
-    await _withFreshlyUnlockedMaterial(
-      pin: pin,
-      useBiometrics: useBiometrics,
-      busyMessage: 'Готовим публичный QR аккаунта…',
-      action: () async {
-        final material = _material;
-        if (material == null) {
-          throw const VaultFailure('Ключ кошелька недоступен.');
+    final backend = activeBackend;
+    if (backend is WalletCustodyBackend) {
+      final custodyBackend = backend as WalletCustodyBackend;
+      await _runBusy('Готовим публичный QR аккаунта…', () async {
+        if (useBiometrics) {
+          throw const BiometricUnavailableFailure();
         }
-        final export = const AccountExportDeriver().deriveAccountExport(
-          mnemonic: material.mnemonic,
+        final publicAccount = await custodyBackend.readAccountPublicKey(
+          pin: pin!,
+        );
+        final export = const AccountExportDeriver().deriveFromPublicAccount(
+          publicAccount: publicAccount,
           name: 'Wallet Demo',
         );
         _airGapAccountExportPayload = const Eip4527Codec().encodeHdKey(export);
-      },
-    );
+      });
+    } else {
+      await _withFreshlyAuthorizedSigner(
+        pin: pin,
+        useBiometrics: useBiometrics,
+        busyMessage: 'Готовим публичный QR аккаунта…',
+        action: (_) async {
+          final material = _material;
+          if (material == null) {
+            throw const VaultFailure('Ключ кошелька недоступен.');
+          }
+          final export = const AccountExportDeriver().deriveAccountExport(
+            mnemonic: material.mnemonic,
+            name: 'Wallet Demo',
+          );
+          _airGapAccountExportPayload = const Eip4527Codec().encodeHdKey(
+            export,
+          );
+        },
+      );
+    }
   }
 
   /// Decodes and validates an EIP-4527 request without unlocking the key.
@@ -961,14 +974,14 @@ class WalletFlowController extends ChangeNotifier {
       });
       return;
     }
-    await _withFreshlyUnlockedMaterial(
+    await _withFreshlyAuthorizedSigner(
       pin: pin,
       useBiometrics: useBiometrics,
-      action: () async {
+      action: (signer) async {
         _airGapResponsePayload = await const Eip4527InboundCoordinator()
             .signRequestUr(
               requestUr: requestPayload,
-              signer: _activeTransactionSigner(),
+              signer: signer,
               transactionService: _transactionService,
             );
       },
