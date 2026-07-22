@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-07-22 — Fix physical Rutoken NFC discovery — branch fix/rutoken-slot-events — in progress
+## 2026-07-22 — Fix physical Rutoken NFC discovery — branch fix/rutoken-slot-events — done (CI green)
 - Plan: owner dogfood on the same Android phone/token proves the official demo detects the Rutoken while Wallet
   Demo v1.41 times out after 30 seconds. Reconcile the native lifecycle against the supplied reference and replace
   Wallet Demo's `C_GetSlotList` polling with the vendor-demonstrated blocking `C_WaitForSlotEvent` listener plus
@@ -31,10 +31,12 @@ Entry template:
   uses those insertion/removal events to maintain token presence. Replaced polling with that event contract plus
   an initial slot snapshot and a generation-guarded monitor that wakes session opens and lifecycle teardown.
   Added a native-source regression, recorded the v1.41 physical failure, and bumped to v1.42.0+53. Format/analyze
-  are clean and all 174 Flutter tests pass. The host has no Android SDK, so native compilation moves to CI.
-- Next / open: require Android/full CI, then repeat the same phone/token probe. Discovery is the only failure fixed
+  are clean and all 174 Flutter tests pass. Actions run 29944041334 is green for Validate, Android APK, both iOS
+  builds, and Windows; Kotlin/native Android compilation and APK artifact upload therefore passed.
+- Next / open: repeat the same phone/token probe with the v1.42 Android artifact. Discovery is the only failure fixed
   in this chunk; public-key/chain-code/raw-signature behavior remains live evidence after the token is detected.
-- Refs: owner v1.41 Android dogfood; official `TokenManager` / `SlotEventProvider` / `SlotEventGenerator`.
+- Refs: owner v1.41 Android dogfood; official `TokenManager` / `SlotEventProvider` / `SlotEventGenerator`; PR #2;
+  squash commit `254ba26`; CI 29944041334.
 
 ## 2026-07-22 — Real Rutoken Android transport spike — branch feat/rutoken-android-transport — done (CI green)
 - Plan: incorporate the owner-supplied official Android v1.1 package without copying its blockchain-agnostic
