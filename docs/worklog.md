@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-07-22 — Accept the Rutoken BIP32 EC-point representation — branch fix/rutoken-compressed-ec-point — in progress (local green)
+## 2026-07-22 — Accept the Rutoken BIP32 EC-point representation — branch fix/rutoken-compressed-ec-point — done (CI green)
 - Plan: owner dogfood on v1.44 proves NFC discovery, login, BIP32 master lookup, and root/child public derivation now
   proceed far enough to return `CKA_EC_POINT`; Dart then rejects the returned point because it assumes every token
   emits a 65-byte uncompressed SEC1 point. Reconcile both sides with the supplied working app and official wrapper:
@@ -31,10 +31,12 @@ Entry template:
   33-byte or uncompressed 65-byte SEC1 encodings, validates the point on secp256k1, and canonicalizes both forms
   before address/fingerprint/xpub use. Added raw/DER compressed vectors, uncompressed coverage, invalid-curve and
   native-source regressions; made Pointy Castle an explicit dependency; recorded the v1.44 physical failure; and
-  bumped to v1.45.0+56. Format/analyze are clean and all 179 tests pass.
-- Next / open: require Android/full CI, then physically retest account chain-code read and raw `CKM_ECDSA` output.
+  bumped to v1.45.0+56. Format/analyze are clean and all 179 tests pass. Actions run 29951942657 is green for
+  Validate, Android APK, both iOS builds, and Windows; the official EC object/accessor compiles against the pinned
+  wrapper and the physical-test Android artifact is available.
+- Next / open: physically retest account chain-code read and raw `CKM_ECDSA` output.
 - Refs: owner v1.44 Android dogfood; supplied `BusinessLogicUtils.findPublicMasterKeys`; official
-  `Pkcs11EcPublicKeyObject.getEcPointAttributeValue`.
+  `Pkcs11EcPublicKeyObject.getEcPointAttributeValue`; PR #5; squash commit `d78efab`; CI 29951942657.
 
 ## 2026-07-22 — Fix empty BIP32 master derivation path — branch fix/rutoken-null-master-path — done (CI green)
 - Plan: owner dogfood confirms that v1.43 now detects the same NFC Rutoken that the official demo detects. An empty
