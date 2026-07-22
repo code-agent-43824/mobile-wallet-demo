@@ -3,10 +3,11 @@
 Flutter-демо single-account EVM-кошелька с рабочим phone vault, WalletConnect и
 MetaMask-совместимым AirGap signer.
 
-**Сейчас:** v1.40 поддерживает Mainnet/Sepolia, локальные переводы, wallet-side WalletConnect,
+**Сейчас:** v1.41 поддерживает Mainnet/Sepolia, локальные переводы, wallet-side WalletConnect,
 EIP-4527/BC-UR AirGap и авторизацию на каждую операцию. **Следующий milestone:** реальный
-неэкспортирующий Rutoken custody backend для Android/iOS, использующий те же own-send,
-WalletConnect и AirGap flows. Подробная карта NOW / NEXT / LATER и критерии готовности — в
+Rutoken custody backend для Android/iOS. Android vendor stack уже подключён и готов к первой
+безопасной физической диагностике; после неё следуют два восстанавливаемых provisioning flow и
+те же own-send, WalletConnect и AirGap flows. Подробная карта NOW / NEXT / LATER — в
 [`docs/development-plan.md`](docs/development-plan.md).
 Live/native release evidence is tracked separately in
 [`docs/device-test-matrix.md`](docs/device-test-matrix.md).
@@ -43,6 +44,9 @@ Live/native release evidence is tracked separately in
 - Контракты для `KeyStorageBackend`, модель выбора backend и совместимый signing/auth foundation под будущий внешний hardware backend
 - Rutoken-ready custody foundation: secret-free account/session/native-adapter contracts, typed public xpub and
   provisioning seams, raw `r‖s` normalization/recovery и byte-compatible EIP-155/EIP-1559/message signing
+- Реальный Android Rutoken transport spike: официальный NFC PC/SC + PKCS#11/JNA stack, лицензированный ARM64
+  `libwtpkcs11ecp.so`, lifecycle/session teardown, public account/xpub read, raw `CKM_ECDSA` и безопасная
+  read-only диагностика физического устройства из welcome screen
 - Demo runtime path для внешнего backend: simulated external device, отдельная UX-ветка и отдельный auth/signing путь без реального NFC SDK
 - WalletConnect v2 wallet-side flow: QR pairing, queued inbound transaction/message/typed-data requests,
   `wallet_switchEthereumChain` для Mainnet/Sepolia, бесшумный EIP-5792 `wallet_getCapabilities` и локальная
@@ -58,7 +62,7 @@ Live/native release evidence is tracked separately in
 
 ## Версионирование
 
-- Текущая версия: `v1.40.0+51`
+- Текущая версия: `v1.41.0+52`
 - По договорённости в этом проекте дальше повышаем minor-версию с каждым функциональным шагом
 
 ## Что покрывает текущий этап

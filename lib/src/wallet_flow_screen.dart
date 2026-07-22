@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:zxing2/qrcode.dart';
@@ -65,6 +66,7 @@ class WalletFlowScreen extends StatefulWidget {
     required this.walletConnectService,
     required this.walletConnectPreflight,
     required this.qrScanner,
+    this.rutokenNativeAdapter,
     super.key,
   });
 
@@ -78,6 +80,7 @@ class WalletFlowScreen extends StatefulWidget {
   final WalletConnectService walletConnectService;
   final WalletConnectTransactionPreflight walletConnectPreflight;
   final QrScanner qrScanner;
+  final RutokenNativeAdapter? rutokenNativeAdapter;
 
   @override
   State<WalletFlowScreen> createState() => _WalletFlowScreenState();
@@ -98,6 +101,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       transactionBroadcaster: widget.transactionBroadcaster,
       nonceProvider: widget.nonceProvider,
       qrScanner: widget.qrScanner,
+      rutokenNativeAdapter: widget.rutokenNativeAdapter,
     )..addListener(_onControllerChanged);
     _controller.loadInitialState();
   }
@@ -176,6 +180,10 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           onBackendSelected: controller.selectBackend,
           onCreatePressed: controller.goToCreateWallet,
           onImportPressed: controller.goToImportWallet,
+          onRutokenDiagnostic: controller.hasRutokenNativeAdapter
+              ? controller.runRutokenTransportDiagnostic
+              : null,
+          rutokenDiagnosticResult: controller.rutokenDiagnosticResult,
         );
       case WalletFlowStage.createWallet:
         return _PinSetupStage(

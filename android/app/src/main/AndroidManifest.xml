@@ -1,6 +1,15 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- rtpcscbridge supports several transports. Wallet Demo intentionally
+         enables NFC only, so remove unrelated permissions merged from its AAR. -->
+    <uses-permission android:name="android.permission.BLUETOOTH"
+        tools:node="remove" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"
+        tools:node="remove" />
+    <uses-permission android:name="ru.rutoken.permission.USE_SPI"
+        tools:node="remove" />
 
     <application
         android:label="Wallet Demo"

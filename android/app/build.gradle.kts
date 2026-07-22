@@ -24,7 +24,10 @@ android {
         applicationId = "com.example.mobile_wallet_demo"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // The official Rutoken PC/SC bridge supports Android 9 (API 28) and
+        // newer. Keeping the minimum explicit prevents an APK that installs
+        // successfully but can never load the native transport.
+        minSdk = 28
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -50,6 +53,17 @@ android {
             )
         }
     }
+}
+
+dependencies {
+    implementation("ru.rutoken.rtpcscbridge:rtpcscbridge:1.4.0")
+    implementation("ru.rutoken.pkcs11wrapper:pkcs11wrapper:4.3.1") {
+        isTransitive = false
+    }
+    implementation("ru.rutoken:pkcs11jna:4.2.0") {
+        isTransitive = false
+    }
+    implementation("net.java.dev.jna:jna:5.17.0@aar")
 }
 
 flutter {

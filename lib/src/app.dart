@@ -6,6 +6,8 @@ import 'app_version.dart';
 import 'auth/biometric_auth.dart';
 import 'blockchain/blockchain_provider.dart';
 import 'key_storage/secure_key_value_store.dart';
+import 'key_storage/custody_backend.dart';
+import 'key_storage/rutoken_method_channel_adapter.dart';
 import 'qr/camera_qr_scanner.dart';
 import 'qr/file_qr_scanner.dart';
 import 'qr/qr_scanner.dart';
@@ -57,6 +59,7 @@ class MobileWalletDemoApp extends StatelessWidget {
     WalletConnectService? walletConnectService,
     WalletConnectTransactionPreflight? walletConnectPreflight,
     QrScanner? qrScanner,
+    RutokenNativeAdapter? rutokenNativeAdapter,
   }) : _store = store,
        _blockchainProvider = blockchainProvider,
        _transactionService = transactionService,
@@ -66,7 +69,8 @@ class MobileWalletDemoApp extends StatelessWidget {
        _biometricAuthGateway = biometricAuthGateway,
        _walletConnectService = walletConnectService,
        _walletConnectPreflight = walletConnectPreflight,
-       _qrScanner = qrScanner;
+       _qrScanner = qrScanner,
+       _rutokenNativeAdapter = rutokenNativeAdapter;
 
   final SecureKeyValueStore? _store;
   final BlockchainProvider? _blockchainProvider;
@@ -78,6 +82,7 @@ class MobileWalletDemoApp extends StatelessWidget {
   final WalletConnectService? _walletConnectService;
   final WalletConnectTransactionPreflight? _walletConnectPreflight;
   final QrScanner? _qrScanner;
+  final RutokenNativeAdapter? _rutokenNativeAdapter;
 
   @override
   Widget build(BuildContext context) {
@@ -132,6 +137,9 @@ class MobileWalletDemoApp extends StatelessWidget {
               rpcTransport: effectiveRpcTransport,
             ),
         qrScanner: _qrScanner ?? _defaultQrScanner(),
+        rutokenNativeAdapter:
+            _rutokenNativeAdapter ??
+            (Platform.isAndroid ? MethodChannelRutokenNativeAdapter() : null),
       ),
     );
   }

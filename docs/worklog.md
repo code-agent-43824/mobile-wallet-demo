@@ -18,6 +18,34 @@ Entry template:
 
 ---
 
+## 2026-07-22 — Real Rutoken Android transport spike — branch feat/rutoken-android-transport — done (CI pending)
+- Plan: incorporate the owner-supplied official Android v1.1 package without copying its blockchain-agnostic
+  signing assumptions. First reconcile Phase 10 provisioning policy: support existing mnemonic/passphrase import
+  and on-token generation followed by mandatory backup export; defer backup-less generation. Vendor the licensed
+  ARM64 `libwtpkcs11ecp.so` with provenance/checksum, add the exact rtpcscbridge/pkcs11wrapper/pkcs11jna/JNA stack,
+  and implement a Kotlin platform-channel boundary for application/activity lifecycle, NFC token discovery,
+  PKCS#11 initialize/open/login/read/sign/close, typed errors, cancellation, and guaranteed teardown. Add a Dart
+  adapter plus a narrowly scoped diagnostic path suitable for the owner's first physical-device test. Keep EVM
+  digest, raw `r‖s` validation, low-s/recovery, envelope assembly, and xpub semantics in the v1.40 shared layer.
+  Add native/Dart contract tests where headless execution permits, bump the functional version, run all local
+  checks, and require the complete multi-platform CI before physical dogfood.
+- Done: updated the provisioning policy to require both existing-mnemonic/passphrase import and on-token
+  generation with mandatory backup export; backup-less generation is deferred. Added the exact official Android
+  dependency stack, API 28 floor, NFC-only permission merge policy, licensed/checksummed ARM64 native library,
+  and a serialized Kotlin runtime for vendor initialization, token polling, RW session + PIN login, BIP32 public
+  derivation/account chain-code reads, session-only child derivation, raw `CKM_ECDSA`, idempotent close, and
+  Activity-stop teardown. Added a typed MethodChannel adapter that validates DER EC points, derives the EVM
+  address/fingerprints from public data, and sends only 32-byte digests for signing. Added a non-mutating welcome
+  diagnostic (NFC/PIN/xpub/sign/close), adapter/codec regressions, and bumped to v1.41.0+52. Local format/analyze
+  and all 173 tests pass.
+- Next / open: GitHub multi-platform CI must compile the Kotlin/vendor stack. Then the owner installs the ARM64
+  APK and runs “Проверить настоящий Рутокен”. Live signature length/shape, account chain-code readability,
+  NFC-loss behavior, cancellation, and precise PIN error mapping remain physical-device questions. Only after
+  that check: both provisioning flows, production backend registration, and the full signing matrix.
+- Refs: Phase 10.0/10.3; owner archive SHA-256
+  `b9ef7c7519c149688d12ed4a8953159c9d58279923edc73eeb3d55e8aa2f2bb3`; bundled `.so` SHA-256
+  `68189f52194197969edafe6df47012315bd8320c9cfcf60070b7cacda2c2b70f`.
+
 ## 2026-07-22 — Rutoken custody integration foundation — branch feat/rutoken-custody-foundation — done (CI green)
 - Plan: complete the library-independent preparation for Phase 10 without pretending that the native Rutoken
   SDK is present. Introduce public account descriptors and backend-provided, transient authenticated signer

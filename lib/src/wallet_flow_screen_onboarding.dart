@@ -8,6 +8,8 @@ class _WelcomeStage extends StatelessWidget {
     required this.onBackendSelected,
     required this.onCreatePressed,
     required this.onImportPressed,
+    required this.onRutokenDiagnostic,
+    required this.rutokenDiagnosticResult,
   });
 
   final List<WalletBackendCatalogEntry> backendEntries;
@@ -16,6 +18,8 @@ class _WelcomeStage extends StatelessWidget {
   final Future<void> Function(String backendId) onBackendSelected;
   final VoidCallback onCreatePressed;
   final VoidCallback onImportPressed;
+  final Future<void> Function(String pin)? onRutokenDiagnostic;
+  final String? rutokenDiagnosticResult;
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +65,36 @@ class _WelcomeStage extends StatelessWidget {
                 : 'Импортировать seed-фразу',
           ),
         ),
+        if (onRutokenDiagnostic != null) ...[
+          const SizedBox(height: 20),
+          const Divider(),
+          const SizedBox(height: 12),
+          const _SectionTitle('Физический Рутокен'),
+          const SizedBox(height: 8),
+          const Text(
+            'Диагностика ничего не создаёт и не удаляет: проверяет NFC, PIN, '
+            'публичный account xpub и одну подпись тестового digest.',
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () async {
+              final auth = await _promptForAuth(
+                context,
+                reason:
+                    'Введите PIN Рутокена и удерживайте устройство у NFC до завершения проверки.',
+                biometricsOffered: false,
+              );
+              final pin = auth?.pin;
+              if (pin != null) await onRutokenDiagnostic!(pin);
+            },
+            icon: const Icon(Icons.nfc),
+            label: const Text('Проверить настоящий Рутокен'),
+          ),
+          if (rutokenDiagnosticResult case final result?) ...[
+            const SizedBox(height: 12),
+            Text(result),
+          ],
+        ],
       ],
     );
   }
