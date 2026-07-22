@@ -11,6 +11,7 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -56,6 +57,7 @@ android {
 }
 
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation("ru.rutoken.rtpcscbridge:rtpcscbridge:1.4.0")
     implementation("ru.rutoken.pkcs11wrapper:pkcs11wrapper:4.3.1") {
         isTransitive = false
