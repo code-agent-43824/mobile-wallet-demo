@@ -21,9 +21,11 @@ class WalletFlowController extends ChangeNotifier {
     TransactionBroadcaster? transactionBroadcaster,
     NonceProvider? nonceProvider,
     QrScanner qrScanner = const UnavailableQrScanner(),
+    RutokenNativeAdapter? rutokenNativeAdapter,
   }) : _walletConnectService = walletConnectService,
        _walletConnectPreflight = walletConnectPreflight,
        _qrScanner = qrScanner,
+       _rutokenNativeAdapter = rutokenNativeAdapter,
        _transactionService =
            transactionService ??
            const HardenedTransactionServiceImplementation(),
@@ -103,6 +105,7 @@ class WalletFlowController extends ChangeNotifier {
   final WalletConnectService _walletConnectService;
   final WalletConnectTransactionPreflight _walletConnectPreflight;
   final QrScanner _qrScanner;
+  final RutokenNativeAdapter? _rutokenNativeAdapter;
   final TransactionService _transactionService;
   final TransactionBroadcaster _transactionBroadcaster;
   final NonceProvider _nonceProvider;
@@ -143,6 +146,7 @@ class WalletFlowController extends ChangeNotifier {
   bool _biometricsEnabled = false;
   bool _biometricsAvailable = false;
   bool _disposed = false;
+  String? _rutokenDiagnosticResult;
 
   // Read-only surface consumed by the widget layer.
   WalletFlowStage get stage => _stage;
@@ -179,6 +183,8 @@ class WalletFlowController extends ChangeNotifier {
 
   /// Whether loading a QR from an image file is available (all platforms).
   bool get isQrFileLoadAvailable => _qrScanner.isFileLoadAvailable;
+  bool get hasRutokenNativeAdapter => _rutokenNativeAdapter != null;
+  String? get rutokenDiagnosticResult => _rutokenDiagnosticResult;
 
   /// Active WalletConnect sessions (wallet-side view).
   List<WalletConnectSession> get walletConnectSessions =>
@@ -305,6 +311,32 @@ class WalletFlowController extends ChangeNotifier {
       _stage = WalletFlowStage.welcome;
       _notify();
     }
+  }
+
+  /// Read-only physical transport probe. It deliberately does not generate,
+  /// import or mutate keys: it verifies NFC/login, account public material,
+  /// one raw CKM_ECDSA operation and unconditional native-session teardown.
+  Future<void> runRutokenTransportDiagnostic(String pin) async {
+    final adapter = _rutokenNativeAdapter;
+    if (adapter == null) return;
+    await _runBusy('Поднеси Рутокен к NFC и удерживай его…', () async {
+      final session = await adapter.openSession(pin: pin);
+      try {
+        final account = await adapter.readAccountPublicKey(session);
+        final digest = Uint8List.fromList(List<int>.generate(32, (i) => i));
+        final signature = await adapter.signDigest(
+          session: session,
+          derivationPath: account.account.derivationPath,
+          digest: digest,
+        );
+        _rutokenDiagnosticResult =
+            'Рутокен доступен: ${account.account.address}. '
+            'Account xpub прочитан, CKM_ECDSA вернул '
+            '${signature.toBytes().length} байта.';
+      } finally {
+        await adapter.closeSession(session);
+      }
+    });
   }
 
   Future<void> selectBackend(String backendId) async {

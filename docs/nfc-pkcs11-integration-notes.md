@@ -445,15 +445,17 @@ local-secret contract by copying token secrets into app memory.
   envelopes; fake-device output matches the local reference byte-for-byte.
 - **10.3 — Android adapter:** NFC/PC-SC lifecycle, PKCS#11 init/session/login/public-key/sign operations, typed
   failures, cancellation, and teardown.
-- **10.4 — provisioning/export:** key generation/import according to token policy, address, xpub/chain code, and
-  one-time mnemonic display only if the device explicitly supports it.
+- **10.4 — recoverable provisioning/export:** support existing BIP-39 mnemonic/passphrase import and on-token
+  generation with mandatory one-time mnemonic export/confirmation. Backup-less generation is explicitly
+  deferred. Address and xpub/chain-code export remain public-data operations independent of mnemonic access.
 - **10.5 — signing matrix:** own-send; WalletConnect transaction, personal message, and EIP-712; EIP-4527
   AirGap transaction.
 - **10.6 — UX and iOS:** real tap/PIN/progress/cooldown/retry UI, removal of mock controls, then the equivalent
   vendor iOS adapter and physical-device matrix.
 
 The authoritative exit criteria are in `docs/development-plan.md`. In particular, success/error/cancel/NFC-loss
-must all close the authenticated session, and no seed or private key may enter Dart models, logs, or errors.
+must all close the authenticated session. No seed or private key may enter logs, errors, or long-lived Dart
+models; provisioning is the narrow exception for transient import and mandatory one-time generated backup.
 ## 10. Open questions to confirm on a real token
 
 (Several earlier questions are now **answered**: mechanism hex values = §3;
