@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-07-22 — Rutoken custody integration foundation — branch feat/rutoken-custody-foundation — done (local validation green; CI pending)
+## 2026-07-22 — Rutoken custody integration foundation — branch feat/rutoken-custody-foundation — done (CI green)
 - Plan: complete the library-independent preparation for Phase 10 without pretending that the native Rutoken
   SDK is present. Introduce public account descriptors and backend-provided, transient authenticated signer
   operations so a hardware backend never needs to return `WalletMaterial`; adapt the phone vault and demo
@@ -33,13 +33,15 @@ Entry template:
   account export; and implemented EVM recovery-id discovery, low-s normalization, and legacy/EIP-1559 envelope
   assembly from raw `r‖s`. Added fake-native lifecycle tests and byte-for-byte parity tests for legacy and
   EIP-1559 transactions, personal/raw-digest signatures, EIP-712's digest path, and EIP-4527 responses. Bumped
-  the app to v1.40.0+51 and reconciled the roadmap/integration docs. Format, analyze, and all 171 tests pass.
+  the app to v1.40.0+51 and reconciled the roadmap/integration docs. Format, analyze, and all 171 tests pass;
+  GitHub Actions run 29909940754 is green for Validate, Android APK, iOS simulator, unsigned iOS device, and
+  Windows x64.
 - Next / open: implement and register the Android Kotlin adapter against the vendor AAR/JNA/native packages,
   then validate NFC discovery, PIN/login, account/xpub reads, signature format, cancellation, NFC loss, and
   teardown on the owner's physical Rutoken. The Swift adapter and provisioning UI follow that Android spike.
 - Refs: Phase 10.1–10.2; `lib/src/key_storage/custody_backend.dart`;
   `lib/src/auth/external_digest_signer.dart`; `test/rutoken_custody_foundation_test.dart`;
-  `docs/nfc-pkcs11-integration-notes.md`; owner has the physical Rutoken.
+  `docs/nfc-pkcs11-integration-notes.md`; owner has the physical Rutoken; CI 29909940754.
 
 ## 2026-07-22 — Reconcile current roadmap and Phase 10 — branch docs/reconcile-current-roadmap — done
 - Plan: make the documentation an unambiguous execution map without changing application code or version.
