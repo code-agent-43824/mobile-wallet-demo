@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-07-23 — Rutoken recoverable provisioning — branch feat/rutoken-recoverable-provisioning — implemented, CI pending
+## 2026-07-23 — Rutoken recoverable provisioning — branch feat/rutoken-recoverable-provisioning — done (CI green)
 - Plan: owner dogfood confirms that v1.46 completes NFC discovery, PIN login, BIP32 public derivation, raw
   `CKM_ECDSA`, and teardown on the physical Rutoken. Mark the transport probe physically passed and implement
   Phase 10.4 without expanding the token contract beyond the supplied Android example. Add two explicit
@@ -41,11 +41,15 @@ Entry template:
   buffers, verifies the token-derived address, persists only versioned public account-xpub metadata, and retains a
   pending public record across a possible post-import process/teardown failure. Docs and the device matrix record
   v1.46 read/sign as physically passed. Format, analyze, `git diff --check`, and all 190 tests pass locally.
+  PR #7 was squash-merged as `f5fdc5d`; Actions run 29998986521 is fully green for Validate, Android APK,
+  iOS Simulator, unsigned iOS Device, and Windows x64. In particular, the changed Kotlin `C_CreateObject` path
+  compiles against the pinned Rutoken wrapper and the Android artifact is available for physical provisioning.
 - Next / open: require Android/full CI, then test v1.47 on an actually empty token: first new-24-word creation,
   then (after safely resetting/using another test token) existing mnemonic + optional-passphrase import. Do not
   test against the currently provisioned card unless intentionally resetting it; the app correctly refuses to add
   a second BIP32 master. Production backend registration remains the next code chunk after provisioning dogfood.
-- Refs: owner v1.46 physical dogfood; Phase 10.4; supplied Android `importBip32PrivateKey` reference.
+- Refs: owner v1.46 physical dogfood; Phase 10.4; supplied Android `importBip32PrivateKey` reference; PR #7;
+  squash `f5fdc5d`; CI 29998986521.
 
 ## 2026-07-22 — Constrain Rutoken to the reference raw-signer contract — branch fix/rutoken-example-signing-contract — done (CI green)
 - Plan: owner dogfood on v1.45 reaches the next PKCS#11 boundary and fails with `CKR_KEY_TYPE_INCONSISTENT`.
