@@ -181,6 +181,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           backendEntries: controller.backendEntries,
           selectedBackendId: controller.effectiveBackendId,
           isExternalBackendSelected: controller.isExternalBackendSelected,
+          isRutokenSelected: controller.isRutokenSelected,
           onBackendSelected: controller.selectBackend,
           onCreatePressed: controller.goToCreateWallet,
           onImportPressed: controller.goToImportWallet,
@@ -261,10 +262,10 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           onUnlockWithBiometrics: controller.canUnlockWithBiometrics
               ? controller.unlockWithBiometrics
               : null,
-          onReconnectExternalDevice: controller.isExternalBackendSelected
+          onReconnectExternalDevice: controller.isDemoExternalBackendSelected
               ? controller.reconnectExternalDevice
               : null,
-          onSimulateExternalOffline: controller.isExternalBackendSelected
+          onSimulateExternalOffline: controller.isDemoExternalBackendSelected
               ? controller.simulateExternalDeviceOffline
               : null,
         );
@@ -302,22 +303,26 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
                 useBiometrics: useBiometrics,
               ),
           onLock: controller.lockWallet,
-          onReconnectExternalDevice: controller.isExternalBackendSelected
+          isHardwareCustody:
+              controller.activeBackend is WalletCustodyBackend &&
+              controller.activeBackend is! ExternalDeviceDemoBackend,
+          onReconnectExternalDevice: controller.isDemoExternalBackendSelected
               ? controller.reconnectExternalDevice
               : null,
-          onDisconnectExternalSession: controller.isExternalBackendSelected
+          onDisconnectExternalSession: controller.isDemoExternalBackendSelected
               ? controller.disconnectExternalSession
               : null,
-          onSimulateExternalOffline: controller.isExternalBackendSelected
+          onSimulateExternalOffline: controller.isDemoExternalBackendSelected
               ? controller.simulateExternalDeviceOffline
               : null,
-          onPingExternalDevice: controller.isExternalBackendSelected
+          onPingExternalDevice: controller.isDemoExternalBackendSelected
               ? controller.pingExternalDevice
               : null,
-          onReadExternalAddress: controller.isExternalBackendSelected
+          onReadExternalAddress: controller.isDemoExternalBackendSelected
               ? controller.readExternalAddress
               : null,
-          onRefreshExternalRuntimeState: controller.isExternalBackendSelected
+          onRefreshExternalRuntimeState:
+              controller.isDemoExternalBackendSelected
               ? controller.refreshExternalRuntimeState
               : null,
           onOpenConnections: controller.openConnections,

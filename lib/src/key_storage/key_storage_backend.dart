@@ -76,27 +76,34 @@ class UnsupportedVaultSchemaFailure extends VaultFailure {
   final int schemaVersion;
 }
 
-abstract interface class KeyStorageBackend {
+/// Common read-only lifecycle exposed by every selectable custody backend.
+///
+/// A hardware backend implements this surface plus `WalletCustodyBackend`; it
+/// deliberately does not implement the secret-exporting [KeyStorageBackend].
+abstract interface class WalletBackend {
   String get backendId;
   bool get isUnlocked;
 
   Future<bool> hasWallet();
   Future<StoredWalletSummary?> getWalletSummary();
+  Future<bool> isBiometricUnlockAvailable();
+  Future<bool> isBiometricUnlockEnabled();
+  void lock();
+}
+
+abstract interface class KeyStorageBackend implements WalletBackend {
   Future<WalletMaterial> createWallet({required String pin});
   Future<WalletMaterial> importWallet({
     required String mnemonic,
     required String pin,
   });
   Future<WalletMaterial> unlock({required String pin});
-  Future<bool> isBiometricUnlockAvailable();
-  Future<bool> isBiometricUnlockEnabled();
   Future<void> setBiometricUnlockEnabled({
     required bool enabled,
     required String pin,
   });
   Future<WalletMaterial> unlockWithBiometrics();
   Future<void> clear();
-  void lock();
 }
 
 abstract interface class ExternalDeviceKeyStorageBackend

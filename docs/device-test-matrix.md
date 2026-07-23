@@ -18,7 +18,7 @@ Result values: `PASS`, `FAIL`, `PARTIAL`, `RETEST`, `BLOCKED`, or `NOT RUN`.
 | Dense MetaMask QR live camera after scanner hardening | Android physical device | v1.39 | NOT RUN | Owner retest pending; file/screenshot decode already passed. |
 | Rutoken custody/NFC discovery | Android owner device | v1.43 / 2026-07-22 | PASS | The same phone/card that timed out in v1.41–v1.42 is detected after moving the complete bridge bootstrap to `Application.onCreate`. An empty card then correctly reached the zero-master check. |
 | Rutoken public-address/raw-signature probe | Android owner device | v1.46 / 2026-07-23 | PASS | Owner confirms the complete diagnostic succeeds: discovery, PIN/login, public address derivation, raw 64-byte `CKM_ECDSA`, and session teardown. Earlier v1.43–v1.45 failures drove the reference-alignment fixes. |
-| Rutoken recoverable create/import provisioning | Android owner device | v1.47 | RETEST | Both empty-token flows are implemented; physical create and import tests are pending. Use only disposable/test backups and never record secrets here. |
+| Rutoken recoverable create/import provisioning | Android owner device | v1.47 / 2026-07-23 | PASS | Owner confirms existing-seed import returns the expected address and new recoverable creation returns its shown seed phrase/address. No secret test material is recorded here. |
 
 ## Phone-vault release checks
 
@@ -57,13 +57,13 @@ Add exact token model, firmware, SDK version, device/OS, and issue/evidence link
 | Check | Android | iOS | Acceptance |
 | --- | --- | --- | --- |
 | Vendor stack init, token discovery, login, public-key read, teardown | PASS v1.46 | BLOCKED | Complete physical diagnostic passed on Android. |
-| Recoverable create + mandatory backup confirmation | RETEST v1.47 | BLOCKED | Empty token receives the reference raw master import; shown backup restores the same address. |
-| Existing mnemonic + optional passphrase import | RETEST v1.47 | BLOCKED | Empty token receives the reference raw master import; address matches an independent vector. |
-| Address + software-retained account xpub/chain code | RETEST v1.47 | BLOCKED | Address matches token derivation; provisioning metadata matches independent vectors without a native xpub query. |
-| Own-send | BLOCKED | BLOCKED | Device signs; valid low-s/recovery id; broadcast succeeds once. |
-| WalletConnect transaction | BLOCKED | BLOCKED | Preflight then tap+PIN; response/broadcast succeeds once. |
-| WalletConnect personal/EIP-712 | BLOCKED | BLOCKED | Valid signatures; displayed request matches signed payload. |
-| EIP-4527 AirGap transaction | BLOCKED | BLOCKED | Public account export and request signature require no secret export. |
+| Recoverable create + mandatory backup confirmation | PASS v1.47 | BLOCKED | Empty token receives the reference raw master import; owner confirms creation and backup display succeed with the expected address. |
+| Existing mnemonic + optional passphrase import | PASS v1.47 | BLOCKED | Owner confirms import succeeds and the address matches the independent source. |
+| Address + software-retained account xpub/chain code | PASS v1.47 | BLOCKED | Address matches token derivation; provisioning metadata is produced from the same software reference without a native xpub query. |
+| Own-send | RETEST v1.48 | BLOCKED | Device signs; valid low-s/recovery id; broadcast succeeds once. |
+| WalletConnect transaction | RETEST v1.48 | BLOCKED | Preflight then tap+PIN; response/broadcast succeeds once. |
+| WalletConnect personal/EIP-712 | RETEST v1.48 | BLOCKED | Valid signatures; displayed request matches signed payload. |
+| EIP-4527 AirGap transaction | RETEST v1.48 | BLOCKED | Public account export and request signature require no secret export. |
 | Cancel, wrong PIN, timeout, NFC loss, SDK error | BLOCKED | BLOCKED | No signature; session always closes; retry starts fresh. |
 | Secret-containment review | BLOCKED | BLOCKED | No seed/private key in Dart models, logs, crash output, or errors. |
 

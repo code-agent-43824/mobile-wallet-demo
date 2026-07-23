@@ -17,8 +17,8 @@ Current factual status of the project:
 - ✅ Phase 8 — only the WC v2 codec (`WalletConnectV2RequestCodec`) and the vault `TransactionService.assembleSignedTransfer` seam survive. The obsolete custom AirGap codec was removed in Phase 12.5; the **outbound** direction originally shipped by Phase 8 was removed in chunk 9.0
 - ✅ Phase 9 (real **wallet-side** inbound signing — WalletConnect v2 + AirGap — plus a connections screen and an incoming-request approval flow) is **feature-complete**. WalletConnect is device-validated on Android through a confirmed Sepolia broadcast; AirGap now uses the MetaMask-compatible EIP-4527 / BC-UR implementation completed in Phase 12
 - 🟡 Phase 10 is **in progress**: library-independent custody/EVM assembly, physically validated Android
-  read/sign transport, and recoverable provisioning are implemented; physical provisioning validation,
-  production-backend wiring, full signing dogfood, and iOS remain
+  read/sign/provisioning and production-backend wiring are implemented; full physical signing dogfood and iOS
+  remain
 - ✅ Phase 11 is complete: read-only app open plus fresh authentication for every private-key operation
 - ✅ Phase 12 is complete: MetaMask-compatible EIP-4527 / BC-UR AirGap signer
 
@@ -28,13 +28,12 @@ Current factual status of the project:
 milestone is an optional Rutoken custody backend for Android/iOS whose signing keys stay non-exporting after
 recoverable provisioning and which supports the same own-send, WalletConnect, and EIP-4527 AirGap flows.
 
-- **NOW — v1.47.0+58:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
+- **NOW — v1.48.0+59:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
   MetaMask-compatible EIP-4527 AirGap, per-operation authentication, hardened QR scanning, and the
-  Rutoken custody/signature foundation, physically validated Android read/sign transport, and both recoverable
-  provisioning paths are built.
-- **NEXT — Phase 10 provisioning dogfood/backend wiring:** physically validate v1.47 create and import on an
-  empty Rutoken, then register the production backend and dogfood the signing matrix. iOS follows proven Android
-  behavior.
+  Rutoken custody/signature foundation, physically validated Android read/sign/provisioning, and the registered
+  production backend are built.
+- **NEXT — Phase 10 signing dogfood:** physically validate own-send, WalletConnect transaction/message/EIP-712,
+  and EIP-4527 AirGap through the real backend, including failure teardown. iOS follows proven Android behavior.
 - **LATER:** optional lock-on-open privacy, broader device/platform integration tests, and only then additional
   chains/accounts if product scope changes. They are not Phase 10 prerequisites.
 
@@ -392,8 +391,9 @@ backup confirmation before importing its raw BIP32 master key + chain code. A ba
 
 Status: 🟡 In progress. Phase 10.1–10.2 are complete in v1.40. The Android 10.0/10.3 transport implemented in
 v1.46 is physically validated for discovery, login, public derivation, raw signing, and teardown. Phase 10.4
-recoverable provisioning is implemented in v1.47 and awaits physical validation; production-backend wiring,
-full dogfood, and iOS remain.
+recoverable provisioning in v1.47 is physically validated for both existing-backup import and new recoverable
+creation, including the expected EVM address. v1.48 registers the production backend and routes every existing
+signing transport through its transient native session. Full physical signing dogfood and iOS remain.
 
 > **Reference:** `docs/nfc-pkcs11-integration-notes.md` contains the vendor mechanisms, native-stack setup,
 > Ethereum corrections, and physical-device questions. The existing demo adapter is a test double, not an
@@ -449,16 +449,18 @@ Small, reviewable steps; each chunk records plan and result in `docs/worklog.md`
   signing path exactly: derive `Pkcs11EcPrivateKeyObject` with the demonstrated template, sign the software-built
   32-byte digest with plain `CKM_ECDSA`, and destroy the child in `finally`. Owner dogfood confirms the complete
   v1.46 diagnostic succeeds. Cancellation, NFC-loss, and precise PIN error mapping remain hardening work.
-- **10.4 — IMPLEMENTED, PHYSICAL VALIDATION PENDING (v1.47):** both owner-required UX paths use the
+- **10.4 — DONE AND PHYSICALLY VALIDATED (v1.47):** both owner-required UX paths use the
   reference example's `C_CreateObject` import only: (a) derive the raw BIP32 master + chain code from an existing
   BIP-39 mnemonic/passphrase in short-lived software buffers, or (b) generate a new mnemonic in software, require
   one-time backup display/confirmation, derive the same raw inputs, and import them. Do not expose backup-less
   creation or invoke undocumented token generation/export behavior. Persist the public account xpub/chain-code
   metadata needed for AirGap at provisioning time; do not query it from the token during normal operation. The
   native path refuses a token that already contains a BIP32 master, verifies the imported address against the
-  software reference, and tears the session down unconditionally.
+  software reference, and tears the session down unconditionally. Owner Android dogfood confirms both importing
+  an existing seed phrase and generating a new recoverable wallet succeed and return the expected address.
 - **10.5 — complete signing matrix:** validate own-send; WalletConnect transaction, `personal_sign`, and EIP-712;
-  and EIP-4527 AirGap transaction signing through the real device backend.
+  and EIP-4527 AirGap transaction signing through the real device backend. v1.48 production wiring and automated
+  orchestration coverage are complete; physical Android validation is pending.
 - **10.6 — UX and iOS:** replace mock device controls with tap/PIN/progress/cooldown/retry UX, then port the
   proven shared contracts to the vendor iOS stack and run the same physical-device matrix.
 
@@ -577,10 +579,13 @@ Two interactions (app = signer):
 - `v1.47` — two recoverable Android provisioning flows: existing BIP-39 mnemonic/passphrase import or new
   24-word software generation with mandatory backup confirmation; reference `C_CreateObject` only, public
   account-xpub metadata persisted, empty-token guard and address verification
+- `v1.48` — register the real `rutoken_nfc` backend: upgrade existing v1.47 public metadata without NFC,
+  select it after provisioning, restore its read-only summary at cold start, and route own-send, WalletConnect,
+  and EIP-4527 AirGap through one fresh secret-free NFC/PIN signer per operation
 
 ## Current non-goals and validation limits
-- no iOS hardware-device SDK implementation yet; Android read/sign/provisioning exists but the real backend is
-  not selectable for normal wallet operations
+- no iOS hardware-device SDK implementation yet; Android production signing is wired but still requires the
+  maintained physical signing-matrix dogfood before being declared complete
 - no additional chains beyond Ethereum Mainnet and Sepolia in the initial AirGap UI
 - no multi-chain support beyond Ethereum Mainnet and Sepolia yet
 - **single-account by design** (audit decision): one EVM address derived at `m/44'/60'/0'/0/0`; HD-account discovery / multiple accounts are out of scope — Phase 9 WalletConnect sessions expose this one account (`eip155:*:<address>`)
