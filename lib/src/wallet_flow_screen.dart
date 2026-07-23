@@ -21,6 +21,7 @@ import 'key_storage/external_device_demo_backend.dart';
 import 'key_storage/external_device_pkcs11.dart';
 import 'key_storage/key_storage_backend.dart';
 import 'key_storage/phone_secure_vault.dart';
+import 'key_storage/rutoken_provisioning.dart';
 import 'key_storage/secure_key_value_store.dart';
 import 'qr/qr_scanner.dart';
 import 'qr/ur_qr.dart';
@@ -48,6 +49,9 @@ enum WalletFlowStage {
   createWallet,
   importWallet,
   showSeed,
+  rutokenCreate,
+  rutokenImport,
+  rutokenBackup,
   biometricPrompt,
   locked,
   unlocked,
@@ -183,7 +187,14 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           onRutokenDiagnostic: controller.hasRutokenNativeAdapter
               ? controller.runRutokenTransportDiagnostic
               : null,
+          onRutokenCreate: controller.hasRutokenNativeAdapter
+              ? controller.goToRutokenCreate
+              : null,
+          onRutokenImport: controller.hasRutokenNativeAdapter
+              ? controller.goToRutokenImport
+              : null,
           rutokenDiagnosticResult: controller.rutokenDiagnosticResult,
+          rutokenProvisioningResult: controller.rutokenProvisioningResult,
         );
       case WalletFlowStage.createWallet:
         return _PinSetupStage(
@@ -209,6 +220,26 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
         return _SeedPhraseStage(
           mnemonic: controller.seedPhraseToShow ?? '',
           onContinue: controller.finishSeedBackup,
+        );
+      case WalletFlowStage.rutokenCreate:
+        return _RutokenCreateStage(
+          onGenerate: controller.prepareRutokenGeneratedBackup,
+          onBack: controller.goToWelcome,
+        );
+      case WalletFlowStage.rutokenImport:
+        return _RutokenImportStage(
+          onSubmit: controller.provisionImportedRutoken,
+          onBack: controller.goToWelcome,
+        );
+      case WalletFlowStage.rutokenBackup:
+        final backup = controller.rutokenGeneratedBackup;
+        if (backup == null) {
+          return const SizedBox.shrink();
+        }
+        return _RutokenBackupStage(
+          backup: backup,
+          onProvision: controller.provisionGeneratedRutoken,
+          onBack: controller.goToWelcome,
         );
       case WalletFlowStage.biometricPrompt:
         return _BiometricPromptStage(

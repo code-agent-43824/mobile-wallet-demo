@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +7,7 @@ import 'package:mobile_wallet_demo/src/app.dart';
 import 'package:mobile_wallet_demo/src/auth/biometric_auth.dart';
 import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
+import 'package:mobile_wallet_demo/src/key_storage/custody_backend.dart';
 import 'package:mobile_wallet_demo/src/key_storage/phone_secure_vault.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
 import 'package:mobile_wallet_demo/src/transactions/transaction_service.dart';
@@ -140,6 +142,35 @@ class _FailingBroadcaster implements TransactionBroadcaster {
   }
 }
 
+class _UnusedRutokenAdapter implements RutokenNativeAdapter {
+  @override
+  Future<void> closeSession(RutokenNativeSession session) =>
+      throw UnimplementedError();
+
+  @override
+  Future<WalletAccountDescriptor> importWallet({
+    required RutokenNativeSession session,
+    required Uint8List masterPrivateKey,
+    required Uint8List chainCode,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<RutokenNativeSession> openSession({required String pin}) =>
+      throw UnimplementedError();
+
+  @override
+  Future<WalletAccountDescriptor?> readAccountDescriptor(
+    RutokenNativeSession session,
+  ) => throw UnimplementedError();
+
+  @override
+  Future<RawEcdsaSignature> signDigest({
+    required RutokenNativeSession session,
+    required String derivationPath,
+    required Uint8List digest,
+  }) => throw UnimplementedError();
+}
+
 class _FakeTrackingTransport implements JsonRpcTransport {
   const _FakeTrackingTransport();
 
@@ -210,11 +241,51 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Wallet Demo'), findsOneWidget);
-    expect(find.text('v1.46.0+57'), findsOneWidget);
+    expect(find.text('v1.47.0+58'), findsOneWidget);
     expect(find.text('Phone Secure Vault'), findsOneWidget);
     expect(find.text('External NFC demo device'), findsOneWidget);
     expect(find.text('Создать новый кошелёк'), findsOneWidget);
     expect(find.text('Импортировать seed-фразу'), findsOneWidget);
+  });
+
+  testWidgets('requires complete backup before Rutoken provisioning', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _FakeBlockchainProvider(),
+        rutokenNativeAdapter: _UnusedRutokenAdapter(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Создать на Рутокене'), findsOneWidget);
+    expect(find.text('Импортировать в Рутокен'), findsOneWidget);
+    await tester.tap(find.text('Создать на Рутокене'));
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.at(0), 'offline secret');
+    await tester.enterText(fields.at(1), 'offline secret');
+    await tester.tap(find.text('Создать резервную фразу'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Сохрани backup до записи на Рутокен'), findsOneWidget);
+    expect(find.text('Я сохранил все 24 слова офлайн'), findsOneWidget);
+    expect(find.text('Я отдельно сохранил passphrase'), findsOneWidget);
+    FilledButton provisionButton() => tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Записать ключ на Рутокен'),
+    );
+    expect(provisionButton().onPressed, isNull);
+
+    await tester.tap(find.text('Я сохранил все 24 слова офлайн'));
+    await tester.tap(find.text('Я отдельно сохранил passphrase'));
+    await tester.pumpAndSettle();
+    expect(provisionButton().onPressed, isNotNull);
   });
 
   testWidgets('switches to external backend UX branch', (

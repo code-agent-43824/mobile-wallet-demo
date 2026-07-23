@@ -2,14 +2,18 @@ package com.example.mobile_wallet_demo.rutoken
 
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import ru.rutoken.pkcs11wrapper.constant.standard.Pkcs11AttributeType.CKA_CLASS
+import ru.rutoken.pkcs11wrapper.constant.standard.Pkcs11AttributeType.CKA_DERIVE
 import ru.rutoken.pkcs11wrapper.constant.standard.Pkcs11AttributeType.CKA_EC_PARAMS
+import ru.rutoken.pkcs11wrapper.constant.standard.Pkcs11AttributeType.CKA_ID
 import ru.rutoken.pkcs11wrapper.constant.standard.Pkcs11AttributeType.CKA_KEY_TYPE
 import ru.rutoken.pkcs11wrapper.constant.standard.Pkcs11AttributeType.CKA_PRIVATE
 import ru.rutoken.pkcs11wrapper.constant.standard.Pkcs11AttributeType.CKA_TOKEN
+import ru.rutoken.pkcs11wrapper.constant.standard.Pkcs11AttributeType.CKA_VALUE
 import ru.rutoken.pkcs11wrapper.constant.standard.Pkcs11MechanismType.CKM_ECDSA
 import ru.rutoken.pkcs11wrapper.constant.standard.Pkcs11ObjectClass.CKO_PRIVATE_KEY
 import ru.rutoken.pkcs11wrapper.constant.standard.Pkcs11ObjectClass.CKO_PUBLIC_KEY
@@ -24,6 +28,7 @@ import ru.rutoken.pkcs11wrapper.`object`.key.Pkcs11PrivateKeyObject
 import ru.rutoken.pkcs11wrapper.rutoken.constant.RtPkcs11KeyType.CKK_VENDOR_BIP32
 import ru.rutoken.pkcs11wrapper.rutoken.constant.RtPkcs11MechanismType.CKM_VENDOR_BIP32_DERIVE_PRIVATE_FROM_PRIVATE
 import ru.rutoken.pkcs11wrapper.rutoken.constant.RtPkcs11MechanismType.CKM_VENDOR_BIP32_DERIVE_PUBLIC_FROM_PRIVATE
+import ru.rutoken.pkcs11wrapper.rutoken.constant.RtPkcs11AttributeType.CKA_VENDOR_BIP32_CHAINCODE
 import ru.rutoken.pkcs11wrapper.rutoken.main.RtPkcs11Session
 import ru.rutoken.pkcs11wrapper.rutoken.main.RtPkcs11Token
 
@@ -114,6 +119,73 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
             )
         } finally {
             open.session.objectManager.destroyObject(derived)
+        }
+    }
+
+    /**
+     * Mirrors the supplied demo's importBip32PrivateKey implementation. The
+     * token receives only the raw BIP32 master private key + chain code; all
+     * BIP39 and EVM-specific processing remains software-side.
+     */
+    fun importWallet(
+        sessionId: String,
+        masterPrivateKey: ByteArray,
+        chainCode: ByteArray,
+    ): Map<String, ByteArray> {
+        try {
+            return importWalletMaterial(sessionId, masterPrivateKey, chainCode)
+        } finally {
+            // MethodChannel byte arrays are mutable. Release the native-side
+            // copies immediately after C_CreateObject returns.
+            masterPrivateKey.fill(0)
+            chainCode.fill(0)
+        }
+    }
+
+    private fun importWalletMaterial(
+        sessionId: String,
+        masterPrivateKey: ByteArray,
+        chainCode: ByteArray,
+    ): Map<String, ByteArray> {
+        require(masterPrivateKey.size == 32) { "BIP32 master private key must be 32 bytes." }
+        require(chainCode.size == 32) { "BIP32 chain code must be 32 bytes." }
+        val open = requireSession(sessionId)
+        check(findMasterKeys(open.session).isEmpty()) {
+            "Rutoken already contains a BIP32 ECDSA master key; Wallet Demo will not replace or add another."
+        }
+        val template = listOf(
+            open.session.attributeFactory.makeAttribute(CKA_CLASS, CKO_PRIVATE_KEY),
+            open.session.attributeFactory.makeAttribute(CKA_PRIVATE, true),
+            open.session.attributeFactory.makeAttribute(CKA_TOKEN, true),
+            open.session.attributeFactory.makeAttribute(CKA_ID, randomObjectId()),
+            open.session.attributeFactory.makeAttribute(CKA_KEY_TYPE, CKK_VENDOR_BIP32),
+            open.session.attributeFactory.makeAttribute(CKA_DERIVE, true),
+            open.session.attributeFactory.makeAttribute(CKA_VALUE, masterPrivateKey),
+            open.session.attributeFactory.makeAttribute(CKA_VENDOR_BIP32_CHAINCODE, chainCode),
+            open.session.attributeFactory.makeAttribute(CKA_EC_PARAMS, SECP256K1_OID),
+        )
+        val imported = open.session.objectManager.createObject(
+            Pkcs11EcPrivateKeyObject::class.java,
+            template,
+        )
+        try {
+            val addressPublic = derivePublic(
+                open.session,
+                imported,
+                longArrayOf(hardened(44), hardened(60), hardened(0), 0, 0),
+            )
+            try {
+                return mapOf(
+                    "addressPublicKey" to ecPoint(open.session, addressPublic),
+                )
+            } finally {
+                open.session.objectManager.destroyObject(addressPublic)
+            }
+        } catch (error: Throwable) {
+            // Do not leave a half-provisioned master if the immediate
+            // reference public-derivation verification fails.
+            runCatching { open.session.objectManager.destroyObject(imported) }
+            throw error
         }
     }
 
@@ -214,12 +286,7 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
         sessions[id] ?: error("Rutoken session is closed or unknown.")
 
     private fun findSingleMasterKey(session: RtPkcs11Session): Pkcs11PrivateKeyObject {
-        val template = listOf(
-            session.attributeFactory.makeAttribute(CKA_CLASS, CKO_PRIVATE_KEY),
-            session.attributeFactory.makeAttribute(CKA_PRIVATE, true),
-            session.attributeFactory.makeAttribute(CKA_KEY_TYPE, CKK_VENDOR_BIP32),
-        )
-        val keys = session.objectManager.findObjectsAtOnce(Pkcs11PrivateKeyObject::class.java, template)
+        val keys = findMasterKeys(session)
         check(keys.isNotEmpty()) {
             "Rutoken contains no BIP32 ECDSA master key; create or import a wallet first."
         }
@@ -227,6 +294,18 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
             "Rutoken contains ${keys.size} BIP32 ECDSA master keys; Wallet Demo currently supports exactly one."
         }
         return keys.single()
+    }
+
+    private fun findMasterKeys(session: RtPkcs11Session): List<Pkcs11PrivateKeyObject> {
+        val template = listOf(
+            session.attributeFactory.makeAttribute(CKA_CLASS, CKO_PRIVATE_KEY),
+            session.attributeFactory.makeAttribute(CKA_PRIVATE, true),
+            session.attributeFactory.makeAttribute(CKA_KEY_TYPE, CKK_VENDOR_BIP32),
+        )
+        return session.objectManager.findObjectsAtOnce(
+            Pkcs11PrivateKeyObject::class.java,
+            template,
+        )
     }
 
     private fun derivePublic(
@@ -283,6 +362,14 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
     private fun hardened(index: Long): Long {
         require(index in 0 until HARDENED)
         return index or HARDENED
+    }
+
+    private fun randomObjectId(): ByteArray {
+        val uuid = UUID.randomUUID()
+        return ByteBuffer.allocate(16)
+            .putLong(uuid.mostSignificantBits)
+            .putLong(uuid.leastSignificantBits)
+            .array()
     }
 
     private data class OpenSession(

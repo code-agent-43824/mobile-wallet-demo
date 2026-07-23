@@ -83,9 +83,24 @@ class MethodChannelRutokenNativeAdapter implements RutokenNativeAdapter {
     required RutokenNativeSession session,
     required Uint8List masterPrivateKey,
     required Uint8List chainCode,
-  }) => throw const RutokenNativeException(
-    'Rutoken provisioning is not enabled in the transport-spike build.',
-  );
+  }) async {
+    if (masterPrivateKey.length != 32 || chainCode.length != 32) {
+      throw const RutokenNativeException(
+        'Rutoken provisioning requires a 32-byte master key and chain code.',
+      );
+    }
+    final response = await _invokeMap('importWallet', <String, Object?>{
+      'sessionId': session.id,
+      'masterPrivateKey': masterPrivateKey,
+      'chainCode': chainCode,
+    });
+    final address = RutokenEcPoint.decode(_bytes(response, 'addressPublicKey'));
+    return WalletAccountDescriptor(
+      backendId: 'rutoken_nfc',
+      address: '0x${bytesToHex(publicKeyToAddress(address.uncompressedXY))}',
+      derivationPath: addressPath,
+    );
+  }
 
   Future<Map<Object?, Object?>> _invokeMap(
     String method,
