@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-07-23 — Register the production Rutoken backend — branch feat/rutoken-production-backend — done locally
+## 2026-07-23 — Register the production Rutoken backend — branch feat/rutoken-production-backend — done (CI green)
 - Plan: owner physical dogfood confirms that both v1.47 recoverable provisioning paths succeed and that each
   produces the independently expected EVM address. Mark Phase 10.4 physically passed, then make that provisioned
   account a first-class selectable wallet backend without weakening the secret-free custody boundary. Persist and
@@ -39,9 +39,12 @@ Entry template:
   selection, cold restart without a token call, v1.47 registration migration, WalletConnect `personal_sign`, and
   own-send/broadcast/tracking through separate native sessions; existing byte-parity tests cover EIP-1559,
   personal/digest, and AirGap assembly. Format/analyze/diff checks are clean and all 192 tests pass locally.
-- Next / open: require full GitHub Actions, then install the Android artifact and physically dogfood own-send,
-  WalletConnect transaction + `personal_sign` + EIP-712, and EIP-4527 AirGap with the provisioned Rutoken.
-- Refs: owner v1.47 physical create/import dogfood; Phase 10.4–10.5.
+  PR #8 was squash-merged as `14adb36`; Actions run 30020097745 is fully green for Validate, Android APK,
+  iOS Simulator, unsigned iOS Device, and Windows x64.
+- Next / open: install the Android artifact and physically dogfood own-send, WalletConnect transaction +
+  `personal_sign` + EIP-712, and EIP-4527 AirGap with the provisioned Rutoken.
+- Refs: owner v1.47 physical create/import dogfood; Phase 10.4–10.5; PR #8; squash `14adb36`;
+  CI 30020097745.
 
 ## 2026-07-23 — Rutoken recoverable provisioning — branch feat/rutoken-recoverable-provisioning — done (CI green)
 - Plan: owner dogfood confirms that v1.46 completes NFC discovery, PIN login, BIP32 public derivation, raw
