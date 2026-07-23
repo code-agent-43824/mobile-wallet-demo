@@ -18,6 +18,35 @@ Entry template:
 
 ---
 
+## 2026-07-23 — Rutoken recoverable provisioning — branch feat/rutoken-recoverable-provisioning — implemented, CI pending
+- Plan: owner dogfood confirms that v1.46 completes NFC discovery, PIN login, BIP32 public derivation, raw
+  `CKM_ECDSA`, and teardown on the physical Rutoken. Mark the transport probe physically passed and implement
+  Phase 10.4 without expanding the token contract beyond the supplied Android example. Add two explicit
+  Android provisioning paths: import an existing valid BIP-39 mnemonic plus optional passphrase, or generate a
+  new 24-word mnemonic in software, show it once, require backup confirmation, and then import it. In both paths,
+  derive the BIP-39 seed, raw BIP32 master private key, chain code, address, and account-level public metadata in
+  short-lived Dart buffers; call only the reference `C_CreateObject` private-key template on the token; reject a
+  token that already contains a BIP32 master rather than silently adding/replacing one; verify the native-derived
+  address against the software reference; persist only public account/xpub metadata for future AirGap/backend
+  wiring; and unconditionally close the native session. Add controller/widget/native-source coverage, bump the
+  functional version, reconcile architecture/roadmap/device evidence, and require full CI plus a fresh physical
+  test before declaring provisioning complete.
+- Done: v1.47.0+58 adds the two physical-Rutoken provisioning entries without registering the device as the
+  normal wallet backend yet. Existing import validates BIP-39 and accepts an optional NFKD-normalized passphrase;
+  new creation generates 24 words in software, shows the phrase/passphrase once, and disables token import until
+  every required backup confirmation is checked. Dart derives the BIP-32 master, EVM address, and account-level
+  public metadata; only the 32-byte master private key + chain code cross the channel. Kotlin mirrors the supplied
+  `C_CreateObject` private-key template, rejects any existing BIP32 master, derives the address for immediate
+  verification, destroys a failed import, and clears its mutable input arrays. Dart also clears mutable seed/master
+  buffers, verifies the token-derived address, persists only versioned public account-xpub metadata, and retains a
+  pending public record across a possible post-import process/teardown failure. Docs and the device matrix record
+  v1.46 read/sign as physically passed. Format, analyze, `git diff --check`, and all 190 tests pass locally.
+- Next / open: require Android/full CI, then test v1.47 on an actually empty token: first new-24-word creation,
+  then (after safely resetting/using another test token) existing mnemonic + optional-passphrase import. Do not
+  test against the currently provisioned card unless intentionally resetting it; the app correctly refuses to add
+  a second BIP32 master. Production backend registration remains the next code chunk after provisioning dogfood.
+- Refs: owner v1.46 physical dogfood; Phase 10.4; supplied Android `importBip32PrivateKey` reference.
+
 ## 2026-07-22 — Constrain Rutoken to the reference raw-signer contract — branch fix/rutoken-example-signing-contract — done (CI green)
 - Plan: owner dogfood on v1.45 reaches the next PKCS#11 boundary and fails with `CKR_KEY_TYPE_INCONSISTENT`.
   Respect the owner's explicit scope correction: the token is a key custodian and raw ECDSA/EdDSA signer only;

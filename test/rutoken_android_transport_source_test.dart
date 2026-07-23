@@ -84,8 +84,38 @@ void main() {
     expect(runtime, contains('makeAttribute(CKA_TOKEN, true)'));
     expect(runtime, contains('Pkcs11Mechanism.make(CKM_ECDSA)'));
     expect(runtime, contains('objectManager.destroyObject(derived)'));
-    expect(runtime, isNot(contains('CKA_VENDOR_BIP32_CHAINCODE')));
+    expect(
+      runtime,
+      contains('makeAttribute(CKA_VENDOR_BIP32_CHAINCODE, chainCode)'),
+    );
     expect(channel, contains('"readAccountDescriptor"'));
     expect(channel, isNot(contains('"readPublicMaterial"')));
+  });
+
+  test('Rutoken provisioning mirrors reference C_CreateObject import', () {
+    final runtime = File(
+      'android/app/src/main/kotlin/com/example/mobile_wallet_demo/rutoken/'
+      'RutokenRuntime.kt',
+    ).readAsStringSync();
+    final channel = File(
+      'android/app/src/main/kotlin/com/example/mobile_wallet_demo/rutoken/'
+      'RutokenMethodChannel.kt',
+    ).readAsStringSync();
+
+    expect(runtime, contains('fun importWallet('));
+    expect(runtime, contains('findMasterKeys(open.session).isEmpty()'));
+    expect(runtime, contains('makeAttribute(CKA_VALUE, masterPrivateKey)'));
+    expect(
+      runtime,
+      contains('makeAttribute(CKA_VENDOR_BIP32_CHAINCODE, chainCode)'),
+    );
+    expect(runtime, contains('createObject('));
+    expect(runtime, contains('masterPrivateKey.fill(0)'));
+    expect(runtime, contains('chainCode.fill(0)'));
+    expect(
+      runtime,
+      isNot(contains('CKM_VENDOR_BIP32_WITH_BIP39_KEY_PAIR_GEN')),
+    );
+    expect(channel, contains('"importWallet"'));
   });
 }

@@ -37,6 +37,12 @@ class WalletFlowController extends ChangeNotifier {
       biometricAuth: biometricAuthGateway,
     );
     _externalDeviceBackend = ExternalDeviceDemoBackend(store: store);
+    _rutokenProvisioning = rutokenNativeAdapter == null
+        ? null
+        : RutokenProvisioningService(
+            adapter: rutokenNativeAdapter,
+            store: store,
+          );
     _backendRegistry = WalletBackendRegistry(
       store: store,
       entries: <WalletBackendCatalogEntry>[
@@ -106,6 +112,7 @@ class WalletFlowController extends ChangeNotifier {
   final WalletConnectTransactionPreflight _walletConnectPreflight;
   final QrScanner _qrScanner;
   final RutokenNativeAdapter? _rutokenNativeAdapter;
+  late final RutokenProvisioningService? _rutokenProvisioning;
   final TransactionService _transactionService;
   final TransactionBroadcaster _transactionBroadcaster;
   final NonceProvider _nonceProvider;
@@ -147,6 +154,8 @@ class WalletFlowController extends ChangeNotifier {
   bool _biometricsAvailable = false;
   bool _disposed = false;
   String? _rutokenDiagnosticResult;
+  RutokenGeneratedBackup? _rutokenGeneratedBackup;
+  String? _rutokenProvisioningResult;
 
   // Read-only surface consumed by the widget layer.
   WalletFlowStage get stage => _stage;
@@ -185,6 +194,8 @@ class WalletFlowController extends ChangeNotifier {
   bool get isQrFileLoadAvailable => _qrScanner.isFileLoadAvailable;
   bool get hasRutokenNativeAdapter => _rutokenNativeAdapter != null;
   String? get rutokenDiagnosticResult => _rutokenDiagnosticResult;
+  RutokenGeneratedBackup? get rutokenGeneratedBackup => _rutokenGeneratedBackup;
+  String? get rutokenProvisioningResult => _rutokenProvisioningResult;
 
   /// Active WalletConnect sessions (wallet-side view).
   List<WalletConnectSession> get walletConnectSessions =>
@@ -358,6 +369,7 @@ class WalletFlowController extends ChangeNotifier {
 
   void goToWelcome() {
     _errorMessage = null;
+    _rutokenGeneratedBackup = null;
     _stage = WalletFlowStage.welcome;
     _notify();
   }
@@ -372,6 +384,76 @@ class WalletFlowController extends ChangeNotifier {
     _errorMessage = null;
     _stage = WalletFlowStage.importWallet;
     _notify();
+  }
+
+  void goToRutokenCreate() {
+    if (_rutokenProvisioning == null) return;
+    _errorMessage = null;
+    _rutokenGeneratedBackup = null;
+    _stage = WalletFlowStage.rutokenCreate;
+    _notify();
+  }
+
+  void goToRutokenImport() {
+    if (_rutokenProvisioning == null) return;
+    _errorMessage = null;
+    _rutokenGeneratedBackup = null;
+    _stage = WalletFlowStage.rutokenImport;
+    _notify();
+  }
+
+  void prepareRutokenGeneratedBackup({required String passphrase}) {
+    final provisioning = _rutokenProvisioning;
+    if (provisioning == null) return;
+    _errorMessage = null;
+    _rutokenGeneratedBackup = provisioning.generateBackup(
+      passphrase: passphrase,
+    );
+    _stage = WalletFlowStage.rutokenBackup;
+    _notify();
+  }
+
+  Future<void> provisionGeneratedRutoken({required String pin}) async {
+    final backup = _rutokenGeneratedBackup;
+    if (backup == null) return;
+    await _provisionRutoken(
+      mnemonic: backup.mnemonic,
+      passphrase: backup.passphrase,
+      pin: pin,
+    );
+  }
+
+  Future<void> provisionImportedRutoken({
+    required String mnemonic,
+    required String passphrase,
+    required String pin,
+  }) {
+    return _provisionRutoken(
+      mnemonic: mnemonic,
+      passphrase: passphrase,
+      pin: pin,
+    );
+  }
+
+  Future<void> _provisionRutoken({
+    required String mnemonic,
+    required String passphrase,
+    required String pin,
+  }) async {
+    final provisioning = _rutokenProvisioning;
+    if (provisioning == null) return;
+    await _runBusy('Поднеси пустой Рутокен к NFC и удерживай его…', () async {
+      final result = await provisioning.provision(
+        mnemonic: mnemonic,
+        passphrase: passphrase,
+        pin: pin,
+      );
+      _rutokenProvisioningResult =
+          'Кошелёк записан на Рутокен: ${result.account.address}. '
+          'В приложении сохранены только публичные данные account xpub.';
+      _rutokenGeneratedBackup = null;
+      _stage = WalletFlowStage.welcome;
+    });
   }
 
   Future<void> createWallet({required String pin}) async {

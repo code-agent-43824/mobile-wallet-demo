@@ -31,6 +31,13 @@ internal class RutokenMethodChannel(
                     digest = call.requiredBytes("digest"),
                 )
             }
+            "importWallet" -> execute(result) {
+                runtime.importWallet(
+                    sessionId = call.requiredString("sessionId"),
+                    masterPrivateKey = call.requiredBytes("masterPrivateKey"),
+                    chainCode = call.requiredBytes("chainCode"),
+                )
+            }
             "closeSession" -> execute(result) {
                 runtime.closeSession(call.requiredString("sessionId"))
                 null

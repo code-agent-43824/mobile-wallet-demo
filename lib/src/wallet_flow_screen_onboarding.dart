@@ -9,7 +9,10 @@ class _WelcomeStage extends StatelessWidget {
     required this.onCreatePressed,
     required this.onImportPressed,
     required this.onRutokenDiagnostic,
+    required this.onRutokenCreate,
+    required this.onRutokenImport,
     required this.rutokenDiagnosticResult,
+    required this.rutokenProvisioningResult,
   });
 
   final List<WalletBackendCatalogEntry> backendEntries;
@@ -19,7 +22,10 @@ class _WelcomeStage extends StatelessWidget {
   final VoidCallback onCreatePressed;
   final VoidCallback onImportPressed;
   final Future<void> Function(String pin)? onRutokenDiagnostic;
+  final VoidCallback? onRutokenCreate;
+  final VoidCallback? onRutokenImport;
   final String? rutokenDiagnosticResult;
+  final String? rutokenProvisioningResult;
 
   @override
   Widget build(BuildContext context) {
@@ -72,9 +78,27 @@ class _WelcomeStage extends StatelessWidget {
           const _SectionTitle('Физический Рутокен'),
           const SizedBox(height: 8),
           const Text(
-            'Диагностика не изменяет мастер-ключи: проверяет NFC, PIN, '
-            'публичный адрес и одну сырую подпись тестового digest. '
-            'Дочерний ключ создаётся на время операции и сразу удаляется.',
+            'Android-контур NFC/PIN/публичного адреса/сырой подписи проверен '
+            'на физическом устройстве. Для нового кошелька сначала сохрани '
+            '24 слова и опциональную passphrase; импорт принимает существующий '
+            'BIP-39 backup. Запись разрешена только на пустой Рутокен.',
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              FilledButton.icon(
+                onPressed: onRutokenCreate,
+                icon: const Icon(Icons.add_card),
+                label: const Text('Создать на Рутокене'),
+              ),
+              OutlinedButton.icon(
+                onPressed: onRutokenImport,
+                icon: const Icon(Icons.download),
+                label: const Text('Импортировать в Рутокен'),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
@@ -95,7 +119,317 @@ class _WelcomeStage extends StatelessWidget {
             const SizedBox(height: 12),
             Text(result),
           ],
+          if (rutokenProvisioningResult case final result?) ...[
+            const SizedBox(height: 12),
+            Text(result),
+          ],
         ],
+      ],
+    );
+  }
+}
+
+class _RutokenCreateStage extends StatefulWidget {
+  const _RutokenCreateStage({required this.onGenerate, required this.onBack});
+
+  final void Function({required String passphrase}) onGenerate;
+  final VoidCallback onBack;
+
+  @override
+  State<_RutokenCreateStage> createState() => _RutokenCreateStageState();
+}
+
+class _RutokenCreateStageState extends State<_RutokenCreateStage> {
+  final _passphraseController = TextEditingController();
+  final _confirmController = TextEditingController();
+  String? _localError;
+
+  @override
+  void dispose() {
+    _passphraseController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  void _handleGenerate() {
+    if (_passphraseController.text != _confirmController.text) {
+      setState(() {
+        _localError = 'Passphrase и подтверждение не совпадают.';
+      });
+      return;
+    }
+    widget.onGenerate(passphrase: _passphraseController.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle('Новый кошелёк на Рутокене'),
+        const SizedBox(height: 12),
+        const Text(
+          'Приложение создаст 24 слова в памяти телефона. Passphrase '
+          'необязательна, но если задать её, она становится обязательной '
+          'частью backup: без неё те же 24 слова восстановят другой адрес.',
+        ),
+        const SizedBox(height: 20),
+        TextField(
+          controller: _passphraseController,
+          obscureText: true,
+          decoration: const InputDecoration(
+            labelText: 'BIP-39 passphrase (необязательно)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _confirmController,
+          obscureText: true,
+          decoration: const InputDecoration(
+            labelText: 'Подтверждение passphrase',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        if (_localError case final message?) ...[
+          const SizedBox(height: 12),
+          Text(
+            message,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ],
+        const SizedBox(height: 20),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            FilledButton(
+              onPressed: _handleGenerate,
+              child: const Text('Создать резервную фразу'),
+            ),
+            TextButton(onPressed: widget.onBack, child: const Text('Назад')),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _RutokenImportStage extends StatefulWidget {
+  const _RutokenImportStage({required this.onSubmit, required this.onBack});
+
+  final Future<void> Function({
+    required String mnemonic,
+    required String passphrase,
+    required String pin,
+  })
+  onSubmit;
+  final VoidCallback onBack;
+
+  @override
+  State<_RutokenImportStage> createState() => _RutokenImportStageState();
+}
+
+class _RutokenImportStageState extends State<_RutokenImportStage> {
+  final _mnemonicController = TextEditingController();
+  final _passphraseController = TextEditingController();
+  final _confirmController = TextEditingController();
+  String? _localError;
+
+  @override
+  void dispose() {
+    _mnemonicController.dispose();
+    _passphraseController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleSubmit() async {
+    final words = _mnemonicController.text
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .length;
+    if (!const <int>{12, 15, 18, 21, 24}.contains(words)) {
+      setState(() {
+        _localError =
+            'BIP-39 seed-фраза должна содержать 12/15/18/21/24 слова.';
+      });
+      return;
+    }
+    if (_passphraseController.text != _confirmController.text) {
+      setState(() {
+        _localError = 'Passphrase и подтверждение не совпадают.';
+      });
+      return;
+    }
+    setState(() {
+      _localError = null;
+    });
+    final auth = await _promptForAuth(
+      context,
+      reason:
+          'Введите текущий PIN Рутокена и удерживайте пустую карту у NFC до завершения записи.',
+      biometricsOffered: false,
+    );
+    final pin = auth?.pin;
+    if (pin == null) return;
+    await widget.onSubmit(
+      mnemonic: _mnemonicController.text,
+      passphrase: _passphraseController.text,
+      pin: pin,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle('Импорт BIP-39 backup в Рутокен'),
+        const SizedBox(height: 12),
+        const Text(
+          'Master key и chain code вычисляются программно и передаются '
+          'Рутокену только во время этой операции. Passphrase нигде не '
+          'сохраняется. Рутокен с существующим BIP-32 ключом будет отклонён.',
+        ),
+        const SizedBox(height: 20),
+        TextField(
+          controller: _mnemonicController,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: 'Seed-фраза',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _passphraseController,
+          obscureText: true,
+          decoration: const InputDecoration(
+            labelText: 'BIP-39 passphrase (необязательно)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _confirmController,
+          obscureText: true,
+          decoration: const InputDecoration(
+            labelText: 'Подтверждение passphrase',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        if (_localError case final message?) ...[
+          const SizedBox(height: 12),
+          Text(
+            message,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ],
+        const SizedBox(height: 20),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            FilledButton(
+              onPressed: _handleSubmit,
+              child: const Text('Импортировать в Рутокен'),
+            ),
+            TextButton(onPressed: widget.onBack, child: const Text('Назад')),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _RutokenBackupStage extends StatefulWidget {
+  const _RutokenBackupStage({
+    required this.backup,
+    required this.onProvision,
+    required this.onBack,
+  });
+
+  final RutokenGeneratedBackup backup;
+  final Future<void> Function({required String pin}) onProvision;
+  final VoidCallback onBack;
+
+  @override
+  State<_RutokenBackupStage> createState() => _RutokenBackupStageState();
+}
+
+class _RutokenBackupStageState extends State<_RutokenBackupStage> {
+  bool _mnemonicSaved = false;
+  bool _passphraseSaved = false;
+
+  Future<void> _handleProvision() async {
+    final auth = await _promptForAuth(
+      context,
+      reason:
+          'Введите текущий PIN Рутокена и удерживайте пустую карту у NFC до завершения записи.',
+      biometricsOffered: false,
+    );
+    final pin = auth?.pin;
+    if (pin != null) await widget.onProvision(pin: pin);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPassphrase = widget.backup.passphrase.isNotEmpty;
+    final canContinue = _mnemonicSaved && (!hasPassphrase || _passphraseSaved);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle('Сохрани backup до записи на Рутокен'),
+        const SizedBox(height: 12),
+        const Text(
+          'Эти данные больше не будут показаны приложением. Сохрани их '
+          'офлайн; потеря Рутокена без полного backup означает потерю средств.',
+        ),
+        const SizedBox(height: 20),
+        SelectableText(widget.backup.mnemonic),
+        if (hasPassphrase) ...[
+          const SizedBox(height: 16),
+          const Text('BIP-39 passphrase:'),
+          SelectableText(widget.backup.passphrase),
+        ],
+        const SizedBox(height: 16),
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          value: _mnemonicSaved,
+          onChanged: (value) {
+            setState(() {
+              _mnemonicSaved = value ?? false;
+            });
+          },
+          title: const Text('Я сохранил все 24 слова офлайн'),
+          controlAffinity: ListTileControlAffinity.leading,
+        ),
+        if (hasPassphrase)
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _passphraseSaved,
+            onChanged: (value) {
+              setState(() {
+                _passphraseSaved = value ?? false;
+              });
+            },
+            title: const Text('Я отдельно сохранил passphrase'),
+            controlAffinity: ListTileControlAffinity.leading,
+          ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            FilledButton(
+              onPressed: canContinue ? _handleProvision : null,
+              child: const Text('Записать ключ на Рутокен'),
+            ),
+            TextButton(onPressed: widget.onBack, child: const Text('Отмена')),
+          ],
+        ),
       ],
     );
   }

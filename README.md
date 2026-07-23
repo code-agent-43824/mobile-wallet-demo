@@ -3,11 +3,12 @@
 Flutter-демо single-account EVM-кошелька с рабочим phone vault, WalletConnect и
 MetaMask-совместимым AirGap signer.
 
-**Сейчас:** v1.46 поддерживает Mainnet/Sepolia, локальные переводы, wallet-side WalletConnect,
+**Сейчас:** v1.47 поддерживает Mainnet/Sepolia, локальные переводы, wallet-side WalletConnect,
 EIP-4527/BC-UR AirGap и авторизацию на каждую операцию. **Следующий milestone:** реальный
-Rutoken custody backend для Android/iOS. Android vendor stack уже подключён и готов к первой
-безопасной физической диагностике; после неё следуют два восстанавливаемых provisioning flow и
-те же own-send, WalletConnect и AirGap flows. Подробная карта NOW / NEXT / LATER — в
+Rutoken custody backend для Android/iOS. Android read/sign transport уже проверен на физическом
+устройстве; оба восстанавливаемых provisioning flow реализованы и ждут проверки на пустом
+Рутокене. Затем следуют production-backend wiring и те же own-send, WalletConnect и AirGap
+flows. Подробная карта NOW / NEXT / LATER — в
 [`docs/development-plan.md`](docs/development-plan.md).
 Live/native release evidence is tracked separately in
 [`docs/device-test-matrix.md`](docs/device-test-matrix.md).
@@ -48,6 +49,10 @@ Live/native release evidence is tracked separately in
   `libwtpkcs11ecp.so`, lifecycle/session teardown, derivation публичного адреса и дочернего ключа строго как в
   официальном примере, raw `CKM_ECDSA` и безопасная диагностика физического устройства из welcome screen;
   xpub/chain code у токена не запрашиваются
+- Recoverable Rutoken provisioning: импорт существующей BIP-39 seed/passphrase либо генерация 24 слов в
+  приложении с обязательным подтверждением offline backup; на карту записываются только raw BIP32 master key +
+  chain code через показанный в официальном примере `C_CreateObject`, а на телефоне сохраняются только публичные
+  account-xpub metadata
 - Demo runtime path для внешнего backend: simulated external device, отдельная UX-ветка и отдельный auth/signing путь без реального NFC SDK
 - WalletConnect v2 wallet-side flow: QR pairing, queued inbound transaction/message/typed-data requests,
   `wallet_switchEthereumChain` для Mainnet/Sepolia, бесшумный EIP-5792 `wallet_getCapabilities` и локальная
@@ -63,7 +68,7 @@ Live/native release evidence is tracked separately in
 
 ## Версионирование
 
-- Текущая версия: `v1.46.0+57`
+- Текущая версия: `v1.47.0+58`
 - По договорённости в этом проекте дальше повышаем minor-версию с каждым функциональным шагом
 
 ## Что покрывает текущий этап

@@ -5,9 +5,10 @@
 > signer in Phase 10. Read it together with `docs/development-plan.md`
 > (Phase 10) and `AGENTS.md`.
 >
-> **Status:** reference plus Android transport implementation. v1.46 wires the
-> official Android PC/SC + PKCS#11 stack for a physical diagnostic; the selectable
-> production backend and provisioning UI are still pending. Every constant/recipe below is cross-checked against the **two
+> **Status:** reference plus Android transport/provisioning implementation. v1.46's
+> official Android PC/SC + PKCS#11 read/sign diagnostic is physically validated;
+> v1.47 adds both recoverable `C_CreateObject` provisioning flows. The selectable
+> production backend and physical provisioning validation are still pending. Every constant/recipe below is cross-checked against the **two
 > official Aktiv-Soft / Rutoken demo wallets** (iOS Swift + Android Kotlin) and
 > the vendor C headers they ship — see Provenance.
 
@@ -446,9 +447,10 @@ local-secret contract by copying token secrets into app memory.
   app-level capability, not the Rutoken native adapter.
 - **10.2 — DONE (v1.40):** keccak/digest rules, strict raw `r‖s`, low-s, recovered y-parity, legacy and typed
   envelopes; fake-device output matches the local reference byte-for-byte.
-- **10.3 — Android adapter:** NFC/PC-SC lifecycle, PKCS#11 init/session/login/public-key/sign operations, typed
-  failures, cancellation, and teardown.
-- **10.4 — recoverable provisioning/export:** use only the example's `C_CreateObject` import. Support an existing
+- **10.3 — DONE for read/sign (v1.46):** NFC/PC-SC lifecycle, PKCS#11
+  init/session/login/public-key/sign operations and teardown; physical diagnostic passed. Precise cancellation,
+  NFC-loss and PIN error mapping remain hardening.
+- **10.4 — IMPLEMENTED, physical validation pending (v1.47):** use only the example's `C_CreateObject` import. Support an existing
   BIP-39 mnemonic/passphrase or generate a new mnemonic in software with mandatory one-time backup confirmation,
   then transiently derive and import the raw master key + chain code. Backup-less creation is deferred. Retain
   public xpub/chain-code metadata during provisioning for later AirGap export; normal signing must not query
@@ -467,11 +469,9 @@ models; provisioning is the narrow exception for transient software generation/i
 attribute base = `0x80005000` = §3 ⚠️; `CKA_EC_POINT` = DER X9.62 = §7.4; hardened
 path convention = caller ORs `0x80000000` = §5.3.)
 
-1. **`C_Sign` output format** on this token — raw `r‖s` (64 B) is expected for
-   `CKM_ECDSA`; confirm it isn’t DER-wrapped before feeding §7.3.
-2. **Mnemonic extractability policy** — is `CKA_VENDOR_BIP39_MNEMONIC` readable
-   only once / only right after generation? Affects the one-time-seed-display UX.
-3. **Transport reach** under the environment network policy and per platform
+1. **Provisioning behavior on an empty physical token** — confirm both v1.47 paths create exactly one BIP32
+   master and reproduce the software-derived address/public account metadata.
+2. **Transport reach** under the environment network policy and per platform
    (Android NFC vs. iOS Core NFC entitlement + cooldown) — feeds 10.0.
 4. **Passphrase ("25th word")** — expose `pPassphrase` in our UX or not?
 5. **SDK/library distribution** — how we obtain `wtpkcs11ecp` for CI-less manual

@@ -17,7 +17,8 @@ Result values: `PASS`, `FAIL`, `PARTIAL`, `RETEST`, `BLOCKED`, or `NOT RUN`.
 | MetaMask EIP-4527 account import/signature return/Sepolia broadcast | Android owner device | v1.38 / 2026-07-22 | PASS | Broadcast appeared successful; transaction hash was not recorded. |
 | Dense MetaMask QR live camera after scanner hardening | Android physical device | v1.39 | NOT RUN | Owner retest pending; file/screenshot decode already passed. |
 | Rutoken custody/NFC discovery | Android owner device | v1.43 / 2026-07-22 | PASS | The same phone/card that timed out in v1.41–v1.42 is detected after moving the complete bridge bootstrap to `Application.onCreate`. An empty card then correctly reached the zero-master check. |
-| Rutoken public-address/raw-signature probe | Android owner device | v1.43–v1.45 / 2026-07-22 | FAIL | v1.43 exposed a null-vs-zero-length path mismatch; v1.44 reached `CKA_EC_POINT`; v1.45 accepted the point but then made an unsupported derived-chain-code query and received `CKR_KEY_TYPE_INCONSISTENT`. v1.46 removes xpub/chain-code from the native boundary and mirrors the example's public derive + private child derive + raw `CKM_ECDSA` flow; retest pending. |
+| Rutoken public-address/raw-signature probe | Android owner device | v1.46 / 2026-07-23 | PASS | Owner confirms the complete diagnostic succeeds: discovery, PIN/login, public address derivation, raw 64-byte `CKM_ECDSA`, and session teardown. Earlier v1.43–v1.45 failures drove the reference-alignment fixes. |
+| Rutoken recoverable create/import provisioning | Android owner device | v1.47 | RETEST | Both empty-token flows are implemented; physical create and import tests are pending. Use only disposable/test backups and never record secrets here. |
 
 ## Phone-vault release checks
 
@@ -55,8 +56,10 @@ Add exact token model, firmware, SDK version, device/OS, and issue/evidence link
 
 | Check | Android | iOS | Acceptance |
 | --- | --- | --- | --- |
-| Vendor stack init, token discovery, login, public-key read, teardown | RETEST v1.46 | BLOCKED | Discovery/login and public derive are physically reached. v1.46 removes the unsupported chain-code operation; address read and teardown need retest. |
-| Address + software-retained account xpub/chain code | BLOCKED | BLOCKED | Address matches token derivation; provisioning metadata matches independent vectors without a native xpub query. |
+| Vendor stack init, token discovery, login, public-key read, teardown | PASS v1.46 | BLOCKED | Complete physical diagnostic passed on Android. |
+| Recoverable create + mandatory backup confirmation | RETEST v1.47 | BLOCKED | Empty token receives the reference raw master import; shown backup restores the same address. |
+| Existing mnemonic + optional passphrase import | RETEST v1.47 | BLOCKED | Empty token receives the reference raw master import; address matches an independent vector. |
+| Address + software-retained account xpub/chain code | RETEST v1.47 | BLOCKED | Address matches token derivation; provisioning metadata matches independent vectors without a native xpub query. |
 | Own-send | BLOCKED | BLOCKED | Device signs; valid low-s/recovery id; broadcast succeeds once. |
 | WalletConnect transaction | BLOCKED | BLOCKED | Preflight then tap+PIN; response/broadcast succeeds once. |
 | WalletConnect personal/EIP-712 | BLOCKED | BLOCKED | Valid signatures; displayed request matches signed payload. |

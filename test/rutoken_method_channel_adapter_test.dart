@@ -120,6 +120,47 @@ void main() {
       expect(calls, hasLength(4));
     },
   );
+
+  test('platform adapter imports only raw BIP32 master material', () async {
+    final calls = <MethodCall>[];
+    final raw = _generatorPoint();
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      switch (call.method) {
+        case 'openSession':
+          return <String, Object?>{'sessionId': 'provision-1'};
+        case 'importWallet':
+          return <String, Object?>{'addressPublicKey': raw};
+        case 'closeSession':
+          return null;
+      }
+      throw MissingPluginException(call.method);
+    });
+
+    final adapter = MethodChannelRutokenNativeAdapter(channel: channel);
+    final session = await adapter.openSession(pin: '12345678');
+    final account = await adapter.importWallet(
+      session: session,
+      masterPrivateKey: Uint8List(32),
+      chainCode: Uint8List.fromList(List<int>.filled(32, 1)),
+    );
+    await adapter.closeSession(session);
+
+    expect(
+      account.derivationPath,
+      MethodChannelRutokenNativeAdapter.addressPath,
+    );
+    expect(calls.map((call) => call.method), <String>[
+      'openSession',
+      'importWallet',
+      'closeSession',
+    ]);
+    final arguments = calls[1].arguments as Map<Object?, Object?>;
+    expect(arguments['masterPrivateKey'], hasLength(32));
+    expect(arguments['chainCode'], hasLength(32));
+    expect(arguments, isNot(contains('mnemonic')));
+    expect(arguments, isNot(contains('passphrase')));
+  });
 }
 
 Uint8List _generatorPoint() => Uint8List.fromList(

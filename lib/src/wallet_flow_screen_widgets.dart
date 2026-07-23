@@ -106,6 +106,12 @@ class _Header extends StatelessWidget {
         return 'Импортируем существующую seed-фразу, задаём PIN и переводим приложение в тот же защищённый shell, что и для нового кошелька.';
       case WalletFlowStage.showSeed:
         return 'Это одноразовый экран резервного сохранения seed-фразы. После закрытия приложения seed больше не должен показываться в открытом виде.';
+      case WalletFlowStage.rutokenCreate:
+        return 'Создаём восстанавливаемый BIP-39 backup перед записью master key на Рутокен.';
+      case WalletFlowStage.rutokenImport:
+        return 'Импортируем существующий BIP-39 backup в пустой Рутокен.';
+      case WalletFlowStage.rutokenBackup:
+        return 'Требуем подтверждение полного offline backup до аппаратного provisioning.';
       case WalletFlowStage.biometricPrompt:
         return 'После PIN можно включить биометрию как удобный путь разблокировки: реальную на мобильных платформах и имитацию на Windows для demo-сценария.';
       case WalletFlowStage.locked:
