@@ -5,6 +5,7 @@ class _WelcomeStage extends StatelessWidget {
     required this.backendEntries,
     required this.selectedBackendId,
     required this.isExternalBackendSelected,
+    required this.isRutokenSelected,
     required this.onBackendSelected,
     required this.onCreatePressed,
     required this.onImportPressed,
@@ -18,6 +19,7 @@ class _WelcomeStage extends StatelessWidget {
   final List<WalletBackendCatalogEntry> backendEntries;
   final String selectedBackendId;
   final bool isExternalBackendSelected;
+  final bool isRutokenSelected;
   final Future<void> Function(String backendId) onBackendSelected;
   final VoidCallback onCreatePressed;
   final VoidCallback onImportPressed;
@@ -35,7 +37,9 @@ class _WelcomeStage extends StatelessWidget {
         const _SectionTitle('Выбери стартовый сценарий'),
         const SizedBox(height: 12),
         const Text(
-          'Phase 7 foundation: закладываем явную модель выбора key storage backend, чтобы потом без архитектурной каши добавить внешний NFC-подписант.',
+          'Выбери локальный phone vault, учебный demo backend или настоящий '
+          'Rutoken NFC. Активный backend определяет, где хранится ключ и как '
+          'подтверждается каждая подпись.',
         ),
         const SizedBox(height: 20),
         _BackendSelectionCard(
@@ -52,7 +56,9 @@ class _WelcomeStage extends StatelessWidget {
                 : Icons.add_circle_outline,
           ),
           label: Text(
-            isExternalBackendSelected
+            isRutokenSelected
+                ? 'Создать кошелёк на Рутокене'
+                : isExternalBackendSelected
                 ? 'Подключить demo NFC-устройство'
                 : 'Создать новый кошелёк',
           ),
@@ -66,7 +72,9 @@ class _WelcomeStage extends StatelessWidget {
                 : Icons.download_outlined,
           ),
           label: Text(
-            isExternalBackendSelected
+            isRutokenSelected
+                ? 'Импортировать seed в Рутокен'
+                : isExternalBackendSelected
                 ? 'Импортировать seed в demo device'
                 : 'Импортировать seed-фразу',
           ),

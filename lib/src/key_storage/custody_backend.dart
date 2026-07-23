@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'key_storage_backend.dart';
+
 /// Public identity of one custody-backed EVM account. It is safe to keep while
 /// the signer is locked: no seed or private key is represented here.
 class WalletAccountDescriptor {
@@ -98,7 +100,7 @@ abstract interface class CustodySigningSession {
 /// Secret-free backend capability consumed by app orchestration. The eventual
 /// Rutoken backend implements this without implementing `unlock() ->
 /// WalletMaterial`.
-abstract interface class WalletCustodyBackend {
+abstract interface class WalletCustodyBackend implements WalletBackend {
   Future<WalletAccountDescriptor> readAccountDescriptor({required String pin});
 
   Future<CustodySigningSession> openSigningSession({required String pin});
@@ -148,13 +150,56 @@ class RutokenCustodyBackend implements WalletCustodyBackend {
   const RutokenCustodyBackend({
     required RutokenNativeAdapter adapter,
     WalletAccountPublicKey? publicAccountMetadata,
+    Future<WalletAccountPublicKey?> Function()? publicAccountLoader,
     this.backendId = 'rutoken_nfc',
   }) : _adapter = adapter,
-       _publicAccountMetadata = publicAccountMetadata;
+       _publicAccountMetadata = publicAccountMetadata,
+       _publicAccountLoader = publicAccountLoader;
 
   final RutokenNativeAdapter _adapter;
   final WalletAccountPublicKey? _publicAccountMetadata;
+  final Future<WalletAccountPublicKey?> Function()? _publicAccountLoader;
+  @override
   final String backendId;
+
+  @override
+  bool get isUnlocked => false;
+
+  Future<WalletAccountPublicKey?> _loadPublicAccount() async {
+    final metadata = _publicAccountMetadata;
+    if (metadata != null) {
+      return metadata;
+    }
+    return _publicAccountLoader?.call();
+  }
+
+  @override
+  Future<bool> hasWallet() async => await _loadPublicAccount() != null;
+
+  @override
+  Future<StoredWalletSummary?> getWalletSummary() async {
+    final metadata = await _loadPublicAccount();
+    if (metadata == null) {
+      return null;
+    }
+    return StoredWalletSummary(
+      address: metadata.account.address,
+      backendId: backendId,
+      // v1 public metadata intentionally did not persist a creation timestamp.
+      // The dashboard does not expose it; keep a stable sentinel rather than
+      // inventing a new time on every app start.
+      createdAtUtc: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    );
+  }
+
+  @override
+  Future<bool> isBiometricUnlockAvailable() async => false;
+
+  @override
+  Future<bool> isBiometricUnlockEnabled() async => false;
+
+  @override
+  void lock() {}
 
   @override
   Future<WalletAccountDescriptor> readAccountDescriptor({
@@ -197,7 +242,7 @@ class RutokenCustodyBackend implements WalletCustodyBackend {
   Future<WalletAccountPublicKey> readAccountPublicKey({
     required String pin,
   }) async {
-    final metadata = _publicAccountMetadata;
+    final metadata = await _loadPublicAccount();
     if (metadata == null) {
       throw StateError(
         'Rutoken account xpub metadata is not provisioned on this phone.',

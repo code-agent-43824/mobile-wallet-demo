@@ -3,12 +3,12 @@
 Flutter-демо single-account EVM-кошелька с рабочим phone vault, WalletConnect и
 MetaMask-совместимым AirGap signer.
 
-**Сейчас:** v1.47 поддерживает Mainnet/Sepolia, локальные переводы, wallet-side WalletConnect,
-EIP-4527/BC-UR AirGap и авторизацию на каждую операцию. **Следующий milestone:** реальный
-Rutoken custody backend для Android/iOS. Android read/sign transport уже проверен на физическом
-устройстве; оба восстанавливаемых provisioning flow реализованы и ждут проверки на пустом
-Рутокене. Затем следуют production-backend wiring и те же own-send, WalletConnect и AirGap
-flows. Подробная карта NOW / NEXT / LATER — в
+**Сейчас:** v1.48 поддерживает Mainnet/Sepolia, локальные переводы, wallet-side WalletConnect,
+EIP-4527/BC-UR AirGap и авторизацию на каждую операцию. Реальный Android Rutoken backend
+зарегистрирован после физически проверенных create/import: read-only профиль загружается без NFC,
+а own-send, WalletConnect и AirGap используют свежую NFC/PIN-сессию для каждой подписи.
+**Следующий milestone:** физически пройти полную signing matrix, затем перенести доказанный контур
+на iOS. Подробная карта NOW / NEXT / LATER — в
 [`docs/development-plan.md`](docs/development-plan.md).
 Live/native release evidence is tracked separately in
 [`docs/device-test-matrix.md`](docs/device-test-matrix.md).
@@ -53,6 +53,9 @@ Live/native release evidence is tracked separately in
   приложении с обязательным подтверждением offline backup; на карту записываются только raw BIP32 master key +
   chain code через показанный в официальном примере `C_CreateObject`, а на телефоне сохраняются только публичные
   account-xpub metadata
+- Production Rutoken backend: после provisioning он становится активным кошельком, восстанавливает публичный
+  адрес после cold start без карты и направляет own-send, WalletConnect transaction/message/EIP-712 и EIP-4527
+  AirGap через один transient NFC/PIN signer без `WalletMaterial`
 - Demo runtime path для внешнего backend: simulated external device, отдельная UX-ветка и отдельный auth/signing путь без реального NFC SDK
 - WalletConnect v2 wallet-side flow: QR pairing, queued inbound transaction/message/typed-data requests,
   `wallet_switchEthereumChain` для Mainnet/Sepolia, бесшумный EIP-5792 `wallet_getCapabilities` и локальная
@@ -68,7 +71,7 @@ Live/native release evidence is tracked separately in
 
 ## Версионирование
 
-- Текущая версия: `v1.47.0+58`
+- Текущая версия: `v1.48.0+59`
 - По договорённости в этом проекте дальше повышаем minor-версию с каждым функциональным шагом
 
 ## Что покрывает текущий этап

@@ -25,7 +25,7 @@ class WalletBackendCatalogEntry {
   const WalletBackendCatalogEntry({required this.descriptor, this.backend});
 
   final WalletBackendDescriptor descriptor;
-  final KeyStorageBackend? backend;
+  final WalletBackend? backend;
 }
 
 class SelectedWalletBackend {
@@ -61,7 +61,7 @@ class WalletBackendRegistry {
     return _entriesById[backendId]?.descriptor;
   }
 
-  KeyStorageBackend? backendById(String backendId) {
+  WalletBackend? backendById(String backendId) {
     return _entriesById[backendId]?.backend;
   }
 
@@ -118,7 +118,7 @@ class WalletBackendRegistry {
     await _store.write(selectionStorageKey, value);
   }
 
-  Future<KeyStorageBackend> loadSelectedBackend() async {
+  Future<WalletBackend> loadSelectedBackend() async {
     final backendId = await loadSelectedBackendId();
     final backend = backendById(backendId);
     if (backend == null) {

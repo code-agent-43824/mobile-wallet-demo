@@ -17,6 +17,7 @@ class _UnlockedStage extends StatefulWidget {
     required this.canUnlockWithBiometrics,
     required this.onAuthorizeAndSubmit,
     required this.onLock,
+    required this.isHardwareCustody,
     required this.onReconnectExternalDevice,
     required this.onDisconnectExternalSession,
     required this.onSimulateExternalOffline,
@@ -29,7 +30,7 @@ class _UnlockedStage extends StatefulWidget {
   final BlockchainProvider blockchainProvider;
   final TransactionService transactionService;
   final JsonRpcTransport trackingTransport;
-  final KeyStorageBackend activeBackend;
+  final WalletBackend activeBackend;
   final StoredWalletSummary? summary;
   final String backendLabel;
   final ExternalDeviceDemoRuntimeState? externalRuntimeState;
@@ -37,6 +38,7 @@ class _UnlockedStage extends StatefulWidget {
   final bool canUnlockWithBiometrics;
   final AuthorizeAndSubmitTransfer onAuthorizeAndSubmit;
   final VoidCallback onLock;
+  final bool isHardwareCustody;
   final Future<void> Function()? onReconnectExternalDevice;
   final Future<void> Function()? onDisconnectExternalSession;
   final Future<void> Function()? onSimulateExternalOffline;
@@ -128,25 +130,33 @@ class _UnlockedStageState extends State<_UnlockedStage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle('Wallet runtime + Phase 7 foundation'),
+        const _SectionTitle('Wallet runtime'),
         const SizedBox(height: 12),
-        const Text(
-          'Phase 6 уже закрыт. Теперь строим основу для нескольких storage backends: текущее выполнение идёт через выбранный backend и совместимый signing/auth контракт.',
+        Text(
+          widget.isHardwareCustody
+              ? 'Публичные данные доступны без карты. Каждая подпись открывает '
+                    'новую NFC/PIN-сессию Рутокена и закрывает её сразу после '
+                    'операции.'
+              : 'Текущее выполнение идёт через выбранный storage backend и '
+                    'общий signing/auth контракт.',
         ),
         const SizedBox(height: 20),
         _SummaryTile(label: 'Активный адрес', value: address),
         const SizedBox(height: 10),
         _SummaryTile(label: 'Backend', value: widget.backendLabel),
         const SizedBox(height: 10),
-        const _SummaryTile(
+        _SummaryTile(
           label: 'Доступ к ключу',
-          value:
-              'Только просмотр. Приватный ключ запрашивает PIN/биометрию при каждой подписи.',
+          value: widget.isHardwareCustody
+              ? 'Только просмотр. Для каждой подписи нужны карта у NFC и PIN Рутокена.'
+              : 'Только просмотр. Приватный ключ запрашивает PIN/биометрию при каждой подписи.',
         ),
         const SizedBox(height: 10),
         _SummaryTile(
           label: 'Биометрия',
-          value: widget.biometricsEnabled
+          value: widget.isHardwareCustody
+              ? 'Не используется для Рутокена'
+              : widget.biometricsEnabled
               ? 'Включена в shell-flow'
               : 'Пока выключена',
         ),
@@ -278,7 +288,8 @@ class _UnlockedStageState extends State<_UnlockedStage> {
             transactionService: widget.transactionService,
             trackingTransport: widget.trackingTransport,
             isExternalBackend:
-                widget.activeBackend is ExternalDeviceKeyStorageBackend,
+                widget.activeBackend is ExternalDeviceKeyStorageBackend ||
+                widget.activeBackend is WalletCustodyBackend,
             canUnlockWithBiometrics: widget.canUnlockWithBiometrics,
             onAuthorizeAndSubmit: widget.onAuthorizeAndSubmit,
           ),
@@ -312,11 +323,12 @@ class _UnlockedStageState extends State<_UnlockedStage> {
               icon: const Icon(Icons.refresh),
               label: const Text('Обновить с блокчейна'),
             ),
-            OutlinedButton.icon(
-              onPressed: widget.onLock,
-              icon: const Icon(Icons.lock_outline),
-              label: const Text('Заблокировать снова'),
-            ),
+            if (!widget.isHardwareCustody)
+              OutlinedButton.icon(
+                onPressed: widget.onLock,
+                icon: const Icon(Icons.lock_outline),
+                label: const Text('Заблокировать снова'),
+              ),
             OutlinedButton.icon(
               onPressed: widget.onOpenConnections,
               icon: const Icon(Icons.hub_outlined),

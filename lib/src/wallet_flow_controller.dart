@@ -22,7 +22,8 @@ class WalletFlowController extends ChangeNotifier {
     NonceProvider? nonceProvider,
     QrScanner qrScanner = const UnavailableQrScanner(),
     RutokenNativeAdapter? rutokenNativeAdapter,
-  }) : _walletConnectService = walletConnectService,
+  }) : _store = store,
+       _walletConnectService = walletConnectService,
        _walletConnectPreflight = walletConnectPreflight,
        _qrScanner = qrScanner,
        _rutokenNativeAdapter = rutokenNativeAdapter,
@@ -42,6 +43,13 @@ class WalletFlowController extends ChangeNotifier {
         : RutokenProvisioningService(
             adapter: rutokenNativeAdapter,
             store: store,
+          );
+    _rutokenBackend =
+        rutokenNativeAdapter == null || _rutokenProvisioning == null
+        ? null
+        : RutokenCustodyBackend(
+            adapter: rutokenNativeAdapter,
+            publicAccountLoader: _rutokenProvisioning.loadPublicAccount,
           );
     _backendRegistry = WalletBackendRegistry(
       store: store,
@@ -68,6 +76,17 @@ class WalletFlowController extends ChangeNotifier {
           ),
           backend: _externalDeviceBackend,
         ),
+        if (_rutokenBackend case final backend?)
+          WalletBackendCatalogEntry(
+            descriptor: const WalletBackendDescriptor(
+              id: 'rutoken_nfc',
+              kind: WalletBackendKind.externalDevice,
+              label: 'Rutoken NFC',
+              description:
+                  'Настоящий неэкспортирующий ECDSA backend: публичный профиль хранится в приложении, каждая подпись требует NFC и PIN Рутокена.',
+            ),
+            backend: backend,
+          ),
       ],
     );
 
@@ -108,11 +127,13 @@ class WalletFlowController extends ChangeNotifier {
   late final PhoneSecureVault _vault;
   late final ExternalDeviceDemoBackend _externalDeviceBackend;
   late final WalletBackendRegistry _backendRegistry;
+  final SecureKeyValueStore _store;
   final WalletConnectService _walletConnectService;
   final WalletConnectTransactionPreflight _walletConnectPreflight;
   final QrScanner _qrScanner;
   final RutokenNativeAdapter? _rutokenNativeAdapter;
   late final RutokenProvisioningService? _rutokenProvisioning;
+  late final RutokenCustodyBackend? _rutokenBackend;
   final TransactionService _transactionService;
   final TransactionBroadcaster _transactionBroadcaster;
   final NonceProvider _nonceProvider;
@@ -156,6 +177,9 @@ class WalletFlowController extends ChangeNotifier {
   String? _rutokenDiagnosticResult;
   RutokenGeneratedBackup? _rutokenGeneratedBackup;
   String? _rutokenProvisioningResult;
+
+  static const String _rutokenRegistrationStorageKey =
+      'wallet.rutoken_backend_registered.v1';
 
   // Read-only surface consumed by the widget layer.
   WalletFlowStage get stage => _stage;
@@ -225,7 +249,7 @@ class WalletFlowController extends ChangeNotifier {
   /// The most recent EIP-4527 `eth-signature` response, if any.
   String? get airGapResponsePayload => _airGapResponsePayload;
 
-  KeyStorageBackend get activeBackend {
+  WalletBackend get activeBackend {
     // Once a wallet exists, its persisted summary is authoritative. The
     // mutable onboarding selection must never redirect a private-key operation
     // to another (uninitialized) vault.
@@ -240,7 +264,13 @@ class WalletFlowController extends ChangeNotifier {
   }
 
   bool get isExternalBackendSelected =>
-      activeBackend is ExternalDeviceKeyStorageBackend;
+      activeBackend is ExternalDeviceKeyStorageBackend ||
+      activeBackend is WalletCustodyBackend;
+
+  bool get isRutokenSelected => activeBackend is RutokenCustodyBackend;
+
+  bool get isDemoExternalBackendSelected =>
+      activeBackend is ExternalDeviceDemoBackend;
 
   /// Display label for the active/selected backend (locked & unlocked stages).
   String get backendLabel {
@@ -267,6 +297,17 @@ class WalletFlowController extends ChangeNotifier {
   Future<void> loadInitialState() async {
     try {
       var selectedBackendId = await _backendRegistry.loadSelectedBackendId();
+      final rutokenBackend = _rutokenBackend;
+      // v1.47 could provision a real token but intentionally did not register
+      // it as the active wallet. Migrate that active public profile exactly
+      // once; later explicit backend choices remain authoritative.
+      if (rutokenBackend != null &&
+          await _store.read(_rutokenRegistrationStorageKey) != '1' &&
+          await rutokenBackend.hasWallet()) {
+        selectedBackendId = rutokenBackend.backendId;
+        await _backendRegistry.selectBackend(selectedBackendId);
+        await _store.write(_rutokenRegistrationStorageKey, '1');
+      }
       var backend = _backendRegistry.backendById(selectedBackendId) ?? _vault;
       var summary = await backend.getWalletSummary();
 
@@ -375,12 +416,20 @@ class WalletFlowController extends ChangeNotifier {
   }
 
   void goToCreateWallet() {
+    if (isRutokenSelected) {
+      goToRutokenCreate();
+      return;
+    }
     _errorMessage = null;
     _stage = WalletFlowStage.createWallet;
     _notify();
   }
 
   void goToImportWallet() {
+    if (isRutokenSelected) {
+      goToRutokenImport();
+      return;
+    }
     _errorMessage = null;
     _stage = WalletFlowStage.importWallet;
     _notify();
@@ -450,9 +499,27 @@ class WalletFlowController extends ChangeNotifier {
       );
       _rutokenProvisioningResult =
           'Кошелёк записан на Рутокен: ${result.account.address}. '
-          'В приложении сохранены только публичные данные account xpub.';
+          'Он выбран как активный backend; в приложении сохранены только '
+          'публичные данные account xpub.';
+      final backend = _rutokenBackend;
+      if (backend == null) {
+        throw const VaultFailure('Rutoken backend недоступен в этой сборке.');
+      }
+      await _backendRegistry.selectBackend(backend.backendId);
+      await _store.write(_rutokenRegistrationStorageKey, '1');
+      _selectedBackendId = backend.backendId;
+      _summary = StoredWalletSummary(
+        address: result.account.address,
+        backendId: backend.backendId,
+        createdAtUtc: DateTime.now().toUtc(),
+      );
+      _material = null;
+      _biometricsEnabled = false;
+      _biometricsAvailable = false;
+      _externalRuntimeState = null;
+      _lastUnlockAuthMethod = WalletAuthMethod.externalDevice;
       _rutokenGeneratedBackup = null;
-      _stage = WalletFlowStage.welcome;
+      _stage = WalletFlowStage.unlocked;
     });
   }
 
@@ -462,6 +529,11 @@ class WalletFlowController extends ChangeNotifier {
         : 'Создаём кошелёк…';
     await _runBusy(busy, () async {
       final backend = activeBackend;
+      if (backend is! KeyStorageBackend) {
+        throw const VaultFailure(
+          'Для Рутокена используй отдельный сценарий создания.',
+        );
+      }
       final material = await backend.createWallet(pin: pin);
       _summary = StoredWalletSummary(
         address: material.address,
@@ -499,6 +571,11 @@ class WalletFlowController extends ChangeNotifier {
         : 'Импортируем кошелёк…';
     await _runBusy(busy, () async {
       final backend = activeBackend;
+      if (backend is! KeyStorageBackend) {
+        throw const VaultFailure(
+          'Для Рутокена используй отдельный сценарий импорта.',
+        );
+      }
       final material = await backend.importWallet(mnemonic: mnemonic, pin: pin);
       _summary = StoredWalletSummary(
         address: material.address,
@@ -532,11 +609,17 @@ class WalletFlowController extends ChangeNotifier {
   /// shell can be re-enabled without re-deriving this logic.
   Future<void> unlockWallet(String pin) async {
     await _runBusy('Разблокируем кошелёк…', () async {
-      _material = await activeBackend.unlock(pin: pin);
-      _lastUnlockAuthMethod = activeBackend is ExternalDeviceKeyStorageBackend
+      final backend = activeBackend;
+      if (backend is! KeyStorageBackend) {
+        throw const VaultFailure(
+          'Аппаратный backend открывается только на время подписи.',
+        );
+      }
+      _material = await backend.unlock(pin: pin);
+      _lastUnlockAuthMethod = backend is ExternalDeviceKeyStorageBackend
           ? WalletAuthMethod.externalDevice
           : WalletAuthMethod.pin;
-      if (activeBackend is ExternalDeviceDemoBackend) {
+      if (backend is ExternalDeviceDemoBackend) {
         _externalRuntimeState = await _externalDeviceBackend.loadRuntimeState();
       }
       _stage = WalletFlowStage.unlocked;
@@ -550,6 +633,10 @@ class WalletFlowController extends ChangeNotifier {
 
   Future<void> completeBiometricChoice(bool enabled) async {
     await _runGuarded(() async {
+      final backend = activeBackend;
+      if (backend is! KeyStorageBackend) {
+        throw const BiometricUnavailableFailure();
+      }
       final pin = _pendingBiometricPin;
       if (enabled) {
         if (pin == null || pin.isEmpty) {
@@ -557,9 +644,9 @@ class WalletFlowController extends ChangeNotifier {
             'Не удалось включить биометрию: PIN текущей сессии недоступен.',
           );
         }
-        await activeBackend.setBiometricUnlockEnabled(enabled: true, pin: pin);
+        await backend.setBiometricUnlockEnabled(enabled: true, pin: pin);
       } else {
-        await activeBackend.setBiometricUnlockEnabled(enabled: false, pin: '');
+        await backend.setBiometricUnlockEnabled(enabled: false, pin: '');
       }
 
       _biometricsEnabled = enabled;
@@ -580,7 +667,11 @@ class WalletFlowController extends ChangeNotifier {
   /// default flow no longer enters a locked screen to unlock the whole app.
   Future<void> unlockWithBiometrics() async {
     await _runGuarded(() async {
-      _material = await activeBackend.unlockWithBiometrics();
+      final backend = activeBackend;
+      if (backend is! KeyStorageBackend) {
+        throw const BiometricUnavailableFailure();
+      }
+      _material = await backend.unlockWithBiometrics();
       _lastUnlockAuthMethod = WalletAuthMethod.biometric;
       _stage = WalletFlowStage.unlocked;
     });
@@ -875,10 +966,7 @@ class WalletFlowController extends ChangeNotifier {
           if (useBiometrics) {
             throw const BiometricUnavailableFailure();
           }
-          final custodyBackend = backend as WalletCustodyBackend;
-          final openedSession = await custodyBackend.openSigningSession(
-            pin: pin!,
-          );
+          final openedSession = await backend.openSigningSession(pin: pin!);
           custodySession = openedSession;
           _lastUnlockAuthMethod = WalletAuthMethod.externalDevice;
           final operation = walletOperationAuthorizer.authorizeCustodySession(
@@ -887,13 +975,17 @@ class WalletFlowController extends ChangeNotifier {
           await action(operation.signer);
           return;
         }
+        if (backend is! KeyStorageBackend) {
+          throw const VaultFailure(
+            'Активный backend не поддерживает локальную подпись.',
+          );
+        }
         if (useBiometrics) {
-          _material = await activeBackend.unlockWithBiometrics();
+          _material = await backend.unlockWithBiometrics();
           _lastUnlockAuthMethod = WalletAuthMethod.biometric;
         } else {
-          _material = await activeBackend.unlock(pin: pin!);
-          _lastUnlockAuthMethod =
-              activeBackend is ExternalDeviceKeyStorageBackend
+          _material = await backend.unlock(pin: pin!);
+          _lastUnlockAuthMethod = backend is ExternalDeviceKeyStorageBackend
               ? WalletAuthMethod.externalDevice
               : WalletAuthMethod.pin;
         }
@@ -976,14 +1068,11 @@ class WalletFlowController extends ChangeNotifier {
   }) async {
     final backend = activeBackend;
     if (backend is WalletCustodyBackend) {
-      final custodyBackend = backend as WalletCustodyBackend;
       await _runBusy('Готовим публичный QR аккаунта…', () async {
         if (useBiometrics) {
           throw const BiometricUnavailableFailure();
         }
-        final publicAccount = await custodyBackend.readAccountPublicKey(
-          pin: pin!,
-        );
+        final publicAccount = await backend.readAccountPublicKey(pin: pin!);
         final export = const AccountExportDeriver().deriveFromPublicAccount(
           publicAccount: publicAccount,
           name: 'Wallet Demo',

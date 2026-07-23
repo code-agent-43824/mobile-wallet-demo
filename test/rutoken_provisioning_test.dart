@@ -2,11 +2,20 @@ import 'dart:typed_data';
 
 import 'package:bip32/bip32.dart' as bip32;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile_wallet_demo/src/auth/biometric_auth.dart';
+import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
+import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
 import 'package:mobile_wallet_demo/src/key_storage/custody_backend.dart';
 import 'package:mobile_wallet_demo/src/key_storage/rutoken_method_channel_adapter.dart';
 import 'package:mobile_wallet_demo/src/key_storage/rutoken_provisioning.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
-import 'package:web3dart/web3dart.dart' show bytesToHex, publicKeyToAddress;
+import 'package:mobile_wallet_demo/src/transactions/hardened_transaction_service.dart';
+import 'package:mobile_wallet_demo/src/transactions/transaction_service.dart';
+import 'package:mobile_wallet_demo/src/transactions/transaction_tracker.dart';
+import 'package:mobile_wallet_demo/src/wallet_flow_screen.dart';
+import 'package:mobile_wallet_demo/src/walletconnect/wallet_connect_service.dart';
+import 'package:web3dart/web3dart.dart'
+    show EthPrivateKey, bytesToHex, publicKeyToAddress, sign;
 
 const _mnemonic =
     'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
@@ -140,6 +149,199 @@ void main() {
     expect(backup.mnemonic.split(' '), hasLength(24));
     expect(backup.passphrase, 'offline secret');
   });
+
+  test(
+    'selects the real backend, restores it without NFC, and signs through it',
+    () async {
+      final store = InMemorySecureKeyValueStore();
+      final adapter = _ProvisioningAdapter();
+      final first = WalletFlowController(
+        store: store,
+        biometricAuthGateway: const SimulatedBiometricAuthGateway(),
+        rutokenNativeAdapter: adapter,
+        transactionService: const HardenedTransactionServiceImplementation(),
+        transactionBroadcaster: _RecordingBroadcaster(),
+        nonceProvider: _StaticNonceProvider(),
+      );
+      await first.loadInitialState();
+
+      await first.provisionImportedRutoken(
+        mnemonic: 'test test test test test test test test test test test junk',
+        passphrase: '',
+        pin: '1234',
+      );
+
+      expect(first.errorMessage, isNull);
+      expect(first.stage, WalletFlowStage.unlocked);
+      expect(first.summary?.backendId, 'rutoken_nfc');
+      expect(first.activeBackend, isA<RutokenCustodyBackend>());
+      expect(first.material, isNull);
+      expect(adapter.openCount, 1);
+      expect(adapter.closeCount, 1);
+      final expectedAddress = first.summary!.address;
+      first.dispose();
+
+      final service = FakeWalletConnectService();
+      final restored = WalletFlowController(
+        store: store,
+        biometricAuthGateway: const SimulatedBiometricAuthGateway(),
+        walletConnectService: service,
+        rutokenNativeAdapter: adapter,
+        transactionService: const HardenedTransactionServiceImplementation(),
+        transactionBroadcaster: _RecordingBroadcaster(),
+        nonceProvider: _StaticNonceProvider(),
+      );
+      await restored.loadInitialState();
+
+      expect(restored.stage, WalletFlowStage.unlocked);
+      expect(restored.summary?.backendId, 'rutoken_nfc');
+      expect(restored.summary?.address, expectedAddress);
+      expect(restored.activeBackend, isA<RutokenCustodyBackend>());
+      expect(
+        adapter.openCount,
+        1,
+        reason: 'read-only startup must use public metadata without NFC',
+      );
+
+      service.simulateRequest(
+        topic: 'rutoken-topic',
+        method: 'personal_sign',
+        chainId: 'eip155:1',
+        params: <Object?>['0x48656c6c6f', expectedAddress],
+      );
+      await pumpEventQueue();
+      await restored.approvePendingRequest(pin: '1234');
+
+      expect(restored.errorMessage, isNull);
+      expect(restored.pendingRequest, isNull);
+      expect(service.respondedErrors, isEmpty);
+      expect(service.respondedResults.single.result, isA<String>());
+      expect(adapter.openCount, 2);
+      expect(adapter.closeCount, 2);
+      expect(adapter.signCount, 1);
+      expect(restored.material, isNull);
+
+      const transactionService = HardenedTransactionServiceImplementation();
+      final snapshot = WalletChainSnapshot(
+        network: EvmNetwork.ethereumSepolia,
+        address: expectedAddress,
+        nativeBalanceWei: BigInt.parse('1000000000000000000'),
+        nativeBalanceFormatted: '1',
+        baseFeeGwei: 1,
+        providerLabel: 'fake-rpc',
+        fetchedAtUtc: DateTime.utc(2026, 7, 23),
+        tokenBalances: const <TokenBalanceSnapshot>[],
+        recentTransactions: const <RecentTransactionSnapshot>[],
+      );
+      final result = await restored.authorizeAndSubmitTransfer(
+        snapshot: snapshot,
+        fromAddress: expectedAddress,
+        toAddress: '0x1111111111111111111111111111111111111111',
+        amountText: '0.01',
+        asset: transactionService
+            .availableAssets(
+              snapshot: snapshot,
+              networkConfig: evmNetworkConfigs[snapshot.network]!,
+            )
+            .first,
+        tracker: TransactionTracker(
+          rpcTransport: const _ReceiptTransport(),
+          pollInterval: Duration.zero,
+          maxAttempts: 1,
+        ),
+        pin: '1234',
+      );
+
+      expect(result, isNotNull);
+      expect(await result!.trackingFuture, isNotNull);
+      expect(adapter.openCount, 3);
+      expect(adapter.closeCount, 3);
+      expect(adapter.signCount, 2);
+      expect(restored.material, isNull);
+
+      restored.dispose();
+      await service.dispose();
+    },
+  );
+
+  test('migrates a v1.47 public profile to the active backend once', () async {
+    final store = InMemorySecureKeyValueStore();
+    final adapter = _ProvisioningAdapter();
+    await RutokenProvisioningService(
+      adapter: adapter,
+      store: store,
+    ).provision(mnemonic: _mnemonic, passphrase: '', pin: '1234');
+    expect(await store.read('wallet.rutoken_backend_registered.v1'), isNull);
+    final opensAfterProvisioning = adapter.openCount;
+
+    final controller = WalletFlowController(
+      store: store,
+      biometricAuthGateway: const SimulatedBiometricAuthGateway(),
+      rutokenNativeAdapter: adapter,
+    );
+    await controller.loadInitialState();
+
+    expect(controller.stage, WalletFlowStage.unlocked);
+    expect(controller.summary?.backendId, 'rutoken_nfc');
+    expect(controller.activeBackend, isA<RutokenCustodyBackend>());
+    expect(await store.read('wallet.rutoken_backend_registered.v1'), '1');
+    expect(
+      adapter.openCount,
+      opensAfterProvisioning,
+      reason: 'registration migration must not touch NFC',
+    );
+    controller.dispose();
+  });
+}
+
+class _StaticNonceProvider implements NonceProvider {
+  @override
+  Future<LoadedNonce> loadNextNonce({
+    required EvmNetworkConfig networkConfig,
+    required String address,
+  }) async {
+    return LoadedNonce(
+      network: networkConfig.network,
+      address: address,
+      nonce: 7,
+      providerLabel: 'fake-nonce',
+      loadedAtUtc: DateTime.utc(2026, 7, 23),
+    );
+  }
+}
+
+class _RecordingBroadcaster implements TransactionBroadcaster {
+  @override
+  Future<SubmittedTransfer> submit({
+    required SignedTransfer signedTransfer,
+  }) async {
+    return SubmittedTransfer(
+      signedTransfer: signedTransfer,
+      providerLabel: 'fake-broadcast',
+      networkTransactionHash: signedTransfer.transactionHashHex,
+      submittedAtUtc: DateTime.utc(2026, 7, 23),
+    );
+  }
+}
+
+class _ReceiptTransport implements JsonRpcTransport {
+  const _ReceiptTransport();
+
+  @override
+  Future<Map<String, dynamic>> post({
+    required Uri uri,
+    required Map<String, dynamic> payload,
+  }) async {
+    return <String, dynamic>{
+      'jsonrpc': '2.0',
+      'id': 1,
+      'result': <String, dynamic>{
+        'status': '0x1',
+        'blockNumber': '0x1',
+        'gasUsed': '0x5208',
+      },
+    };
+  }
 }
 
 class _ProvisioningAdapter implements RutokenNativeAdapter {
@@ -153,6 +355,9 @@ class _ProvisioningAdapter implements RutokenNativeAdapter {
   Uint8List? chainCodeCopy;
   Uint8List? masterReference;
   Uint8List? chainCodeReference;
+  WalletAccountDescriptor? account;
+  Uint8List? addressPrivateKey;
+  int signCount = 0;
 
   @override
   Future<RutokenNativeSession> openSession({required String pin}) async {
@@ -180,11 +385,13 @@ class _ProvisioningAdapter implements RutokenNativeAdapter {
       RutokenProvisioningService.addressPath,
     );
     final point = RutokenEcPoint.decode(addressNode.publicKey);
-    return WalletAccountDescriptor(
+    addressPrivateKey = Uint8List.fromList(addressNode.privateKey!);
+    account = WalletAccountDescriptor(
       backendId: 'rutoken_nfc',
       address: '0x${bytesToHex(publicKeyToAddress(point.uncompressedXY))}',
       derivationPath: RutokenProvisioningService.addressPath,
     );
+    return account!;
   }
 
   @override
@@ -196,7 +403,7 @@ class _ProvisioningAdapter implements RutokenNativeAdapter {
   @override
   Future<WalletAccountDescriptor?> readAccountDescriptor(
     RutokenNativeSession session,
-  ) async => null;
+  ) async => account;
 
   @override
   Future<RawEcdsaSignature> signDigest({
@@ -204,8 +411,27 @@ class _ProvisioningAdapter implements RutokenNativeAdapter {
     required String derivationPath,
     required Uint8List digest,
   }) async {
-    return RawEcdsaSignature.fromBytes(Uint8List(64));
+    signCount++;
+    final privateKey = addressPrivateKey;
+    if (privateKey == null) {
+      throw StateError('wallet not provisioned');
+    }
+    final signature = sign(digest, EthPrivateKey(privateKey).privateKey);
+    return RawEcdsaSignature(
+      r: _uint256(signature.r),
+      s: _uint256(signature.s),
+    );
   }
+}
+
+Uint8List _uint256(BigInt value) {
+  final out = Uint8List(32);
+  var remaining = value;
+  for (var index = 31; index >= 0; index--) {
+    out[index] = (remaining & BigInt.from(0xff)).toInt();
+    remaining >>= 8;
+  }
+  return out;
 }
 
 class _RecordingStore implements SecureKeyValueStore {

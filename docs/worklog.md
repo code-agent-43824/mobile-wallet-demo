@@ -18,6 +18,31 @@ Entry template:
 
 ---
 
+## 2026-07-23 — Register the production Rutoken backend — branch feat/rutoken-production-backend — done locally
+- Plan: owner physical dogfood confirms that both v1.47 recoverable provisioning paths succeed and that each
+  produces the independently expected EVM address. Mark Phase 10.4 physically passed, then make that provisioned
+  account a first-class selectable wallet backend without weakening the secret-free custody boundary. Persist and
+  restore the Rutoken public summary at startup without NFC; after create/import, select the real `rutoken_nfc`
+  backend and enter the read-only dashboard; route every private operation through one fresh NFC/PIN
+  `CustodySigningSession` and `ExternalDigestWalletTransactionSigner`; and keep own-send, WalletConnect
+  transaction/message/typed-data, and EIP-4527 AirGap on their existing shared signer seam. Remove demo-device
+  affordances from the real backend, keep phone-vault and simulated-device compatibility, add restart/selection/
+  teardown/signing orchestration coverage, bump the functional version, reconcile docs, and require full CI before
+  physical signing-matrix dogfood.
+- Done: v1.48.0+59 introduces a minimal `WalletBackend` lifecycle so selectable custody no longer implies
+  secret-exporting `KeyStorageBackend`. The real `rutoken_nfc` backend loads its address/account-xpub record
+  without NFC, becomes active immediately after provisioning, and one-time migrates an existing v1.47 active
+  public profile without overriding later explicit choices. Normal signing opens a fresh native session, verifies
+  the card-derived address, signs through `ExternalDigestWalletTransactionSigner`, and closes in `finally`; the
+  same controller seam already serves own-send, WalletConnect transaction/message/typed-data, and EIP-4527.
+  Real-backend UI uses NFC/PIN language and hides the simulated-device controls. Tests cover provisioning →
+  selection, cold restart without a token call, v1.47 registration migration, WalletConnect `personal_sign`, and
+  own-send/broadcast/tracking through separate native sessions; existing byte-parity tests cover EIP-1559,
+  personal/digest, and AirGap assembly. Format/analyze/diff checks are clean and all 192 tests pass locally.
+- Next / open: require full GitHub Actions, then install the Android artifact and physically dogfood own-send,
+  WalletConnect transaction + `personal_sign` + EIP-712, and EIP-4527 AirGap with the provisioned Rutoken.
+- Refs: owner v1.47 physical create/import dogfood; Phase 10.4–10.5.
+
 ## 2026-07-23 — Rutoken recoverable provisioning — branch feat/rutoken-recoverable-provisioning — done (CI green)
 - Plan: owner dogfood confirms that v1.46 completes NFC discovery, PIN login, BIP32 public derivation, raw
   `CKM_ECDSA`, and teardown on the physical Rutoken. Mark the transport probe physically passed and implement
