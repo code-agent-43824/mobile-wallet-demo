@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-07-24 — Adopt existing Rutoken + biometric PIN convenience — branch feat/rutoken-existing-card-biometric-pin — done (local validation)
+## 2026-07-24 — Adopt existing Rutoken + biometric PIN convenience — branch feat/rutoken-existing-card-biometric-pin — done (CI green)
 - Plan: extend the real Android backend so onboarding can adopt a Rutoken that already contains the supported
   BIP-32 key instead of requiring Wallet Demo to provision it. Read and persist only the card-derived public
   account descriptor; keep account-xpub metadata optional, so own-send and WalletConnect work while EIP-4527
@@ -42,10 +42,12 @@ Entry template:
   descriptor-only adopted card reports that AirGap account export needs provisioning-retained xpub metadata.
   Format/analyze/diff checks are clean. The full pre-final suite passed, and the final Rutoken-focused suite
   (23 tests) covers adoption without import, schema migration, xpub preservation, address mismatch,
-  opt-in/decline, biometric invocation, cold restart, and biometric WalletConnect signing.
-- Next / open: require full GitHub Actions, then physically adopt a pre-provisioned card and test one
-  biometric-authorized Sepolia send. WalletConnect/AirGap remain deferred per owner request.
-- Refs: owner request in Telegram topic 7389; v1.49.0+60.
+  opt-in/decline, biometric invocation, cold restart, and biometric WalletConnect signing. PR #9 was
+  squash-merged as `d8132a0`; Actions run 30112410051 is fully green for Validate, Android APK, iOS Simulator,
+  unsigned iOS Device, and Windows x64.
+- Next / open: physically adopt a pre-provisioned card and test one biometric-authorized Sepolia send.
+  WalletConnect/AirGap remain deferred per owner request.
+- Refs: owner request in Telegram topic 7389; v1.49.0+60; PR #9; squash `d8132a0`; CI 30112410051.
 
 ## 2026-07-23 — Register the production Rutoken backend — branch feat/rutoken-production-backend — done (CI green)
 - Plan: owner physical dogfood confirms that both v1.47 recoverable provisioning paths succeed and that each
