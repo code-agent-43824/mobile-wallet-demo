@@ -28,12 +28,15 @@ Current factual status of the project:
 milestone is an optional Rutoken custody backend for Android/iOS whose signing keys stay non-exporting after
 recoverable provisioning and which supports the same own-send, WalletConnect, and EIP-4527 AirGap flows.
 
-- **NOW — v1.48.0+59:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
+- **NOW — v1.49.0+60:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
   MetaMask-compatible EIP-4527 AirGap, per-operation authentication, hardened QR scanning, and the
   Rutoken custody/signature foundation, physically validated Android read/sign/provisioning, and the registered
-  production backend are built.
-- **NEXT — Phase 10 signing dogfood:** physically validate own-send, WalletConnect transaction/message/EIP-712,
-  and EIP-4527 AirGap through the real backend, including failure teardown. iOS follows proven Android behavior.
+  production backend are built. A compatible pre-provisioned card can be adopted read-only without rewriting its
+  key; every later card is bound to the registered address; and an explicit one-time opt-in can keep the PIN in a
+  separate biometric-gated secret store.
+- **NEXT — Phase 10 physical dogfood:** adopt a pre-provisioned card and send once using biometric PIN release;
+  then physically validate the deferred WalletConnect/AirGap matrix and failure teardown. iOS follows proven
+  Android behavior.
 - **LATER:** optional lock-on-open privacy, broader device/platform integration tests, and only then additional
   chains/accounts if product scope changes. They are not Phase 10 prerequisites.
 
@@ -393,7 +396,8 @@ Status: 🟡 In progress. Phase 10.1–10.2 are complete in v1.40. The Android 1
 v1.46 is physically validated for discovery, login, public derivation, raw signing, and teardown. Phase 10.4
 recoverable provisioning in v1.47 is physically validated for both existing-backup import and new recoverable
 creation, including the expected EVM address. v1.48 registers the production backend and routes every existing
-signing transport through its transient native session. Full physical signing dogfood and iOS remain.
+signing transport through its transient native session. v1.49 adds existing-card adoption, registered-address
+binding, and biometric-gated PIN convenience. Full physical signing dogfood and iOS remain.
 
 > **Reference:** `docs/nfc-pkcs11-integration-notes.md` contains the vendor mechanisms, native-stack setup,
 > Ethereum corrections, and physical-device questions. The existing demo adapter is a test double, not an
@@ -461,6 +465,12 @@ Small, reviewable steps; each chunk records plan and result in `docs/worklog.md`
 - **10.5 — complete signing matrix:** validate own-send; WalletConnect transaction, `personal_sign`, and EIP-712;
   and EIP-4527 AirGap transaction signing through the real device backend. v1.48 production wiring and automated
   orchestration coverage are complete; physical Android validation is pending.
+- **10.5a — DONE IN v1.49; PHYSICAL DOGFOOD PENDING:** adopt a compatible card that already has a BIP-32 master without calling
+  `C_CreateObject`; persist its public address/path as the wallet profile and keep xpub metadata optional. Verify
+  each later NFC session resolves to that registered address. After the first successful PIN use, offer an
+  explicit one-time choice to store the card PIN in a separate biometric-gated secret store; a later biometric
+  operation must authenticate through the platform prompt before the PIN is released to the transient native
+  session. A declined offer is remembered for that account, and neither public profile nor logs contain the PIN.
 - **10.6 — UX and iOS:** replace mock device controls with tap/PIN/progress/cooldown/retry UX, then port the
   proven shared contracts to the vendor iOS stack and run the same physical-device matrix.
 
@@ -582,6 +592,9 @@ Two interactions (app = signer):
 - `v1.48` — register the real `rutoken_nfc` backend: upgrade existing v1.47 public metadata without NFC,
   select it after provisioning, restore its read-only summary at cold start, and route own-send, WalletConnect,
   and EIP-4527 AirGap through one fresh secret-free NFC/PIN signer per operation
+- `v1.49` — adopt an already provisioned compatible Rutoken without modifying its key, support a descriptor-only
+  profile when account xpub is unavailable, reject a different card at signing time, and offer a one-time
+  biometric-gated PIN opt-in for later private operations
 
 ## Current non-goals and validation limits
 - no iOS hardware-device SDK implementation yet; Android production signing is wired but still requires the

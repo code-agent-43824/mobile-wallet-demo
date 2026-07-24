@@ -22,7 +22,6 @@ class _ConnectionsStage extends StatefulWidget {
     required this.isQrCameraAvailable,
     required this.isQrFileLoadAvailable,
     required this.canUnlockWithBiometrics,
-    required this.isExternalBackend,
     required this.onScanQrCamera,
     required this.onLoadQrFromFile,
     required this.onPair,
@@ -54,7 +53,6 @@ class _ConnectionsStage extends StatefulWidget {
   final bool isQrCameraAvailable;
   final bool isQrFileLoadAvailable;
   final bool canUnlockWithBiometrics;
-  final bool isExternalBackend;
   final Future<String?> Function({String title}) onScanQrCamera;
   final Future<String?> Function() onLoadQrFromFile;
   final Future<void> Function({required String uri}) onPair;
@@ -96,8 +94,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
     await widget.onPair(uri: uri);
   }
 
-  bool get _biometricsOffered =>
-      widget.canUnlockWithBiometrics && !widget.isExternalBackend;
+  bool get _biometricsOffered => widget.canUnlockWithBiometrics;
 
   Future<void> _approveRequest() async {
     const codec = WalletConnectV2RequestCodec();

@@ -135,7 +135,8 @@ class _UnlockedStageState extends State<_UnlockedStage> {
         Text(
           widget.isHardwareCustody
               ? 'Публичные данные доступны без карты. Каждая подпись открывает '
-                    'новую NFC/PIN-сессию Рутокена и закрывает её сразу после '
+                    'новую NFC-сессию Рутокена, получает PIN вручную или после '
+                    'биометрии и закрывает сессию сразу после '
                     'операции.'
               : 'Текущее выполнение идёт через выбранный storage backend и '
                     'общий signing/auth контракт.',
@@ -148,14 +149,16 @@ class _UnlockedStageState extends State<_UnlockedStage> {
         _SummaryTile(
           label: 'Доступ к ключу',
           value: widget.isHardwareCustody
-              ? 'Только просмотр. Для каждой подписи нужны карта у NFC и PIN Рутокена.'
+              ? 'Только просмотр. Для каждой подписи нужны карта у NFC и PIN либо биометрия.'
               : 'Только просмотр. Приватный ключ запрашивает PIN/биометрию при каждой подписи.',
         ),
         const SizedBox(height: 10),
         _SummaryTile(
           label: 'Биометрия',
           value: widget.isHardwareCustody
-              ? 'Не используется для Рутокена'
+              ? widget.biometricsEnabled
+                    ? 'Включена для доступа к PIN Рутокена'
+                    : 'PIN Рутокена вводится вручную'
               : widget.biometricsEnabled
               ? 'Включена в shell-flow'
               : 'Пока выключена',
@@ -287,9 +290,6 @@ class _UnlockedStageState extends State<_UnlockedStage> {
             networkConfig: config,
             transactionService: widget.transactionService,
             trackingTransport: widget.trackingTransport,
-            isExternalBackend:
-                widget.activeBackend is ExternalDeviceKeyStorageBackend ||
-                widget.activeBackend is WalletCustodyBackend,
             canUnlockWithBiometrics: widget.canUnlockWithBiometrics,
             onAuthorizeAndSubmit: widget.onAuthorizeAndSubmit,
           ),
@@ -377,7 +377,6 @@ class _TransferPreparationSection extends StatefulWidget {
     required this.networkConfig,
     required this.transactionService,
     required this.trackingTransport,
-    required this.isExternalBackend,
     required this.canUnlockWithBiometrics,
     required this.onAuthorizeAndSubmit,
   });
@@ -387,7 +386,6 @@ class _TransferPreparationSection extends StatefulWidget {
   final EvmNetworkConfig networkConfig;
   final TransactionService transactionService;
   final JsonRpcTransport trackingTransport;
-  final bool isExternalBackend;
   final bool canUnlockWithBiometrics;
   final AuthorizeAndSubmitTransfer onAuthorizeAndSubmit;
 
@@ -529,8 +527,7 @@ class _TransferPreparationSectionState
     final credential = await _promptForAuth(
       context,
       reason: 'Подпись и отправка перевода требует доступа к приватному ключу.',
-      biometricsOffered:
-          widget.canUnlockWithBiometrics && !widget.isExternalBackend,
+      biometricsOffered: widget.canUnlockWithBiometrics,
     );
     if (credential == null || !mounted) {
       // User dismissed the auth sheet — abort silently, no error.

@@ -44,12 +44,20 @@ class WalletFlowController extends ChangeNotifier {
             adapter: rutokenNativeAdapter,
             store: store,
           );
+    _rutokenBiometricPinStore = rutokenNativeAdapter == null
+        ? null
+        : RutokenBiometricPinStore(
+            store: store,
+            biometricAuth: biometricAuthGateway,
+          );
     _rutokenBackend =
         rutokenNativeAdapter == null || _rutokenProvisioning == null
         ? null
         : RutokenCustodyBackend(
             adapter: rutokenNativeAdapter,
             publicAccountLoader: _rutokenProvisioning.loadPublicAccount,
+            accountLoader: _rutokenProvisioning.loadAccountDescriptor,
+            biometricPinStore: _rutokenBiometricPinStore,
           );
     _backendRegistry = WalletBackendRegistry(
       store: store,
@@ -133,6 +141,7 @@ class WalletFlowController extends ChangeNotifier {
   final QrScanner _qrScanner;
   final RutokenNativeAdapter? _rutokenNativeAdapter;
   late final RutokenProvisioningService? _rutokenProvisioning;
+  late final RutokenBiometricPinStore? _rutokenBiometricPinStore;
   late final RutokenCustodyBackend? _rutokenBackend;
   final TransactionService _transactionService;
   final TransactionBroadcaster _transactionBroadcaster;
@@ -177,6 +186,7 @@ class WalletFlowController extends ChangeNotifier {
   String? _rutokenDiagnosticResult;
   RutokenGeneratedBackup? _rutokenGeneratedBackup;
   String? _rutokenProvisioningResult;
+  String? _pendingRutokenBiometricPin;
 
   static const String _rutokenRegistrationStorageKey =
       'wallet.rutoken_backend_registered.v1';
@@ -220,6 +230,8 @@ class WalletFlowController extends ChangeNotifier {
   String? get rutokenDiagnosticResult => _rutokenDiagnosticResult;
   RutokenGeneratedBackup? get rutokenGeneratedBackup => _rutokenGeneratedBackup;
   String? get rutokenProvisioningResult => _rutokenProvisioningResult;
+  bool get hasPendingRutokenBiometricOffer =>
+      _pendingRutokenBiometricPin != null && _busyMessage == null;
 
   /// Active WalletConnect sessions (wallet-side view).
   List<WalletConnectSession> get walletConnectSessions =>
@@ -484,6 +496,32 @@ class WalletFlowController extends ChangeNotifier {
     );
   }
 
+  Future<void> adoptExistingRutoken({required String pin}) async {
+    final provisioning = _rutokenProvisioning;
+    final backend = _rutokenBackend;
+    if (provisioning == null || backend == null) return;
+    await _runBusy('Поднеси готовый Рутокен к NFC и удерживай его…', () async {
+      final account = await provisioning.adoptExisting(pin: pin);
+      await _backendRegistry.selectBackend(backend.backendId);
+      await _store.write(_rutokenRegistrationStorageKey, '1');
+      _selectedBackendId = backend.backendId;
+      _summary = StoredWalletSummary(
+        address: account.address,
+        backendId: backend.backendId,
+        createdAtUtc: DateTime.now().toUtc(),
+      );
+      _material = null;
+      _externalRuntimeState = null;
+      _lastUnlockAuthMethod = WalletAuthMethod.externalDevice;
+      _stage = WalletFlowStage.unlocked;
+      _rutokenProvisioningResult =
+          'Готовый Рутокен подключён без изменения ключей: '
+          '${account.address}. Для этой карты сохранены только адрес и путь; '
+          'AirGap account export недоступен без ранее сохранённого xpub.';
+      await _queueRutokenBiometricOffer(pin);
+    });
+  }
+
   Future<void> _provisionRutoken({
     required String mnemonic,
     required String passphrase,
@@ -515,12 +553,49 @@ class WalletFlowController extends ChangeNotifier {
       );
       _material = null;
       _biometricsEnabled = false;
-      _biometricsAvailable = false;
+      _biometricsAvailable = await backend.isBiometricUnlockAvailable();
       _externalRuntimeState = null;
       _lastUnlockAuthMethod = WalletAuthMethod.externalDevice;
       _rutokenGeneratedBackup = null;
       _stage = WalletFlowStage.unlocked;
+      await _queueRutokenBiometricOffer(pin);
     });
+  }
+
+  Future<void> completeRutokenBiometricOffer(bool enabled) async {
+    final pin = _pendingRutokenBiometricPin;
+    final backend = _rutokenBackend;
+    if (pin == null || backend == null) return;
+    var completed = false;
+    await _runBusy(
+      enabled ? 'Сохраняем PIN под защитой биометрии…' : 'Сохраняем выбор…',
+      () async {
+        if (enabled) {
+          await backend.enableBiometricPin(pin);
+        } else {
+          await backend.declineBiometricPin();
+        }
+        _biometricsAvailable = await backend.isBiometricUnlockAvailable();
+        _biometricsEnabled = await backend.isBiometricUnlockEnabled();
+        completed = true;
+      },
+    );
+    if (completed) {
+      _pendingRutokenBiometricPin = null;
+      _notify();
+    }
+  }
+
+  Future<void> _queueRutokenBiometricOffer(String pin) async {
+    final backend = _rutokenBackend;
+    if (backend == null ||
+        pin.isEmpty ||
+        _pendingRutokenBiometricPin != null ||
+        !await backend.shouldOfferBiometricPin()) {
+      return;
+    }
+    _pendingRutokenBiometricPin = pin;
+    _notify();
   }
 
   Future<void> createWallet({required String pin}) async {
@@ -963,16 +1038,30 @@ class WalletFlowController extends ChangeNotifier {
       try {
         final backend = activeBackend;
         if (backend is WalletCustodyBackend) {
+          var effectivePin = pin;
           if (useBiometrics) {
-            throw const BiometricUnavailableFailure();
+            if (backend is! RutokenCustodyBackend) {
+              throw const BiometricUnavailableFailure();
+            }
+            effectivePin = await backend.retrievePinWithBiometrics();
           }
-          final openedSession = await backend.openSigningSession(pin: pin!);
+          if (effectivePin == null || effectivePin.isEmpty) {
+            throw const VaultFailure('Введите PIN Рутокена.');
+          }
+          final openedSession = await backend.openSigningSession(
+            pin: effectivePin,
+          );
           custodySession = openedSession;
-          _lastUnlockAuthMethod = WalletAuthMethod.externalDevice;
+          _lastUnlockAuthMethod = useBiometrics
+              ? WalletAuthMethod.biometric
+              : WalletAuthMethod.externalDevice;
           final operation = walletOperationAuthorizer.authorizeCustodySession(
             session: openedSession,
           );
           await action(operation.signer);
+          if (!useBiometrics && backend is RutokenCustodyBackend) {
+            await _queueRutokenBiometricOffer(effectivePin);
+          }
           return;
         }
         if (backend is! KeyStorageBackend) {
@@ -1070,9 +1159,14 @@ class WalletFlowController extends ChangeNotifier {
     if (backend is WalletCustodyBackend) {
       await _runBusy('Готовим публичный QR аккаунта…', () async {
         if (useBiometrics) {
-          throw const BiometricUnavailableFailure();
+          if (backend is! RutokenCustodyBackend) {
+            throw const BiometricUnavailableFailure();
+          }
+          await backend.retrievePinWithBiometrics();
         }
-        final publicAccount = await backend.readAccountPublicKey(pin: pin!);
+        final publicAccount = await backend.readAccountPublicKey(
+          pin: pin ?? '',
+        );
         final export = const AccountExportDeriver().deriveFromPublicAccount(
           publicAccount: publicAccount,
           name: 'Wallet Demo',

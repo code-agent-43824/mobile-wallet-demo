@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:bip32/bip32.dart' as bip32;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/auth/biometric_auth.dart';
+import 'package:mobile_wallet_demo/src/auth/wallet_operation_auth.dart';
 import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
 import 'package:mobile_wallet_demo/src/key_storage/custody_backend.dart';
@@ -149,6 +151,131 @@ void main() {
     expect(backup.mnemonic.split(' '), hasLength(24));
     expect(backup.passphrase, 'offline secret');
   });
+
+  test(
+    'adopts an existing card without importing and keeps xpub optional',
+    () async {
+      final adapter = _ProvisioningAdapter();
+      await RutokenProvisioningService(
+        adapter: adapter,
+        store: InMemorySecureKeyValueStore(),
+      ).provision(mnemonic: _mnemonic, passphrase: '', pin: '1234');
+      final importCountBeforeAdoption = adapter.importCount;
+      final store = InMemorySecureKeyValueStore();
+      final service = RutokenProvisioningService(
+        adapter: adapter,
+        store: store,
+      );
+
+      final account = await service.adoptExisting(pin: '1234');
+
+      expect(adapter.importCount, importCountBeforeAdoption);
+      expect(await service.loadAccountDescriptor(), isNotNull);
+      expect(await service.loadPublicAccount(), isNull);
+      expect(account.address, adapter.account?.address);
+      final publicProfile = await store.read('rutoken.public_account.v1');
+      expect(publicProfile, contains('"schema":2'));
+      expect(publicProfile, isNot(contains('1234')));
+    },
+  );
+
+  test('loads the existing schema-1 public profile', () async {
+    final store = InMemorySecureKeyValueStore();
+    final service = RutokenProvisioningService(
+      adapter: _ProvisioningAdapter(),
+      store: store,
+    );
+    await service.provision(mnemonic: _mnemonic, passphrase: '', pin: '1234');
+    final json =
+        jsonDecode((await store.read('rutoken.public_account.v1'))!)
+            as Map<String, dynamic>;
+    json['schema'] = 1;
+    await store.write('rutoken.public_account.v1', jsonEncode(json));
+
+    expect(await service.loadAccountDescriptor(), isNotNull);
+    expect(await service.loadPublicAccount(), isNotNull);
+  });
+
+  test(
+    'adopting the same registered card preserves its retained xpub',
+    () async {
+      final store = InMemorySecureKeyValueStore();
+      final adapter = _ProvisioningAdapter();
+      final service = RutokenProvisioningService(
+        adapter: adapter,
+        store: store,
+      );
+      await service.provision(mnemonic: _mnemonic, passphrase: '', pin: '1234');
+      final importCount = adapter.importCount;
+
+      await service.adoptExisting(pin: '1234');
+
+      expect(adapter.importCount, importCount);
+      expect(await service.loadPublicAccount(), isNotNull);
+    },
+  );
+
+  test(
+    'offers biometric PIN after adoption and uses it after cold restart',
+    () async {
+      final adapter = _ProvisioningAdapter();
+      await RutokenProvisioningService(
+        adapter: adapter,
+        store: InMemorySecureKeyValueStore(),
+      ).provision(mnemonic: _mnemonic, passphrase: '', pin: '1234');
+      final importCountBeforeAdoption = adapter.importCount;
+      final store = InMemorySecureKeyValueStore();
+      final first = WalletFlowController(
+        store: store,
+        biometricAuthGateway: const SimulatedBiometricAuthGateway(),
+        rutokenNativeAdapter: adapter,
+      );
+      await first.loadInitialState();
+
+      await first.adoptExistingRutoken(pin: '1234');
+
+      expect(first.errorMessage, isNull);
+      expect(first.summary?.address, adapter.account?.address);
+      expect(first.hasPendingRutokenBiometricOffer, isTrue);
+      expect(adapter.importCount, importCountBeforeAdoption);
+
+      await first.completeRutokenBiometricOffer(true);
+
+      expect(first.hasPendingRutokenBiometricOffer, isFalse);
+      expect(first.biometricsEnabled, isTrue);
+      expect(first.canUnlockWithBiometrics, isTrue);
+      first.dispose();
+
+      final walletConnect = FakeWalletConnectService();
+      final restored = WalletFlowController(
+        store: store,
+        biometricAuthGateway: const SimulatedBiometricAuthGateway(),
+        walletConnectService: walletConnect,
+        rutokenNativeAdapter: adapter,
+      );
+      await restored.loadInitialState();
+
+      expect(restored.biometricsEnabled, isTrue);
+      expect(restored.canUnlockWithBiometrics, isTrue);
+      walletConnect.simulateRequest(
+        topic: 'rutoken-biometric',
+        method: 'personal_sign',
+        chainId: 'eip155:1',
+        params: <Object?>['0x48656c6c6f', restored.summary!.address],
+      );
+      await pumpEventQueue();
+      await restored.approvePendingRequest(useBiometrics: true);
+
+      expect(restored.errorMessage, isNull);
+      expect(restored.pendingRequest, isNull);
+      expect(walletConnect.respondedResults, hasLength(1));
+      expect(adapter.openPins.last, '1234');
+      expect(restored.lastUnlockAuthMethod, WalletAuthMethod.biometric);
+
+      restored.dispose();
+      await walletConnect.dispose();
+    },
+  );
 
   test(
     'selects the real backend, restores it without NFC, and signs through it',
@@ -358,10 +485,13 @@ class _ProvisioningAdapter implements RutokenNativeAdapter {
   WalletAccountDescriptor? account;
   Uint8List? addressPrivateKey;
   int signCount = 0;
+  int importCount = 0;
+  final List<String> openPins = <String>[];
 
   @override
   Future<RutokenNativeSession> openSession({required String pin}) async {
     openCount++;
+    openPins.add(pin);
     return RutokenNativeSession(
       id: 'provision-$openCount',
       openedAtUtc: DateTime.utc(2026, 7, 23),
@@ -374,6 +504,7 @@ class _ProvisioningAdapter implements RutokenNativeAdapter {
     required Uint8List masterPrivateKey,
     required Uint8List chainCode,
   }) async {
+    importCount++;
     masterReference = masterPrivateKey;
     chainCodeReference = chainCode;
     masterCopy = Uint8List.fromList(masterPrivateKey);
