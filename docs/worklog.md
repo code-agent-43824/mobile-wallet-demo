@@ -18,6 +18,35 @@ Entry template:
 
 ---
 
+## 2026-07-24 — Adopt existing Rutoken + biometric PIN convenience — branch feat/rutoken-existing-card-biometric-pin — done (local validation)
+- Plan: extend the real Android backend so onboarding can adopt a Rutoken that already contains the supported
+  BIP-32 key instead of requiring Wallet Demo to provision it. Read and persist only the card-derived public
+  account descriptor; keep account-xpub metadata optional, so own-send and WalletConnect work while EIP-4527
+  account export clearly remains unavailable for cards whose xpub was not retained during provisioning. Bind
+  every signing session to the registered address so swapping in another card cannot sign under a stale
+  dashboard identity. After the first successful PIN-authenticated use of a registered card, offer once to save
+  its PIN in the separate biometric-gated secret store; if accepted, expose biometric authentication as an
+  alternative for later private operations, never as a bypass without a system biometric prompt. Do not place
+  the PIN in the public Rutoken profile or logs. Cover existing-profile migration, adoption, card mismatch,
+  opt-in/decline, cold restart, and biometric signing; bump the functional version, reconcile docs, and require
+  full CI before physical dogfood.
+- Done: v1.49.0+60 adds «Подключить готовый Рутокен». It opens the existing card read-only, derives the supported
+  address/path, never calls `C_CreateObject`, and persists a schema-2 descriptor-only profile; schema-1 and
+  full-xpub profiles still load, and re-adopting the same provisioned card preserves its xpub. Cold start uses
+  that descriptor without NFC; every later signing session re-derives and compares the card address before any
+  signature. After the first successful PIN-authenticated adoption/provision/sign operation, an explicit
+  non-dismissible choice offers biometric convenience once per account. Acceptance first invokes system
+  biometrics, then stores the PIN only in the separate secure-storage namespace; each later retrieval invokes
+  system biometrics again before opening the transient native session. Decline is remembered. Own-send,
+  WalletConnect, and AirGap auth sheets now expose the biometric option for a real Rutoken when enabled; a
+  descriptor-only adopted card reports that AirGap account export needs provisioning-retained xpub metadata.
+  Format/analyze/diff checks are clean. The full pre-final suite passed, and the final Rutoken-focused suite
+  (23 tests) covers adoption without import, schema migration, xpub preservation, address mismatch,
+  opt-in/decline, biometric invocation, cold restart, and biometric WalletConnect signing.
+- Next / open: require full GitHub Actions, then physically adopt a pre-provisioned card and test one
+  biometric-authorized Sepolia send. WalletConnect/AirGap remain deferred per owner request.
+- Refs: owner request in Telegram topic 7389; v1.49.0+60.
+
 ## 2026-07-23 — Register the production Rutoken backend — branch feat/rutoken-production-backend — done (CI green)
 - Plan: owner physical dogfood confirms that both v1.47 recoverable provisioning paths succeed and that each
   produces the independently expected EVM address. Mark Phase 10.4 physically passed, then make that provisioned

@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'key_storage_backend.dart';
+import 'rutoken_biometric_pin_store.dart';
 
 /// Public identity of one custody-backed EVM account. It is safe to keep while
 /// the signer is locked: no seed or private key is represented here.
@@ -151,14 +152,20 @@ class RutokenCustodyBackend implements WalletCustodyBackend {
     required RutokenNativeAdapter adapter,
     WalletAccountPublicKey? publicAccountMetadata,
     Future<WalletAccountPublicKey?> Function()? publicAccountLoader,
+    Future<WalletAccountDescriptor?> Function()? accountLoader,
+    RutokenBiometricPinStore? biometricPinStore,
     this.backendId = 'rutoken_nfc',
   }) : _adapter = adapter,
        _publicAccountMetadata = publicAccountMetadata,
-       _publicAccountLoader = publicAccountLoader;
+       _publicAccountLoader = publicAccountLoader,
+       _accountLoader = accountLoader,
+       _biometricPinStore = biometricPinStore;
 
   final RutokenNativeAdapter _adapter;
   final WalletAccountPublicKey? _publicAccountMetadata;
   final Future<WalletAccountPublicKey?> Function()? _publicAccountLoader;
+  final Future<WalletAccountDescriptor?> Function()? _accountLoader;
+  final RutokenBiometricPinStore? _biometricPinStore;
   @override
   final String backendId;
 
@@ -173,17 +180,25 @@ class RutokenCustodyBackend implements WalletCustodyBackend {
     return _publicAccountLoader?.call();
   }
 
+  Future<WalletAccountDescriptor?> _loadRegisteredAccount() async {
+    final account = await _accountLoader?.call();
+    if (account != null) {
+      return account;
+    }
+    return (await _loadPublicAccount())?.account;
+  }
+
   @override
-  Future<bool> hasWallet() async => await _loadPublicAccount() != null;
+  Future<bool> hasWallet() async => await _loadRegisteredAccount() != null;
 
   @override
   Future<StoredWalletSummary?> getWalletSummary() async {
-    final metadata = await _loadPublicAccount();
-    if (metadata == null) {
+    final account = await _loadRegisteredAccount();
+    if (account == null) {
       return null;
     }
     return StoredWalletSummary(
-      address: metadata.account.address,
+      address: account.address,
       backendId: backendId,
       // v1 public metadata intentionally did not persist a creation timestamp.
       // The dashboard does not expose it; keep a stable sentinel rather than
@@ -193,10 +208,18 @@ class RutokenCustodyBackend implements WalletCustodyBackend {
   }
 
   @override
-  Future<bool> isBiometricUnlockAvailable() async => false;
+  Future<bool> isBiometricUnlockAvailable() async {
+    return await _biometricPinStore?.isAvailable() ?? false;
+  }
 
   @override
-  Future<bool> isBiometricUnlockEnabled() async => false;
+  Future<bool> isBiometricUnlockEnabled() async {
+    final account = await _loadRegisteredAccount();
+    if (account == null) {
+      return false;
+    }
+    return await _biometricPinStore?.isEnabled(account.address) ?? false;
+  }
 
   @override
   void lock() {}
@@ -211,6 +234,7 @@ class RutokenCustodyBackend implements WalletCustodyBackend {
       if (account == null) {
         throw StateError('Rutoken does not contain a configured wallet.');
       }
+      await _verifyRegisteredAccount(account);
       return account;
     } finally {
       await _adapter.closeSession(native);
@@ -227,6 +251,7 @@ class RutokenCustodyBackend implements WalletCustodyBackend {
       if (account == null) {
         throw StateError('Rutoken does not contain a configured wallet.');
       }
+      await _verifyRegisteredAccount(account);
       return _RutokenCustodySigningSession(
         adapter: _adapter,
         native: native,
@@ -245,10 +270,64 @@ class RutokenCustodyBackend implements WalletCustodyBackend {
     final metadata = await _loadPublicAccount();
     if (metadata == null) {
       throw StateError(
-        'Rutoken account xpub metadata is not provisioned on this phone.',
+        'Для этой готовой карты на телефоне нет account xpub: '
+        'AirGap export доступен только после создания или импорта ключа '
+        'через Wallet Demo.',
       );
     }
     return metadata;
+  }
+
+  Future<bool> shouldOfferBiometricPin() async {
+    final account = await _loadRegisteredAccount();
+    if (account == null) {
+      return false;
+    }
+    return await _biometricPinStore?.shouldOffer(account.address) ?? false;
+  }
+
+  Future<void> enableBiometricPin(String pin) async {
+    final account = await _requireRegisteredAccount();
+    final store = _biometricPinStore;
+    if (store == null) {
+      throw const BiometricUnavailableFailure();
+    }
+    await store.enable(address: account.address, pin: pin);
+  }
+
+  Future<void> declineBiometricPin() async {
+    final account = await _requireRegisteredAccount();
+    await _biometricPinStore?.decline(account.address);
+  }
+
+  Future<String> retrievePinWithBiometrics() async {
+    final account = await _requireRegisteredAccount();
+    final store = _biometricPinStore;
+    if (store == null) {
+      throw const BiometricUnavailableFailure();
+    }
+    return store.retrieve(account.address);
+  }
+
+  Future<WalletAccountDescriptor> _requireRegisteredAccount() async {
+    final account = await _loadRegisteredAccount();
+    if (account == null) {
+      throw StateError('Rutoken does not have a registered public profile.');
+    }
+    return account;
+  }
+
+  Future<void> _verifyRegisteredAccount(WalletAccountDescriptor actual) async {
+    final expected = await _loadRegisteredAccount();
+    if (expected == null) {
+      return;
+    }
+    if (actual.derivationPath != expected.derivationPath ||
+        actual.address.toLowerCase() != expected.address.toLowerCase()) {
+      throw const VaultFailure(
+        'Поднесён другой Рутокен: адрес карты не совпадает с активным кошельком.',
+      );
+    }
   }
 }
 

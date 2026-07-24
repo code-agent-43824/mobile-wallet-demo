@@ -77,6 +77,36 @@ void main() {
       expect(adapter.openCount, 1);
       expect(adapter.closeCount, 1);
     });
+
+    test(
+      'rejects a card whose address differs from the registered profile',
+      () async {
+        final adapter = _FakeRutokenNativeAdapter(
+          account: const WalletAccountDescriptor(
+            backendId: 'rutoken_nfc',
+            address: '0x1111111111111111111111111111111111111111',
+            derivationPath: "m/44'/60'/0'/0/0",
+          ),
+        );
+        final backend = RutokenCustodyBackend(
+          adapter: adapter,
+          accountLoader: () async => _FakeRutokenNativeAdapter.account,
+        );
+
+        await expectLater(
+          backend.openSigningSession(pin: '1234'),
+          throwsA(
+            isA<VaultFailure>().having(
+              (error) => error.message,
+              'message',
+              contains('другой Рутокен'),
+            ),
+          ),
+        );
+        expect(adapter.openCount, 1);
+        expect(adapter.closeCount, 1);
+      },
+    );
   });
 
   group('device r || s EVM parity', () {
@@ -305,9 +335,13 @@ class _FakeCustodySigningSession implements CustodySigningSession {
 }
 
 class _FakeRutokenNativeAdapter implements RutokenNativeAdapter {
-  _FakeRutokenNativeAdapter({this.hasAccount = true});
+  _FakeRutokenNativeAdapter({
+    this.hasAccount = true,
+    WalletAccountDescriptor? account,
+  }) : _account = account ?? _FakeRutokenNativeAdapter.account;
 
   final bool hasAccount;
+  final WalletAccountDescriptor _account;
   int openCount = 0;
   int closeCount = 0;
 
@@ -337,7 +371,7 @@ class _FakeRutokenNativeAdapter implements RutokenNativeAdapter {
   @override
   Future<WalletAccountDescriptor?> readAccountDescriptor(
     RutokenNativeSession session,
-  ) async => hasAccount ? account : null;
+  ) async => hasAccount ? _account : null;
 
   @override
   Future<WalletAccountDescriptor> importWallet({

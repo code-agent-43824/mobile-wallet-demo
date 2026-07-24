@@ -21,6 +21,7 @@ import 'key_storage/external_device_demo_backend.dart';
 import 'key_storage/external_device_pkcs11.dart';
 import 'key_storage/key_storage_backend.dart';
 import 'key_storage/phone_secure_vault.dart';
+import 'key_storage/rutoken_biometric_pin_store.dart';
 import 'key_storage/rutoken_provisioning.dart';
 import 'key_storage/secure_key_value_store.dart';
 import 'qr/qr_scanner.dart';
@@ -92,6 +93,7 @@ class WalletFlowScreen extends StatefulWidget {
 
 class _WalletFlowScreenState extends State<WalletFlowScreen> {
   late final WalletFlowController _controller;
+  bool _rutokenBiometricDialogOpen = false;
 
   @override
   void initState() {
@@ -113,7 +115,51 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
   void _onControllerChanged() {
     if (mounted) {
       setState(() {});
+      _scheduleRutokenBiometricOffer();
     }
+  }
+
+  void _scheduleRutokenBiometricOffer() {
+    if (_rutokenBiometricDialogOpen ||
+        !_controller.hasPendingRutokenBiometricOffer) {
+      return;
+    }
+    _rutokenBiometricDialogOpen = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        _rutokenBiometricDialogOpen = false;
+        return;
+      }
+      final enabled = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Использовать биометрию для Рутокена?'),
+          content: const Text(
+            'Можно сохранить PIN этой карты в отдельном защищённом хранилище. '
+            'В следующих операциях вместо ручного ввода PIN приложение сначала '
+            'потребует системную биометрическую проверку смартфона.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Не сохранять'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Сохранить под биометрией'),
+            ),
+          ],
+        ),
+      );
+      if (mounted) {
+        await _controller.completeRutokenBiometricOffer(enabled ?? false);
+      }
+      _rutokenBiometricDialogOpen = false;
+      if (mounted) {
+        _scheduleRutokenBiometricOffer();
+      }
+    });
   }
 
   @override
@@ -193,6 +239,9 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
               : null,
           onRutokenImport: controller.hasRutokenNativeAdapter
               ? controller.goToRutokenImport
+              : null,
+          onRutokenAdopt: controller.hasRutokenNativeAdapter
+              ? controller.adoptExistingRutoken
               : null,
           rutokenDiagnosticResult: controller.rutokenDiagnosticResult,
           rutokenProvisioningResult: controller.rutokenProvisioningResult,
@@ -345,7 +394,6 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           isQrCameraAvailable: controller.isQrCameraAvailable,
           isQrFileLoadAvailable: controller.isQrFileLoadAvailable,
           canUnlockWithBiometrics: controller.canUnlockWithBiometrics,
-          isExternalBackend: controller.isExternalBackendSelected,
           onScanQrCamera: controller.scanQrWithCamera,
           onLoadQrFromFile: controller.loadQrFromFile,
           onPair: controller.pairWalletConnect,

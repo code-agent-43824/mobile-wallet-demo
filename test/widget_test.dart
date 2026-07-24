@@ -241,7 +241,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Wallet Demo'), findsOneWidget);
-    expect(find.text('v1.48.0+59'), findsOneWidget);
+    expect(find.text('v1.49.0+60'), findsOneWidget);
     expect(find.text('Phone Secure Vault'), findsOneWidget);
     expect(find.text('External NFC demo device'), findsOneWidget);
     expect(find.text('Создать новый кошелёк'), findsOneWidget);
@@ -265,6 +265,7 @@ void main() {
 
     expect(find.text('Создать на Рутокене'), findsOneWidget);
     expect(find.text('Импортировать в Рутокен'), findsOneWidget);
+    expect(find.text('Подключить готовый Рутокен'), findsOneWidget);
     await tester.tap(find.text('Создать на Рутокене'));
     await tester.pumpAndSettle();
 

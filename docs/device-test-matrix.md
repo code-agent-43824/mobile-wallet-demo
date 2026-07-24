@@ -60,10 +60,12 @@ Add exact token model, firmware, SDK version, device/OS, and issue/evidence link
 | Recoverable create + mandatory backup confirmation | PASS v1.47 | BLOCKED | Empty token receives the reference raw master import; owner confirms creation and backup display succeed with the expected address. |
 | Existing mnemonic + optional passphrase import | PASS v1.47 | BLOCKED | Owner confirms import succeeds and the address matches the independent source. |
 | Address + software-retained account xpub/chain code | PASS v1.47 | BLOCKED | Address matches token derivation; provisioning metadata is produced from the same software reference without a native xpub query. |
-| Own-send | RETEST v1.48 | BLOCKED | Device signs; valid low-s/recovery id; broadcast succeeds once. |
-| WalletConnect transaction | RETEST v1.48 | BLOCKED | Preflight then tap+PIN; response/broadcast succeeds once. |
-| WalletConnect personal/EIP-712 | RETEST v1.48 | BLOCKED | Valid signatures; displayed request matches signed payload. |
-| EIP-4527 AirGap transaction | RETEST v1.48 | BLOCKED | Public account export and request signature require no secret export. |
+| Adopt existing compatible card | TEST v1.49 | BLOCKED | Address/path are registered without `C_CreateObject`; card key remains unchanged. |
+| Biometric PIN release | TEST v1.49 | BLOCKED | Opt in after first PIN use; next operation prompts system biometrics and signs without manual PIN entry. |
+| Own-send | RETEST v1.49 | BLOCKED | Device signs; valid low-s/recovery id; broadcast succeeds once. |
+| WalletConnect transaction | RETEST v1.49 | BLOCKED | Preflight then tap+PIN/biometric; response/broadcast succeeds once. |
+| WalletConnect personal/EIP-712 | RETEST v1.49 | BLOCKED | Valid signatures; displayed request matches signed payload. |
+| EIP-4527 AirGap transaction | RETEST v1.49 | BLOCKED | Public account export and request signature require no secret export; descriptor-only adopted cards cannot export xpub. |
 | Cancel, wrong PIN, timeout, NFC loss, SDK error | BLOCKED | BLOCKED | No signature; session always closes; retry starts fresh. |
 | Secret-containment review | BLOCKED | BLOCKED | No seed/private key in Dart models, logs, crash output, or errors. |
 

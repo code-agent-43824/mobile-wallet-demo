@@ -164,16 +164,68 @@ class RutokenProvisioningService {
     }
   }
 
-  Future<WalletAccountPublicKey?> loadPublicAccount() async {
-    final raw = await _store.read(_metadataKey);
-    if (raw == null) return null;
+  /// Registers a compatible card that already contains the supported BIP-32
+  /// master. The token is read only; no key object is created or replaced.
+  Future<WalletAccountDescriptor> adoptExisting({required String pin}) async {
+    if (pin.isEmpty) {
+      throw const RutokenNativeException('PIN Рутокена не должен быть пустым.');
+    }
+    final session = await _adapter.openSession(pin: pin);
+    WalletAccountDescriptor? account;
     try {
-      final json = jsonDecode(raw);
-      if (json is! Map<String, dynamic> ||
-          json['schema'] != 1 ||
-          json['state'] != 'active') {
-        return null;
+      account = await _adapter.readAccountDescriptor(session);
+      if (account == null) {
+        throw const RutokenNativeException(
+          'Рутокен не содержит совместимый BIP-32 кошелёк.',
+        );
       }
+      if (account.backendId != 'rutoken_nfc' ||
+          account.derivationPath != addressPath ||
+          !RegExp(r'^0x[0-9a-fA-F]{40}$').hasMatch(account.address)) {
+        throw const RutokenNativeException(
+          'Публичный профиль Рутокена имеет неподдерживаемый формат.',
+        );
+      }
+    } finally {
+      await _adapter.closeSession(session);
+    }
+
+    final existing = await loadAccountDescriptor();
+    if (existing != null &&
+        existing.address.toLowerCase() != account.address.toLowerCase()) {
+      throw const RutokenNativeException(
+        'На телефоне уже зарегистрирован другой Рутокен.',
+      );
+    }
+    if (existing != null) {
+      // Preserve any account-xpub fields retained during Wallet Demo
+      // provisioning; adopting the same card must not downgrade AirGap.
+      return account;
+    }
+    await _writeAccount(account);
+    return account;
+  }
+
+  Future<WalletAccountDescriptor?> loadAccountDescriptor() async {
+    final json = await _loadActiveMetadata();
+    if (json == null) return null;
+    try {
+      return WalletAccountDescriptor(
+        backendId: json['backendId'] as String,
+        address: json['address'] as String,
+        derivationPath: json['derivationPath'] as String,
+      );
+    } catch (_) {
+      throw const RutokenNativeException(
+        'Сохранённый публичный профиль Рутокена повреждён.',
+      );
+    }
+  }
+
+  Future<WalletAccountPublicKey?> loadPublicAccount() async {
+    final json = await _loadActiveMetadata();
+    if (json == null || json['compressedPublicKey'] == null) return null;
+    try {
       final account = WalletAccountDescriptor(
         backendId: json['backendId'] as String,
         address: json['address'] as String,
@@ -197,6 +249,37 @@ class RutokenProvisioningService {
     }
   }
 
+  Future<Map<String, dynamic>?> _loadActiveMetadata() async {
+    final raw = await _store.read(_metadataKey);
+    if (raw == null) return null;
+    try {
+      final json = jsonDecode(raw);
+      if (json is! Map<String, dynamic> ||
+          (json['schema'] != 1 && json['schema'] != 2) ||
+          json['state'] != 'active') {
+        return null;
+      }
+      return json;
+    } catch (_) {
+      throw const RutokenNativeException(
+        'Сохранённые публичные данные Рутокена повреждены.',
+      );
+    }
+  }
+
+  Future<void> _writeAccount(WalletAccountDescriptor account) {
+    return _store.write(
+      _metadataKey,
+      jsonEncode(<String, Object>{
+        'schema': 2,
+        'state': 'active',
+        'backendId': account.backendId,
+        'address': account.address,
+        'derivationPath': account.derivationPath,
+      }),
+    );
+  }
+
   Future<void> _writeMetadata(
     WalletAccountPublicKey publicAccount, {
     required String state,
@@ -204,7 +287,7 @@ class RutokenProvisioningService {
     return _store.write(
       _metadataKey,
       jsonEncode(<String, Object>{
-        'schema': 1,
+        'schema': 2,
         'state': state,
         'backendId': publicAccount.account.backendId,
         'address': publicAccount.account.address,

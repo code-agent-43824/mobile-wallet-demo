@@ -12,6 +12,7 @@ class _WelcomeStage extends StatelessWidget {
     required this.onRutokenDiagnostic,
     required this.onRutokenCreate,
     required this.onRutokenImport,
+    required this.onRutokenAdopt,
     required this.rutokenDiagnosticResult,
     required this.rutokenProvisioningResult,
   });
@@ -26,6 +27,7 @@ class _WelcomeStage extends StatelessWidget {
   final Future<void> Function(String pin)? onRutokenDiagnostic;
   final VoidCallback? onRutokenCreate;
   final VoidCallback? onRutokenImport;
+  final Future<void> Function({required String pin})? onRutokenAdopt;
   final String? rutokenDiagnosticResult;
   final String? rutokenProvisioningResult;
 
@@ -105,6 +107,24 @@ class _WelcomeStage extends StatelessWidget {
                 onPressed: onRutokenImport,
                 icon: const Icon(Icons.download),
                 label: const Text('Импортировать в Рутокен'),
+              ),
+              OutlinedButton.icon(
+                onPressed: onRutokenAdopt == null
+                    ? null
+                    : () async {
+                        final auth = await _promptForAuth(
+                          context,
+                          reason:
+                              'Введите PIN готового Рутокена. Ключи на карте изменены не будут.',
+                          biometricsOffered: false,
+                        );
+                        final pin = auth?.pin;
+                        if (pin != null) {
+                          await onRutokenAdopt!(pin: pin);
+                        }
+                      },
+                icon: const Icon(Icons.credit_card),
+                label: const Text('Подключить готовый Рутокен'),
               ),
             ],
           ),
