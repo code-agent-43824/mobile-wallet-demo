@@ -479,10 +479,12 @@ Small, reviewable steps; each chunk records plan and result in `docs/worklog.md`
   rejection remains automated-only until a second physical card is available.
 - **10.6 — ANDROID HARDENING DONE IN v1.50; iOS PENDING:** Android now provides cancellable NFC discovery,
   stable sanitized PIN/timeout/NFC-loss errors, card-presence checks, and primary-failure-preserving teardown.
-  Port the proven shared contracts to the vendor iOS stack and run the same physical-device matrix. The official
-  Rutoken SDK release 15.05.2026 is publicly downloadable and was audited to contain signed
-  `rtpkcs11ecp.xcframework` and `RtPcsc.xcframework`; integrate those exact vendor inputs in a separate reviewed
-  chunk rather than substitute an unverified binary or hand-roll Core NFC/APDUs.
+  Port the proven shared contracts to the vendor iOS stack and run the same physical-device matrix. The public
+  Rutoken SDK release 15.05.2026 contains signed generic `rtpkcs11ecp.xcframework` and `RtPcsc.xcframework`,
+  but header inspection confirms that it does **not** expose the wallet-only BIP32 mechanisms. The compatible
+  cards require the distinct `wtpkcs11ecp.xcframework` used by the official iOS crypto-wallet demo. Obtain that
+  exact licensed provider (device + simulator slices, headers, and notice) before implementation; do not
+  substitute the generic provider or hand-roll Core NFC/APDUs.
 
 ### Definition of Done
 - During normal use and signing, seed/private key never leave the token; logs, errors, persisted platform-channel
