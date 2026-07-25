@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-07-25 — Rutoken cancellation, error and secret-containment hardening — branch feat/rutoken-lifecycle-hardening — done locally (CI pending)
+## 2026-07-25 — Rutoken cancellation, error and secret-containment hardening — branch feat/rutoken-lifecycle-hardening — done (CI green)
 - Plan: owner dogfood confirms that v1.49 can adopt the ready card, opt in to biometric PIN storage, and complete
   a biometric-authorized Sepolia send. A second physical card is not currently available, so keep card-mismatch
   dogfood pending rather than weakening the binding. Close the remaining code-verifiable Android Phase 10 gaps:
@@ -41,9 +41,10 @@ Entry template:
   `efe57bae541bb8467ef9c6b960796f992a2483ce70cda67e5cc0030ccde28606`): it contains signed iOS-device/simulator
   `rtpkcs11ecp.xcframework` and `RtPcsc.xcframework`, so iOS is now an implementation chunk, not an acquisition
   unknown.
-- Next / open: require full CI, then physically exercise cancel/wrong-PIN/timeout/NFC-loss plus the deferred
-  WalletConnect/AirGap matrix. Integrate the audited official iOS frameworks and Swift adapter in the next
-  isolated functional chunk; the second-card mismatch check remains deferred until another card is available.
+- Next / open: physically exercise cancel/wrong-PIN/timeout/NFC-loss plus the deferred WalletConnect/AirGap
+  matrix. Integrate the audited official iOS frameworks and Swift adapter in the next isolated functional chunk;
+  the second-card mismatch check remains deferred until another card is available.
+- Refs: owner dogfood in Telegram topic 7389; v1.50.0+61; PR #10; squash `74b8a4f`; CI 30151905240.
 
 ## 2026-07-24 — Adopt existing Rutoken + biometric PIN convenience — branch feat/rutoken-existing-card-biometric-pin — done (CI green)
 - Plan: extend the real Android backend so onboarding can adopt a Rutoken that already contains the supported
