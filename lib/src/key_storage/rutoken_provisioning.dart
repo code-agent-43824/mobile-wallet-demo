@@ -172,6 +172,7 @@ class RutokenProvisioningService {
     }
     final session = await _adapter.openSession(pin: pin);
     WalletAccountDescriptor? account;
+    Object? primaryFailure;
     try {
       account = await _adapter.readAccountDescriptor(session);
       if (account == null) {
@@ -186,8 +187,15 @@ class RutokenProvisioningService {
           'Публичный профиль Рутокена имеет неподдерживаемый формат.',
         );
       }
+    } catch (error) {
+      primaryFailure = error;
+      rethrow;
     } finally {
-      await _adapter.closeSession(session);
+      try {
+        await _adapter.closeSession(session);
+      } catch (_) {
+        if (primaryFailure == null) rethrow;
+      }
     }
 
     final existing = await loadAccountDescriptor();

@@ -144,6 +144,9 @@ class _FailingBroadcaster implements TransactionBroadcaster {
 
 class _UnusedRutokenAdapter implements RutokenNativeAdapter {
   @override
+  Future<void> cancelPendingOperation() async {}
+
+  @override
   Future<void> closeSession(RutokenNativeSession session) =>
       throw UnimplementedError();
 
@@ -238,10 +241,11 @@ void main() {
         blockchainProvider: _FakeBlockchainProvider(),
       ),
     );
+
     await tester.pumpAndSettle();
 
     expect(find.text('Wallet Demo'), findsOneWidget);
-    expect(find.text('v1.49.0+60'), findsOneWidget);
+    expect(find.text('v1.50.0+61'), findsOneWidget);
     expect(find.text('Phone Secure Vault'), findsOneWidget);
     expect(find.text('External NFC demo device'), findsOneWidget);
     expect(find.text('Создать новый кошелёк'), findsOneWidget);

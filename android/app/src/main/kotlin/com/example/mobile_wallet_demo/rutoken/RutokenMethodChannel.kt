@@ -19,7 +19,14 @@ internal class RutokenMethodChannel(
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "openSession" -> execute(result) {
-                runtime.openSession(call.requiredString("pin"))
+                runtime.openSession(
+                    operationId = call.requiredString("operationId"),
+                    pin = call.requiredString("pin"),
+                )
+            }
+            "cancelOperation" -> {
+                runtime.cancelOperation(call.requiredString("operationId"))
+                result.success(null)
             }
             "readAccountDescriptor" -> execute(result) {
                 runtime.readAccountDescriptor(call.requiredString("sessionId"))
@@ -53,8 +60,8 @@ internal class RutokenMethodChannel(
                     onSuccess = result::success,
                     onFailure = { error ->
                         result.error(
-                            "rutoken_native",
-                            error.message ?: error.javaClass.simpleName,
+                            nativeErrorCode(error),
+                            nativeErrorMessage(error),
                             mapOf("type" to error.javaClass.name),
                         )
                     },
@@ -75,6 +82,32 @@ internal class RutokenMethodChannel(
             ?: throw IllegalArgumentException("Missing '$name'.")
         return values.map(Number::toLong).toLongArray()
     }
+
+    private fun nativeErrorCode(error: Throwable): String {
+        if (error is RutokenOperationCancelledException) return "rutoken_cancelled"
+        if (error is RutokenWaitTimeoutException) return "rutoken_timeout"
+        if (error is RutokenNfcLostException) return "rutoken_nfc_lost"
+        val diagnostic = "${error.javaClass.name} ${error.message}".uppercase()
+        return when {
+            "CKR_PIN_LOCKED" in diagnostic -> "rutoken_pin_locked"
+            "CKR_PIN_INCORRECT" in diagnostic || "CKR_PIN_INVALID" in diagnostic ->
+                "rutoken_pin_invalid"
+            "CKR_DEVICE_REMOVED" in diagnostic ||
+                "CKR_TOKEN_NOT_PRESENT" in diagnostic ||
+                "SCARD_W_REMOVED_CARD" in diagnostic -> "rutoken_nfc_lost"
+            else -> "rutoken_native"
+        }
+    }
+
+    private fun nativeErrorMessage(error: Throwable): String =
+        when (nativeErrorCode(error)) {
+            "rutoken_cancelled" -> "Rutoken NFC wait was cancelled."
+            "rutoken_timeout" -> "Rutoken was not detected over NFC within 30 seconds."
+            "rutoken_pin_invalid" -> "Rutoken PIN is invalid."
+            "rutoken_pin_locked" -> "Rutoken PIN is locked."
+            "rutoken_nfc_lost" -> "Rutoken NFC connection was lost."
+            else -> error.message ?: error.javaClass.simpleName
+        }
 
     companion object {
         const val CHANNEL_NAME = "wallet_demo/rutoken"

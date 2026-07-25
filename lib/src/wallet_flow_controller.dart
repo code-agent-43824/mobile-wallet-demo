@@ -162,6 +162,8 @@ class WalletFlowController extends ChangeNotifier {
   String? _seedPhraseToShow;
   String? _errorMessage;
   String? _busyMessage;
+  Future<void> Function()? _busyCancelAction;
+  bool _busyCancellationRequested = false;
   String? _pendingBiometricPin;
   String? _selectedBackendId;
   WalletConnectSessionProposal? _pendingProposal;
@@ -201,6 +203,8 @@ class WalletFlowController extends ChangeNotifier {
   /// Non-null while a long operation (create/import/unlock) runs; the UI shows a
   /// progress overlay with this message so key derivation isn't a frozen screen.
   String? get busyMessage => _busyMessage;
+  bool get canCancelBusyOperation => _busyCancelAction != null;
+  bool get isBusyCancellationRequested => _busyCancellationRequested;
   String? get selectedBackendId => _selectedBackendId;
   ExternalDeviceDemoRuntimeState? get externalRuntimeState =>
       _externalRuntimeState;
@@ -384,27 +388,39 @@ class WalletFlowController extends ChangeNotifier {
   Future<void> runRutokenTransportDiagnostic(String pin) async {
     final adapter = _rutokenNativeAdapter;
     if (adapter == null) return;
-    await _runBusy('Поднеси Рутокен к NFC и удерживай его…', () async {
-      final session = await adapter.openSession(pin: pin);
-      try {
-        final account = await adapter.readAccountDescriptor(session);
-        if (account == null) {
-          throw StateError('Рутокен не содержит ECDSA-кошелёк.');
+    await _runBusy(
+      'Поднеси Рутокен к NFC и удерживай его…',
+      () async {
+        final session = await adapter.openSession(pin: pin);
+        Object? primaryFailure;
+        try {
+          final account = await adapter.readAccountDescriptor(session);
+          if (account == null) {
+            throw StateError('Рутокен не содержит ECDSA-кошелёк.');
+          }
+          final digest = Uint8List.fromList(List<int>.generate(32, (i) => i));
+          final signature = await adapter.signDigest(
+            session: session,
+            derivationPath: account.derivationPath,
+            digest: digest,
+          );
+          _rutokenDiagnosticResult =
+              'Рутокен доступен: ${account.address}. '
+              'CKM_ECDSA вернул сырую подпись длиной '
+              '${signature.toBytes().length} байта.';
+        } catch (error) {
+          primaryFailure = error;
+          rethrow;
+        } finally {
+          try {
+            await adapter.closeSession(session);
+          } catch (_) {
+            if (primaryFailure == null) rethrow;
+          }
         }
-        final digest = Uint8List.fromList(List<int>.generate(32, (i) => i));
-        final signature = await adapter.signDigest(
-          session: session,
-          derivationPath: account.derivationPath,
-          digest: digest,
-        );
-        _rutokenDiagnosticResult =
-            'Рутокен доступен: ${account.address}. '
-            'CKM_ECDSA вернул сырую подпись длиной '
-            '${signature.toBytes().length} байта.';
-      } finally {
-        await adapter.closeSession(session);
-      }
-    });
+      },
+      onCancel: adapter.cancelPendingOperation,
+    );
   }
 
   Future<void> selectBackend(String backendId) async {
@@ -500,26 +516,30 @@ class WalletFlowController extends ChangeNotifier {
     final provisioning = _rutokenProvisioning;
     final backend = _rutokenBackend;
     if (provisioning == null || backend == null) return;
-    await _runBusy('Поднеси готовый Рутокен к NFC и удерживай его…', () async {
-      final account = await provisioning.adoptExisting(pin: pin);
-      await _backendRegistry.selectBackend(backend.backendId);
-      await _store.write(_rutokenRegistrationStorageKey, '1');
-      _selectedBackendId = backend.backendId;
-      _summary = StoredWalletSummary(
-        address: account.address,
-        backendId: backend.backendId,
-        createdAtUtc: DateTime.now().toUtc(),
-      );
-      _material = null;
-      _externalRuntimeState = null;
-      _lastUnlockAuthMethod = WalletAuthMethod.externalDevice;
-      _stage = WalletFlowStage.unlocked;
-      _rutokenProvisioningResult =
-          'Готовый Рутокен подключён без изменения ключей: '
-          '${account.address}. Для этой карты сохранены только адрес и путь; '
-          'AirGap account export недоступен без ранее сохранённого xpub.';
-      await _queueRutokenBiometricOffer(pin);
-    });
+    await _runBusy(
+      'Поднеси готовый Рутокен к NFC и удерживай его…',
+      () async {
+        final account = await provisioning.adoptExisting(pin: pin);
+        await _backendRegistry.selectBackend(backend.backendId);
+        await _store.write(_rutokenRegistrationStorageKey, '1');
+        _selectedBackendId = backend.backendId;
+        _summary = StoredWalletSummary(
+          address: account.address,
+          backendId: backend.backendId,
+          createdAtUtc: DateTime.now().toUtc(),
+        );
+        _material = null;
+        _externalRuntimeState = null;
+        _lastUnlockAuthMethod = WalletAuthMethod.externalDevice;
+        _stage = WalletFlowStage.unlocked;
+        _rutokenProvisioningResult =
+            'Готовый Рутокен подключён без изменения ключей: '
+            '${account.address}. Для этой карты сохранены только адрес и путь; '
+            'AirGap account export недоступен без ранее сохранённого xpub.';
+        await _queueRutokenBiometricOffer(pin);
+      },
+      onCancel: _rutokenNativeAdapter?.cancelPendingOperation,
+    );
   }
 
   Future<void> _provisionRutoken({
@@ -529,37 +549,41 @@ class WalletFlowController extends ChangeNotifier {
   }) async {
     final provisioning = _rutokenProvisioning;
     if (provisioning == null) return;
-    await _runBusy('Поднеси пустой Рутокен к NFC и удерживай его…', () async {
-      final result = await provisioning.provision(
-        mnemonic: mnemonic,
-        passphrase: passphrase,
-        pin: pin,
-      );
-      _rutokenProvisioningResult =
-          'Кошелёк записан на Рутокен: ${result.account.address}. '
-          'Он выбран как активный backend; в приложении сохранены только '
-          'публичные данные account xpub.';
-      final backend = _rutokenBackend;
-      if (backend == null) {
-        throw const VaultFailure('Rutoken backend недоступен в этой сборке.');
-      }
-      await _backendRegistry.selectBackend(backend.backendId);
-      await _store.write(_rutokenRegistrationStorageKey, '1');
-      _selectedBackendId = backend.backendId;
-      _summary = StoredWalletSummary(
-        address: result.account.address,
-        backendId: backend.backendId,
-        createdAtUtc: DateTime.now().toUtc(),
-      );
-      _material = null;
-      _biometricsEnabled = false;
-      _biometricsAvailable = await backend.isBiometricUnlockAvailable();
-      _externalRuntimeState = null;
-      _lastUnlockAuthMethod = WalletAuthMethod.externalDevice;
-      _rutokenGeneratedBackup = null;
-      _stage = WalletFlowStage.unlocked;
-      await _queueRutokenBiometricOffer(pin);
-    });
+    await _runBusy(
+      'Поднеси пустой Рутокен к NFC и удерживай его…',
+      () async {
+        final result = await provisioning.provision(
+          mnemonic: mnemonic,
+          passphrase: passphrase,
+          pin: pin,
+        );
+        _rutokenProvisioningResult =
+            'Кошелёк записан на Рутокен: ${result.account.address}. '
+            'Он выбран как активный backend; в приложении сохранены только '
+            'публичные данные account xpub.';
+        final backend = _rutokenBackend;
+        if (backend == null) {
+          throw const VaultFailure('Rutoken backend недоступен в этой сборке.');
+        }
+        await _backendRegistry.selectBackend(backend.backendId);
+        await _store.write(_rutokenRegistrationStorageKey, '1');
+        _selectedBackendId = backend.backendId;
+        _summary = StoredWalletSummary(
+          address: result.account.address,
+          backendId: backend.backendId,
+          createdAtUtc: DateTime.now().toUtc(),
+        );
+        _material = null;
+        _biometricsEnabled = false;
+        _biometricsAvailable = await backend.isBiometricUnlockAvailable();
+        _externalRuntimeState = null;
+        _lastUnlockAuthMethod = WalletAuthMethod.externalDevice;
+        _rutokenGeneratedBackup = null;
+        _stage = WalletFlowStage.unlocked;
+        await _queueRutokenBiometricOffer(pin);
+      },
+      onCancel: _rutokenNativeAdapter?.cancelPendingOperation,
+    );
   }
 
   Future<void> completeRutokenBiometricOffer(bool enabled) async {
@@ -1033,71 +1057,85 @@ class WalletFlowController extends ChangeNotifier {
     String busyMessage = 'Разблокируем для подписи…',
     required Future<void> Function(WalletTransactionSigner signer) action,
   }) async {
-    await _runBusy(busyMessage, () async {
-      CustodySigningSession? custodySession;
-      try {
-        final backend = activeBackend;
-        if (backend is WalletCustodyBackend) {
-          var effectivePin = pin;
-          if (useBiometrics) {
-            if (backend is! RutokenCustodyBackend) {
-              throw const BiometricUnavailableFailure();
-            }
-            effectivePin = await backend.retrievePinWithBiometrics();
-          }
-          if (effectivePin == null || effectivePin.isEmpty) {
-            throw const VaultFailure('Введите PIN Рутокена.');
-          }
-          final openedSession = await backend.openSigningSession(
-            pin: effectivePin,
-          );
-          custodySession = openedSession;
-          _lastUnlockAuthMethod = useBiometrics
-              ? WalletAuthMethod.biometric
-              : WalletAuthMethod.externalDevice;
-          final operation = walletOperationAuthorizer.authorizeCustodySession(
-            session: openedSession,
-          );
-          await action(operation.signer);
-          if (!useBiometrics && backend is RutokenCustodyBackend) {
-            await _queueRutokenBiometricOffer(effectivePin);
-          }
-          return;
-        }
-        if (backend is! KeyStorageBackend) {
-          throw const VaultFailure(
-            'Активный backend не поддерживает локальную подпись.',
-          );
-        }
-        if (useBiometrics) {
-          _material = await backend.unlockWithBiometrics();
-          _lastUnlockAuthMethod = WalletAuthMethod.biometric;
-        } else {
-          _material = await backend.unlock(pin: pin!);
-          _lastUnlockAuthMethod = backend is ExternalDeviceKeyStorageBackend
-              ? WalletAuthMethod.externalDevice
-              : WalletAuthMethod.pin;
-        }
-        final operation = walletOperationAuthorizer
-            .authorizeUnlockedLocalSigning(
-              backend: backend,
-              walletMaterial: _material,
-              authMethod: _lastUnlockAuthMethod,
-            );
-        await action(operation.signer);
-      } finally {
+    await _runBusy(
+      busyMessage,
+      () async {
+        CustodySigningSession? custodySession;
+        Object? primaryFailure;
         try {
-          await custodySession?.close();
+          final backend = activeBackend;
+          if (backend is WalletCustodyBackend) {
+            var effectivePin = pin;
+            if (useBiometrics) {
+              if (backend is! RutokenCustodyBackend) {
+                throw const BiometricUnavailableFailure();
+              }
+              effectivePin = await backend.retrievePinWithBiometrics();
+            }
+            if (effectivePin == null || effectivePin.isEmpty) {
+              throw const VaultFailure('Введите PIN Рутокена.');
+            }
+            final openedSession = await backend.openSigningSession(
+              pin: effectivePin,
+            );
+            custodySession = openedSession;
+            _lastUnlockAuthMethod = useBiometrics
+                ? WalletAuthMethod.biometric
+                : WalletAuthMethod.externalDevice;
+            final operation = walletOperationAuthorizer.authorizeCustodySession(
+              session: openedSession,
+            );
+            await action(operation.signer);
+            if (!useBiometrics && backend is RutokenCustodyBackend) {
+              await _queueRutokenBiometricOffer(effectivePin);
+            }
+            return;
+          }
+          if (backend is! KeyStorageBackend) {
+            throw const VaultFailure(
+              'Активный backend не поддерживает локальную подпись.',
+            );
+          }
+          if (useBiometrics) {
+            _material = await backend.unlockWithBiometrics();
+            _lastUnlockAuthMethod = WalletAuthMethod.biometric;
+          } else {
+            _material = await backend.unlock(pin: pin!);
+            _lastUnlockAuthMethod = backend is ExternalDeviceKeyStorageBackend
+                ? WalletAuthMethod.externalDevice
+                : WalletAuthMethod.pin;
+          }
+          final operation = walletOperationAuthorizer
+              .authorizeUnlockedLocalSigning(
+                backend: backend,
+                walletMaterial: _material,
+                authMethod: _lastUnlockAuthMethod,
+              );
+          await action(operation.signer);
+        } catch (error) {
+          primaryFailure = error;
+          rethrow;
         } finally {
-          activeBackend.lock();
-          _material = null;
-          if (activeBackend is ExternalDeviceDemoBackend) {
-            _externalRuntimeState = await _externalDeviceBackend
-                .loadRuntimeState();
+          try {
+            try {
+              await custodySession?.close();
+            } catch (_) {
+              if (primaryFailure == null) rethrow;
+            }
+          } finally {
+            activeBackend.lock();
+            _material = null;
+            if (activeBackend is ExternalDeviceDemoBackend) {
+              _externalRuntimeState = await _externalDeviceBackend
+                  .loadRuntimeState();
+            }
           }
         }
-      }
-    });
+      },
+      onCancel: activeBackend is RutokenCustodyBackend
+          ? _rutokenNativeAdapter?.cancelPendingOperation
+          : null,
+    );
   }
 
   /// Authorizes, signs and submits a transfer from the read-only dashboard send
@@ -1359,13 +1397,35 @@ class WalletFlowController extends ChangeNotifier {
   /// the overlay), runs it through [_runGuarded] (error handling + notify), then
   /// clears the overlay. Pairs with the off-isolate key derivation in the vault
   /// so the overlay actually animates instead of freezing.
-  Future<void> _runBusy(String message, Future<void> Function() action) async {
+  Future<void> cancelBusyOperation() async {
+    final cancel = _busyCancelAction;
+    if (cancel == null || _busyCancellationRequested) return;
+    _busyCancellationRequested = true;
+    _notify();
+    try {
+      await cancel();
+    } catch (error) {
+      _errorMessage = 'Не удалось отменить ожидание NFC: $error';
+    } finally {
+      _notify();
+    }
+  }
+
+  Future<void> _runBusy(
+    String message,
+    Future<void> Function() action, {
+    Future<void> Function()? onCancel,
+  }) async {
     _busyMessage = message;
+    _busyCancelAction = onCancel;
+    _busyCancellationRequested = false;
     _notify();
     try {
       await _runGuarded(action);
     } finally {
       _busyMessage = null;
+      _busyCancelAction = null;
+      _busyCancellationRequested = false;
       _notify();
     }
   }

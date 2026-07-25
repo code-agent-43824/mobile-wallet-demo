@@ -114,6 +114,10 @@ abstract interface class WalletCustodyBackend implements WalletBackend {
 abstract interface class RutokenNativeAdapter {
   Future<RutokenNativeSession> openSession({required String pin});
 
+  /// Cancels the currently pending NFC discovery, if any. Native signing and
+  /// PKCS#11 calls that already started remain atomic.
+  Future<void> cancelPendingOperation();
+
   Future<WalletAccountDescriptor?> readAccountDescriptor(
     RutokenNativeSession session,
   );
@@ -229,6 +233,7 @@ class RutokenCustodyBackend implements WalletCustodyBackend {
     required String pin,
   }) async {
     final native = await _adapter.openSession(pin: pin);
+    Object? primaryFailure;
     try {
       final account = await _adapter.readAccountDescriptor(native);
       if (account == null) {
@@ -236,8 +241,15 @@ class RutokenCustodyBackend implements WalletCustodyBackend {
       }
       await _verifyRegisteredAccount(account);
       return account;
+    } catch (error) {
+      primaryFailure = error;
+      rethrow;
     } finally {
-      await _adapter.closeSession(native);
+      try {
+        await _adapter.closeSession(native);
+      } catch (_) {
+        if (primaryFailure == null) rethrow;
+      }
     }
   }
 
@@ -257,9 +269,14 @@ class RutokenCustodyBackend implements WalletCustodyBackend {
         native: native,
         account: account,
       );
-    } catch (_) {
-      await _adapter.closeSession(native);
-      rethrow;
+    } catch (error, stackTrace) {
+      try {
+        await _adapter.closeSession(native);
+      } catch (_) {
+        // Preserve the address-read/binding failure; teardown is best effort
+        // and must not hide why no signature was produced.
+      }
+      Error.throwWithStackTrace(error, stackTrace);
     }
   }
 
