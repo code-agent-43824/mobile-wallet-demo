@@ -28,15 +28,17 @@ Current factual status of the project:
 milestone is an optional Rutoken custody backend for Android/iOS whose signing keys stay non-exporting after
 recoverable provisioning and which supports the same own-send, WalletConnect, and EIP-4527 AirGap flows.
 
-- **NOW — v1.49.0+60:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
+- **NOW — v1.50.0+61:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
   MetaMask-compatible EIP-4527 AirGap, per-operation authentication, hardened QR scanning, and the
   Rutoken custody/signature foundation, physically validated Android read/sign/provisioning, and the registered
   production backend are built. A compatible pre-provisioned card can be adopted read-only without rewriting its
-  key; every later card is bound to the registered address; and an explicit one-time opt-in can keep the PIN in a
-  separate biometric-gated secret store.
-- **NEXT — Phase 10 physical dogfood:** adopt a pre-provisioned card and send once using biometric PIN release;
-  then physically validate the deferred WalletConnect/AirGap matrix and failure teardown. iOS follows proven
-  Android behavior.
+  key; every later card is bound to the registered address; an explicit one-time opt-in can keep the PIN in a
+  separate biometric-gated secret store; and Android NFC discovery is cancellable with stable sanitized
+  PIN/timeout/NFC-loss errors and primary-failure-preserving teardown.
+- **NEXT — Phase 10 completion:** v1.49 ready-card adoption plus biometric PIN release and one Sepolia send passed
+  owner dogfood. Physically validate the deferred
+  WalletConnect/AirGap and negative-path matrix. A different-card check remains pending until a second compatible
+  card is available. iOS follows proven Android behavior once the exact vendor framework is available.
 - **LATER:** optional lock-on-open privacy, broader device/platform integration tests, and only then additional
   chains/accounts if product scope changes. They are not Phase 10 prerequisites.
 
@@ -397,7 +399,9 @@ v1.46 is physically validated for discovery, login, public derivation, raw signi
 recoverable provisioning in v1.47 is physically validated for both existing-backup import and new recoverable
 creation, including the expected EVM address. v1.48 registers the production backend and routes every existing
 signing transport through its transient native session. v1.49 adds existing-card adoption, registered-address
-binding, and biometric-gated PIN convenience. Full physical signing dogfood and iOS remain.
+binding, and biometric-gated PIN convenience. v1.50 adds cancellable Android NFC discovery, stable native failure
+categories, pre-operation card-presence checks, and teardown error precedence. Full physical signing dogfood and
+iOS remain.
 
 > **Reference:** `docs/nfc-pkcs11-integration-notes.md` contains the vendor mechanisms, native-stack setup,
 > Ethereum corrections, and physical-device questions. The existing demo adapter is a test double, not an
@@ -465,14 +469,20 @@ Small, reviewable steps; each chunk records plan and result in `docs/worklog.md`
 - **10.5 — complete signing matrix:** validate own-send; WalletConnect transaction, `personal_sign`, and EIP-712;
   and EIP-4527 AirGap transaction signing through the real device backend. v1.48 production wiring and automated
   orchestration coverage are complete; physical Android validation is pending.
-- **10.5a — DONE IN v1.49; PHYSICAL DOGFOOD PENDING:** adopt a compatible card that already has a BIP-32 master without calling
+- **10.5a — DONE IN v1.49; OWNER DOGFOOD PASSED EXCEPT CARD SWAP:** adopt a compatible card that already has a BIP-32 master without calling
   `C_CreateObject`; persist its public address/path as the wallet profile and keep xpub metadata optional. Verify
   each later NFC session resolves to that registered address. After the first successful PIN use, offer an
   explicit one-time choice to store the card PIN in a separate biometric-gated secret store; a later biometric
   operation must authenticate through the platform prompt before the PIN is released to the transient native
   session. A declined offer is remembered for that account, and neither public profile nor logs contain the PIN.
-- **10.6 — UX and iOS:** replace mock device controls with tap/PIN/progress/cooldown/retry UX, then port the
-  proven shared contracts to the vendor iOS stack and run the same physical-device matrix.
+  Owner v1.49 dogfood passed ready-card adoption, biometric opt-in/release, and a Sepolia send. Different-card
+  rejection remains automated-only until a second physical card is available.
+- **10.6 — ANDROID HARDENING DONE IN v1.50; iOS PENDING:** Android now provides cancellable NFC discovery,
+  stable sanitized PIN/timeout/NFC-loss errors, card-presence checks, and primary-failure-preserving teardown.
+  Port the proven shared contracts to the vendor iOS stack and run the same physical-device matrix. The official
+  Rutoken SDK release 15.05.2026 is publicly downloadable and was audited to contain signed
+  `rtpkcs11ecp.xcframework` and `RtPcsc.xcframework`; integrate those exact vendor inputs in a separate reviewed
+  chunk rather than substitute an unverified binary or hand-roll Core NFC/APDUs.
 
 ### Definition of Done
 - During normal use and signing, seed/private key never leave the token; logs, errors, persisted platform-channel
@@ -595,6 +605,10 @@ Two interactions (app = signer):
 - `v1.49` — adopt an already provisioned compatible Rutoken without modifying its key, support a descriptor-only
   profile when account xpub is unavailable, reject a different card at signing time, and offer a one-time
   biometric-gated PIN opt-in for later private operations
+- `v1.50` — make Android Rutoken NFC discovery explicitly cancellable; map stable sanitized cancellation,
+  timeout, invalid/locked PIN and NFC-loss errors; detect a removed card before subsequent session operations;
+  preserve the primary signing/account failure if teardown also reports; add source-level secret-containment and
+  controller/native-adapter lifecycle regressions
 
 ## Current non-goals and validation limits
 - no iOS hardware-device SDK implementation yet; Android production signing is wired but still requires the

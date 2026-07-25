@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/key_storage/rutoken_method_channel_adapter.dart';
@@ -160,6 +162,74 @@ void main() {
     expect(arguments['chainCode'], hasLength(32));
     expect(arguments, isNot(contains('mnemonic')));
     expect(arguments, isNot(contains('passphrase')));
+  });
+
+  test('cancels the exact pending NFC session operation', () async {
+    final calls = <MethodCall>[];
+    final openCompleter = Completer<Object?>();
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      switch (call.method) {
+        case 'openSession':
+          return openCompleter.future;
+        case 'cancelOperation':
+          return null;
+      }
+      throw MissingPluginException(call.method);
+    });
+
+    final adapter = MethodChannelRutokenNativeAdapter(channel: channel);
+    final open = adapter.openSession(pin: 'not-recorded');
+    await Future<void>.delayed(Duration.zero);
+    await adapter.cancelPendingOperation();
+    openCompleter.completeError(PlatformException(code: 'rutoken_cancelled'));
+
+    await expectLater(
+      open,
+      throwsA(
+        isA<RutokenNativeException>()
+            .having((error) => error.code, 'code', 'rutoken_cancelled')
+            .having(
+              (error) => error.message,
+              'message',
+              'Ожидание Рутокена отменено.',
+            ),
+      ),
+    );
+    expect(calls.map((call) => call.method), <String>[
+      'openSession',
+      'cancelOperation',
+    ]);
+    final openArguments = calls.first.arguments as Map<Object?, Object?>;
+    final cancelArguments = calls.last.arguments as Map<Object?, Object?>;
+    expect(cancelArguments['operationId'], openArguments['operationId']);
+    expect(cancelArguments, isNot(contains('pin')));
+  });
+
+  test('maps stable native PIN, timeout, and NFC-loss categories', () async {
+    const cases = <String, String>{
+      'rutoken_timeout':
+          'Рутокен не обнаружен за 30 секунд. Поднесите карту и повторите.',
+      'rutoken_pin_invalid': 'Неверный PIN Рутокена.',
+      'rutoken_pin_locked': 'PIN Рутокена заблокирован.',
+      'rutoken_nfc_lost': 'Связь с Рутокеном потеряна. Поднесите карту заново.',
+    };
+
+    for (final entry in cases.entries) {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        throw PlatformException(code: entry.key, message: 'raw native detail');
+      });
+      final adapter = MethodChannelRutokenNativeAdapter(channel: channel);
+
+      await expectLater(
+        adapter.openSession(pin: 'not-recorded'),
+        throwsA(
+          isA<RutokenNativeException>()
+              .having((error) => error.code, 'code', entry.key)
+              .having((error) => error.message, 'message', entry.value),
+        ),
+      );
+    }
   });
 }
 

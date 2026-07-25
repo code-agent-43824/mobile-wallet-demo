@@ -499,6 +499,9 @@ class _ProvisioningAdapter implements RutokenNativeAdapter {
   }
 
   @override
+  Future<void> cancelPendingOperation() async {}
+
+  @override
   Future<WalletAccountDescriptor> importWallet({
     required RutokenNativeSession session,
     required Uint8List masterPrivateKey,

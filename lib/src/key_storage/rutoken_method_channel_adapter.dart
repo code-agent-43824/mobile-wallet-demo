@@ -5,9 +5,10 @@ import 'package:web3dart/web3dart.dart' show bytesToHex, publicKeyToAddress;
 import 'custody_backend.dart';
 
 class RutokenNativeException implements Exception {
-  const RutokenNativeException(this.message);
+  const RutokenNativeException(this.message, {this.code = 'rutoken_native'});
 
   final String message;
+  final String code;
 
   @override
   String toString() => message;
@@ -26,19 +27,46 @@ class MethodChannelRutokenNativeAdapter implements RutokenNativeAdapter {
   static const String addressPath = "m/44'/60'/0'/0/0";
 
   final MethodChannel _channel;
+  String? _pendingOperationId;
+  static int _operationSequence = 0;
 
   @override
   Future<RutokenNativeSession> openSession({required String pin}) async {
-    final response = await _invokeMap('openSession', <String, Object?>{
-      'pin': pin,
-    });
-    final id = response['sessionId'];
-    if (id is! String || id.isEmpty) {
-      throw const RutokenNativeException(
-        'Android Rutoken bridge returned no session identifier.',
-      );
+    final operationId =
+        '${DateTime.now().microsecondsSinceEpoch}-${_operationSequence++}';
+    _pendingOperationId = operationId;
+    try {
+      final response = await _invokeMap('openSession', <String, Object?>{
+        'operationId': operationId,
+        'pin': pin,
+      });
+      final id = response['sessionId'];
+      if (id is! String || id.isEmpty) {
+        throw const RutokenNativeException(
+          'Android Rutoken bridge returned no session identifier.',
+        );
+      }
+      return RutokenNativeSession(id: id, openedAtUtc: DateTime.now().toUtc());
+    } finally {
+      if (_pendingOperationId == operationId) {
+        _pendingOperationId = null;
+      }
     }
-    return RutokenNativeSession(id: id, openedAtUtc: DateTime.now().toUtc());
+  }
+
+  @override
+  Future<void> cancelPendingOperation() async {
+    final operationId = _pendingOperationId;
+    if (operationId == null) return;
+    try {
+      await _channel.invokeMethod<void>('cancelOperation', <String, Object?>{
+        'operationId': operationId,
+      });
+    } on PlatformException catch (error) {
+      throw _nativeFailure(error);
+    } on MissingPluginException {
+      // The engine may disappear while an NFC wait is being cancelled.
+    }
   }
 
   @override
@@ -111,7 +139,7 @@ class MethodChannelRutokenNativeAdapter implements RutokenNativeAdapter {
       if (response is Map<Object?, Object?>) return response;
       throw RutokenNativeException('$method returned an invalid response.');
     } on PlatformException catch (error) {
-      throw RutokenNativeException(error.message ?? error.code);
+      throw _nativeFailure(error);
     } on MissingPluginException {
       throw const RutokenNativeException(
         'Rutoken native bridge is available only in the Android build.',
@@ -128,7 +156,12 @@ class MethodChannelRutokenNativeAdapter implements RutokenNativeAdapter {
       if (response is Uint8List) return response;
       throw RutokenNativeException('$method returned an invalid byte array.');
     } on PlatformException catch (error) {
-      throw RutokenNativeException(error.message ?? error.code);
+      throw _nativeFailure(error);
+    } on MissingPluginException {
+      throw const RutokenNativeException(
+        'Rutoken native bridge is unavailable in this build.',
+        code: 'rutoken_unavailable',
+      );
     }
   }
 
@@ -139,11 +172,25 @@ class MethodChannelRutokenNativeAdapter implements RutokenNativeAdapter {
     try {
       await _channel.invokeMethod<void>(method, arguments);
     } on PlatformException catch (error) {
-      throw RutokenNativeException(error.message ?? error.code);
+      throw _nativeFailure(error);
     } on MissingPluginException {
       // Idempotent teardown: a disappearing engine must not hide the original
       // operation result from the caller.
     }
+  }
+
+  RutokenNativeException _nativeFailure(PlatformException error) {
+    final message = switch (error.code) {
+      'rutoken_cancelled' => 'Ожидание Рутокена отменено.',
+      'rutoken_timeout' =>
+        'Рутокен не обнаружен за 30 секунд. Поднесите карту и повторите.',
+      'rutoken_pin_invalid' => 'Неверный PIN Рутокена.',
+      'rutoken_pin_locked' => 'PIN Рутокена заблокирован.',
+      'rutoken_nfc_lost' =>
+        'Связь с Рутокеном потеряна. Поднесите карту заново.',
+      _ => error.message ?? 'Ошибка нативного модуля Рутокена.',
+    };
+    return RutokenNativeException(message, code: error.code);
   }
 
   Uint8List _bytes(Map<Object?, Object?> response, String key) {

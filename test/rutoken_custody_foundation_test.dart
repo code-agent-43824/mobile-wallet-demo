@@ -78,6 +78,26 @@ void main() {
       expect(adapter.closeCount, 1);
     });
 
+    test('preserves account failure when teardown also fails', () async {
+      final adapter = _FakeRutokenNativeAdapter(
+        readFailure: StateError('primary account failure'),
+        closeFailure: StateError('secondary close failure'),
+      );
+      final backend = RutokenCustodyBackend(adapter: adapter);
+
+      await expectLater(
+        backend.openSigningSession(pin: '1234'),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'primary account failure',
+          ),
+        ),
+      );
+      expect(adapter.closeCount, 1);
+    });
+
     test(
       'rejects a card whose address differs from the registered profile',
       () async {
@@ -338,10 +358,14 @@ class _FakeRutokenNativeAdapter implements RutokenNativeAdapter {
   _FakeRutokenNativeAdapter({
     this.hasAccount = true,
     WalletAccountDescriptor? account,
+    this.readFailure,
+    this.closeFailure,
   }) : _account = account ?? _FakeRutokenNativeAdapter.account;
 
   final bool hasAccount;
   final WalletAccountDescriptor _account;
+  final Object? readFailure;
+  final Object? closeFailure;
   int openCount = 0;
   int closeCount = 0;
 
@@ -364,14 +388,21 @@ class _FakeRutokenNativeAdapter implements RutokenNativeAdapter {
   }
 
   @override
+  Future<void> cancelPendingOperation() async {}
+
+  @override
   Future<void> closeSession(RutokenNativeSession session) async {
     closeCount++;
+    if (closeFailure case final failure?) throw failure;
   }
 
   @override
   Future<WalletAccountDescriptor?> readAccountDescriptor(
     RutokenNativeSession session,
-  ) async => hasAccount ? _account : null;
+  ) async {
+    if (readFailure case final failure?) throw failure;
+    return hasAccount ? _account : null;
+  }
 
   @override
   Future<WalletAccountDescriptor> importWallet({

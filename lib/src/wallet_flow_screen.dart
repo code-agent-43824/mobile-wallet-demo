@@ -211,7 +211,13 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
             ),
           ),
           if (_controller.busyMessage case final String message)
-            _BusyOverlay(message: message),
+            _BusyOverlay(
+              message: message,
+              onCancel: _controller.canCancelBusyOperation
+                  ? _controller.cancelBusyOperation
+                  : null,
+              cancellationRequested: _controller.isBusyCancellationRequested,
+            ),
         ],
       ),
     );

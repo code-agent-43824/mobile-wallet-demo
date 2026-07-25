@@ -19,6 +19,7 @@ Result values: `PASS`, `FAIL`, `PARTIAL`, `RETEST`, `BLOCKED`, or `NOT RUN`.
 | Rutoken custody/NFC discovery | Android owner device | v1.43 / 2026-07-22 | PASS | The same phone/card that timed out in v1.41–v1.42 is detected after moving the complete bridge bootstrap to `Application.onCreate`. An empty card then correctly reached the zero-master check. |
 | Rutoken public-address/raw-signature probe | Android owner device | v1.46 / 2026-07-23 | PASS | Owner confirms the complete diagnostic succeeds: discovery, PIN/login, public address derivation, raw 64-byte `CKM_ECDSA`, and session teardown. Earlier v1.43–v1.45 failures drove the reference-alignment fixes. |
 | Rutoken recoverable create/import provisioning | Android owner device | v1.47 / 2026-07-23 | PASS | Owner confirms existing-seed import returns the expected address and new recoverable creation returns its shown seed phrase/address. No secret test material is recorded here. |
+| Rutoken ready-card adoption + biometric Sepolia send | Android owner device | v1.49 / 2026-07-25 | PASS | Owner confirms ready-card adoption, biometric PIN opt-in/release, and one Sepolia send. A second card was unavailable, so physical card-mismatch rejection remains pending. |
 
 ## Phone-vault release checks
 
@@ -60,14 +61,14 @@ Add exact token model, firmware, SDK version, device/OS, and issue/evidence link
 | Recoverable create + mandatory backup confirmation | PASS v1.47 | BLOCKED | Empty token receives the reference raw master import; owner confirms creation and backup display succeed with the expected address. |
 | Existing mnemonic + optional passphrase import | PASS v1.47 | BLOCKED | Owner confirms import succeeds and the address matches the independent source. |
 | Address + software-retained account xpub/chain code | PASS v1.47 | BLOCKED | Address matches token derivation; provisioning metadata is produced from the same software reference without a native xpub query. |
-| Adopt existing compatible card | TEST v1.49 | BLOCKED | Address/path are registered without `C_CreateObject`; card key remains unchanged. |
-| Biometric PIN release | TEST v1.49 | BLOCKED | Opt in after first PIN use; next operation prompts system biometrics and signs without manual PIN entry. |
-| Own-send | RETEST v1.49 | BLOCKED | Device signs; valid low-s/recovery id; broadcast succeeds once. |
+| Adopt existing compatible card | PASS v1.49 | BLOCKED | Owner confirms address/path registration without `C_CreateObject`; different-card rejection still needs a second physical card. |
+| Biometric PIN release | PASS v1.49 | BLOCKED | Owner confirms opt-in and a later system-biometric PIN release for signing. |
+| Own-send | PASS v1.49 | BLOCKED | Owner confirms a biometric-authorized Sepolia send; earlier manual-PIN send also passed. |
 | WalletConnect transaction | RETEST v1.49 | BLOCKED | Preflight then tap+PIN/biometric; response/broadcast succeeds once. |
 | WalletConnect personal/EIP-712 | RETEST v1.49 | BLOCKED | Valid signatures; displayed request matches signed payload. |
 | EIP-4527 AirGap transaction | RETEST v1.49 | BLOCKED | Public account export and request signature require no secret export; descriptor-only adopted cards cannot export xpub. |
-| Cancel, wrong PIN, timeout, NFC loss, SDK error | BLOCKED | BLOCKED | No signature; session always closes; retry starts fresh. |
-| Secret-containment review | BLOCKED | BLOCKED | No seed/private key in Dart models, logs, crash output, or errors. |
+| Cancel, wrong PIN, timeout, NFC loss, SDK error | RETEST v1.50 | BLOCKED | v1.50 adds cancellation, stable error mapping, presence checks and teardown precedence; physical negative-path evidence remains. |
+| Secret-containment review | PARTIAL v1.50 | BLOCKED | Static source/tests confirm public-profile separation, mutable provisioning-buffer clearing and no native secret logging; physical crash-output review remains. |
 
 Phase 10 is complete only when the corresponding Definition of Done in `docs/development-plan.md` and every
 required row above pass on physical Android; iOS support is complete only after its equivalent column passes.

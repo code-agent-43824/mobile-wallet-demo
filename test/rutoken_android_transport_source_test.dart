@@ -118,4 +118,43 @@ void main() {
     );
     expect(channel, contains('"importWallet"'));
   });
+
+  test('Rutoken NFC wait is cancellable with stable sanitized errors', () {
+    final runtime = File(
+      'android/app/src/main/kotlin/com/example/mobile_wallet_demo/rutoken/'
+      'RutokenRuntime.kt',
+    ).readAsStringSync();
+    final channel = File(
+      'android/app/src/main/kotlin/com/example/mobile_wallet_demo/rutoken/'
+      'RutokenMethodChannel.kt',
+    ).readAsStringSync();
+
+    expect(runtime, contains('fun cancelOperation(operationId: String)'));
+    expect(runtime, contains('RutokenOperationCancelledException'));
+    expect(runtime, contains('RutokenWaitTimeoutException'));
+    expect(runtime, contains('RutokenNfcLostException'));
+    expect(channel, contains('"cancelOperation"'));
+    expect(channel, contains('"rutoken_cancelled"'));
+    expect(channel, contains('"rutoken_timeout"'));
+    expect(channel, contains('"rutoken_pin_invalid"'));
+    expect(channel, contains('"rutoken_pin_locked"'));
+    expect(channel, contains('"rutoken_nfc_lost"'));
+    expect(channel, isNot(contains('mapOf("pin"')));
+  });
+
+  test('Rutoken native sources do not log secret-bearing payloads', () {
+    final sources = <String>[
+      'android/app/src/main/kotlin/com/example/mobile_wallet_demo/rutoken/'
+          'RutokenRuntime.kt',
+      'android/app/src/main/kotlin/com/example/mobile_wallet_demo/rutoken/'
+          'RutokenMethodChannel.kt',
+    ].map((path) => File(path).readAsStringSync()).join('\n');
+
+    expect(sources, isNot(contains('Log.')));
+    expect(sources, isNot(contains('println(')));
+    expect(sources, isNot(contains('printStackTrace(')));
+    expect(sources, isNot(contains('"pin" to')));
+    expect(sources, isNot(contains('"masterPrivateKey" to')));
+    expect(sources, isNot(contains('"chainCode" to')));
+  });
 }

@@ -48,6 +48,8 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
     private val sessions = linkedMapOf<String, OpenSession>()
     private val tokenMonitor = Object()
     private var presentTokens = emptyMap<Long, RtPkcs11Token>()
+    private val activeOperations = mutableSetOf<String>()
+    private val cancelledOperations = mutableSetOf<String>()
     private var slotEventGeneration = 0L
     private var initialized = false
 
@@ -68,14 +70,25 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
         }
     }
 
-    fun openSession(pin: String): Map<String, Any> {
+    fun openSession(operationId: String, pin: String): Map<String, Any> {
         require(pin.isNotEmpty()) { "Rutoken PIN must not be empty." }
-        val token = awaitSingleToken()
+        synchronized(tokenMonitor) {
+            activeOperations += operationId
+        }
+        val tokenEntry = try {
+            awaitSingleToken(operationId)
+        } finally {
+            synchronized(tokenMonitor) {
+                activeOperations -= operationId
+                cancelledOperations -= operationId
+            }
+        }
+        val (slotId, token) = tokenEntry
         val session = token.openSession(true)
         try {
             val login = session.login(CKU_USER, pin)
             val id = UUID.randomUUID().toString()
-            sessions[id] = OpenSession(session, login)
+            sessions[id] = OpenSession(slotId, session, login)
             val info = token.tokenInfo
             return mapOf(
                 "sessionId" to id,
@@ -86,6 +99,15 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
         } catch (error: Throwable) {
             session.close()
             throw error
+        }
+    }
+
+    fun cancelOperation(operationId: String) {
+        synchronized(tokenMonitor) {
+            if (operationId in activeOperations) {
+                cancelledOperations += operationId
+                tokenMonitor.notifyAll()
+            }
         }
     }
 
@@ -210,17 +232,20 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
         }
     }
 
-    private fun awaitSingleToken(): RtPkcs11Token {
+    private fun awaitSingleToken(operationId: String): Pair<Long, RtPkcs11Token> {
         val deadline = System.nanoTime() + TOKEN_WAIT_NANOS
         synchronized(tokenMonitor) {
             while (true) {
-                if (presentTokens.size == 1) return presentTokens.values.single()
+                if (operationId in cancelledOperations) {
+                    throw RutokenOperationCancelledException()
+                }
+                if (presentTokens.size == 1) return presentTokens.entries.single().toPair()
                 if (presentTokens.size > 1) {
                     error("More than one Rutoken is connected; leave exactly one token in NFC range.")
                 }
 
                 val remaining = deadline - System.nanoTime()
-                if (remaining <= 0) error("Rutoken was not detected over NFC within 30 seconds.")
+                if (remaining <= 0) throw RutokenWaitTimeoutException()
                 val waitMillis = remaining / NANOS_PER_MILLISECOND
                 val waitNanos = (remaining % NANOS_PER_MILLISECOND).toInt()
                 tokenMonitor.wait(waitMillis, waitNanos)
@@ -282,8 +307,18 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
     private fun currentTokens(): Map<Long, RtPkcs11Token> =
         module.getSlotList(true).associate { it.id to (it.token as RtPkcs11Token) }
 
-    private fun requireSession(id: String): OpenSession =
-        sessions[id] ?: error("Rutoken session is closed or unknown.")
+    private fun requireSession(id: String): OpenSession {
+        val open = sessions[id] ?: error("Rutoken session is closed or unknown.")
+        val tokenStillPresent = synchronized(tokenMonitor) {
+            presentTokens.containsKey(open.slotId)
+        }
+        if (!tokenStillPresent) {
+            sessions.remove(id)
+            runCatching { open.close() }
+            throw RutokenNfcLostException()
+        }
+        return open
+    }
 
     private fun findSingleMasterKey(session: RtPkcs11Session): Pkcs11PrivateKeyObject {
         val keys = findMasterKeys(session)
@@ -373,6 +408,7 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
     }
 
     private data class OpenSession(
+        val slotId: Long,
         val session: RtPkcs11Session,
         val login: Pkcs11Session.LoginGuard,
     ) {
@@ -399,3 +435,12 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
             }
     }
 }
+
+internal class RutokenOperationCancelledException :
+    RuntimeException("Rutoken NFC wait was cancelled.")
+
+internal class RutokenWaitTimeoutException :
+    RuntimeException("Rutoken was not detected over NFC within 30 seconds.")
+
+internal class RutokenNfcLostException :
+    RuntimeException("Rutoken NFC connection was lost.")

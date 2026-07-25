@@ -4,9 +4,15 @@ part of 'wallet_flow_screen.dart';
 /// create/import/unlock) runs, so the screen isn't a frozen blank. Pairs with
 /// the off-isolate PBKDF2 in PhoneSecureVault so the spinner actually animates.
 class _BusyOverlay extends StatelessWidget {
-  const _BusyOverlay({required this.message});
+  const _BusyOverlay({
+    required this.message,
+    required this.onCancel,
+    required this.cancellationRequested,
+  });
 
   final String message;
+  final Future<void> Function()? onCancel;
+  final bool cancellationRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -34,12 +40,25 @@ class _BusyOverlay extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Это занимает несколько секунд.',
+                    onCancel == null
+                        ? 'Это занимает несколько секунд.'
+                        : 'Удерживайте карту у NFC до завершения.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
+                  if (onCancel != null) ...[
+                    const SizedBox(height: 16),
+                    TextButton(
+                      onPressed: cancellationRequested ? null : onCancel,
+                      child: Text(
+                        cancellationRequested
+                            ? 'Отменяем ожидание…'
+                            : 'Отменить ожидание NFC',
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

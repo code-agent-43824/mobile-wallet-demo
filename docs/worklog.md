@@ -18,6 +18,33 @@ Entry template:
 
 ---
 
+## 2026-07-25 — Rutoken cancellation, error and secret-containment hardening — branch feat/rutoken-lifecycle-hardening — done locally (CI pending)
+- Plan: owner dogfood confirms that v1.49 can adopt the ready card, opt in to biometric PIN storage, and complete
+  a biometric-authorized Sepolia send. A second physical card is not currently available, so keep card-mismatch
+  dogfood pending rather than weakening the binding. Close the remaining code-verifiable Android Phase 10 gaps:
+  add explicit cancellation while waiting for NFC, stable user-facing timeout/PIN/NFC/native error categories,
+  preserve the original signing failure if best-effort teardown also fails, and strengthen automated
+  secret-containment/teardown coverage. Reconcile the physical matrix and roadmap, bump the functional version,
+  and require full CI. Audit the available iOS inputs before claiming that the Swift adapter can be implemented;
+  do not fabricate or replace the vendor `wtpkcs11ecp.xcframework`.
+- Done: v1.50.0+61 gives every real-Rutoken NFC wait an explicit cancel action in the blocking overlay and binds
+  that action to the exact pending native operation id. Kotlin wakes the PC/SC waiter without waiting for the
+  serial PKCS#11 executor, detects a removed card before subsequent session work, and emits stable cancellation,
+  timeout, invalid/locked-PIN and NFC-loss categories; Dart converts those to sanitized Russian messages. Account,
+  signing, diagnostic and adoption paths preserve the primary failure if best-effort close also fails. Static
+  secret-containment coverage asserts that native sources do not log PIN/master/chain-code payloads, while
+  existing provisioning tests still prove public-only persistence and mutable-buffer clearing. Owner evidence
+  marks ready-card adoption, biometric PIN release and a Sepolia send PASS; the different-card row stays pending.
+  Format and analyze are clean; all 205 tests pass. A local APK build could not start because this Linux host has
+  no Android SDK, so Kotlin compilation remains a mandatory CI gate. The official Rutoken SDK release 15.05.2026
+  was independently found at the vendor FTP (archive SHA-256
+  `efe57bae541bb8467ef9c6b960796f992a2483ce70cda67e5cc0030ccde28606`): it contains signed iOS-device/simulator
+  `rtpkcs11ecp.xcframework` and `RtPcsc.xcframework`, so iOS is now an implementation chunk, not an acquisition
+  unknown.
+- Next / open: require full CI, then physically exercise cancel/wrong-PIN/timeout/NFC-loss plus the deferred
+  WalletConnect/AirGap matrix. Integrate the audited official iOS frameworks and Swift adapter in the next
+  isolated functional chunk; the second-card mismatch check remains deferred until another card is available.
+
 ## 2026-07-24 — Adopt existing Rutoken + biometric PIN convenience — branch feat/rutoken-existing-card-biometric-pin — done (CI green)
 - Plan: extend the real Android backend so onboarding can adopt a Rutoken that already contains the supported
   BIP-32 key instead of requiring Wallet Demo to provision it. Read and persist only the card-derived public
