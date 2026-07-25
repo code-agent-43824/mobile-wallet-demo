@@ -18,6 +18,23 @@ Entry template:
 
 ---
 
+## 2026-07-25 — Audit current iOS Rutoken inputs — branch feat/rutoken-ios-backend — done (blocked before code)
+- Plan: verify that the currently downloadable official SDK contains the exact crypto-wallet provider required
+  by the already documented Swift implementation before linking any binary or changing the iOS target. Compare
+  the public package headers and the full SDK archive index against the supplied demo-wallet contract and its
+  four `CKM_VENDOR_BIP32*` mechanisms; do not substitute a similarly named generic provider.
+- Done: the official public Swift packages provide `RtPcscWrapper` 1.8.0 and generic
+  `rtpkcs11ecp` 2.18.4, and the current 15.05.2026 SDK archive contains the same signed
+  `rtpkcs11ecp.xcframework` plus `RtPcsc.xcframework`. Header inspection confirms that the generic provider has
+  no `CKM_VENDOR_BIP32*`, `CKK_VENDOR_BIP32`, or `CKA_VENDOR_BIP32_CHAINCODE` definitions. The compatible
+  Android implementation and the supplied iOS demo instead use the distinct crypto-wallet provider
+  `wtpkcs11ecp`; the prior iOS demo archive/framework was intentionally not retained or vendored. Implementing
+  against `rtpkcs11ecp` would compile the wrong custody backend and cannot read, provision, derive, or sign the
+  existing wallet cards. No product code, dependency, entitlement, or version was changed.
+- Next / open: obtain the exact licensed `wtpkcs11ecp.xcframework` (device + simulator slices), matching headers,
+  and redistribution notice from the official iOS demo-wallet delivery. Then implement the already specified
+  Swift channel adapter and run the physical iOS matrix. PC/SC transport alone does not remove this blocker.
+
 ## 2026-07-25 — Rutoken cancellation, error and secret-containment hardening — branch feat/rutoken-lifecycle-hardening — done (CI green)
 - Plan: owner dogfood confirms that v1.49 can adopt the ready card, opt in to biometric PIN storage, and complete
   a biometric-authorized Sepolia send. A second physical card is not currently available, so keep card-mismatch
@@ -39,11 +56,11 @@ Entry template:
   no Android SDK, so Kotlin compilation remains a mandatory CI gate. The official Rutoken SDK release 15.05.2026
   was independently found at the vendor FTP (archive SHA-256
   `efe57bae541bb8467ef9c6b960796f992a2483ce70cda67e5cc0030ccde28606`): it contains signed iOS-device/simulator
-  `rtpkcs11ecp.xcframework` and `RtPcsc.xcframework`, so iOS is now an implementation chunk, not an acquisition
-  unknown.
+  `rtpkcs11ecp.xcframework` and `RtPcsc.xcframework`. A follow-up header audit established that this is the
+  generic provider, not the required crypto-wallet `wtpkcs11ecp` provider; see the newer iOS input-audit entry.
 - Next / open: physically exercise cancel/wrong-PIN/timeout/NFC-loss plus the deferred WalletConnect/AirGap
-  matrix. Integrate the audited official iOS frameworks and Swift adapter in the next isolated functional chunk;
-  the second-card mismatch check remains deferred until another card is available.
+  matrix. Obtain the exact licensed iOS `wtpkcs11ecp.xcframework` before implementing the Swift adapter; the
+  second-card mismatch check remains deferred until another card is available.
 - Refs: owner dogfood in Telegram topic 7389; v1.50.0+61; PR #10; squash `74b8a4f`; CI 30151905240.
 
 ## 2026-07-24 — Adopt existing Rutoken + biometric PIN convenience — branch feat/rutoken-existing-card-biometric-pin — done (CI green)
