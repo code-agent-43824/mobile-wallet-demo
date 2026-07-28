@@ -18,6 +18,19 @@ Entry template:
 
 ---
 
+## 2026-07-28 — Brief for a separate future production wallet — branch docs/future-production-wallet-brief — done
+- Plan: add one short, self-contained technical brief for a new production multi-chain wallet that will live in
+  another repository. Mark the boundary prominently so the brief cannot be mistaken for this demo's roadmap;
+  capture the agreed product scope, custody/security constraints, architecture, quality bar, reuse policy and
+  acceptance criteria without expanding or changing the prototype.
+- Done: added `docs/future-production-wallet-technical-brief.md` with a prominent cross-repository warning and
+  concise requirements for the product scope, chain adapters, Phone Secure Vault, capability-gated Rutoken
+  support, existing WalletConnect/AirGap limits, UX/security boundaries, selective demo reuse, agent workflow
+  and beta/Mainnet acceptance gates. Kept this demo's roadmap and code unchanged.
+- Next / open: finish the prototype's existing Phase 10 physical matrix; use the brief only when creating the
+  separate production repository.
+- Refs: owner decision in Telegram topic 7389.
+
 ## 2026-07-25 — Audit current iOS Rutoken inputs — branch feat/rutoken-ios-backend — done (blocked before code)
 - Plan: verify that the currently downloadable official SDK contains the exact crypto-wallet provider required
   by the already documented Swift implementation before linking any binary or changing the iOS target. Compare
