@@ -33,7 +33,8 @@ Entry template:
   to forbid native logging and secret-bearing result maps; a new adapter regression proves arbitrary vendor
   diagnostics/details never appear in the public exception. The wider audit found no Rutoken `Log`, `println`,
   stack-trace print, PIN/master-key/chain-code result payload, or mnemonic persistence path. Format and analyze
-  are clean; all 206 tests pass locally.
+  are clean; all 206 tests pass locally. PR #13 was squash-merged as `3f00561`; Actions run `30467854909` is
+  fully green across Validate, Android APK, iOS Simulator, unsigned iOS Device, and Windows x64.
   The supplied iOS archive is readable and path-safe, has SHA-256
   `6c1da7d8fb257141bb6e12761730fc400df8774e11df12dc3334491a0960d768`, and contains the exact official
   v2.17.8 `wtpkcs11ecp.xcframework`: iOS arm64 device, arm64/x86_64 simulator, matching headers, and every required
@@ -45,7 +46,8 @@ Entry template:
   second card is available. Before the future iOS implementation is wired into public CI/artifacts, obtain or
   clarify redistribution terms for the supplied framework and choose a compliant private dependency path if
   public redistribution is not allowed.
-- Refs: owner request in Telegram topic 7389; Phase 10 secret-containment gate.
+- Refs: owner request in Telegram topic 7389; Phase 10 secret-containment gate; PR #13; squash `3f00561`;
+  CI `30467854909`.
 
 ## 2026-07-28 — Brief for a separate future production wallet — branch docs/future-production-wallet-brief — done
 - Plan: add one short, self-contained technical brief for a new production multi-chain wallet that will live in
