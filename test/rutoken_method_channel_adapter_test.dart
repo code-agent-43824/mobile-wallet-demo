@@ -231,6 +231,43 @@ void main() {
       );
     }
   });
+
+  test('does not surface an unknown raw native diagnostic', () async {
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      throw PlatformException(
+        code: 'rutoken_native',
+        message: 'vendor diagnostic containing sensitive runtime context',
+        details: <String, Object?>{
+          'type': 'VendorException',
+          'pin': 'must-never-cross',
+        },
+      );
+    });
+    final adapter = MethodChannelRutokenNativeAdapter(channel: channel);
+
+    await expectLater(
+      adapter.openSession(pin: 'not-recorded'),
+      throwsA(
+        isA<RutokenNativeException>()
+            .having((error) => error.code, 'code', 'rutoken_native')
+            .having(
+              (error) => error.message,
+              'message',
+              'Ошибка нативного модуля Рутокена.',
+            )
+            .having(
+              (error) => error.toString(),
+              'string form',
+              isNot(contains('vendor diagnostic')),
+            )
+            .having(
+              (error) => error.toString(),
+              'details',
+              isNot(contains('must-never-cross')),
+            ),
+      ),
+    );
+  });
 }
 
 Uint8List _generatorPoint() => Uint8List.fromList(

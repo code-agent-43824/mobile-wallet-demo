@@ -188,7 +188,7 @@ class MethodChannelRutokenNativeAdapter implements RutokenNativeAdapter {
       'rutoken_pin_locked' => 'PIN Рутокена заблокирован.',
       'rutoken_nfc_lost' =>
         'Связь с Рутокеном потеряна. Поднесите карту заново.',
-      _ => error.message ?? 'Ошибка нативного модуля Рутокена.',
+      _ => 'Ошибка нативного модуля Рутокена.',
     };
     return RutokenNativeException(message, code: error.code);
   }
