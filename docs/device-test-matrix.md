@@ -68,7 +68,7 @@ Add exact token model, firmware, SDK version, device/OS, and issue/evidence link
 | WalletConnect personal/EIP-712 | RETEST v1.49 | BLOCKED | Valid signatures; displayed request matches signed payload. |
 | EIP-4527 AirGap transaction | RETEST v1.49 | BLOCKED | Public account export and request signature require no secret export; descriptor-only adopted cards cannot export xpub. |
 | Cancel, wrong PIN, timeout, NFC loss, SDK error | RETEST v1.50 | BLOCKED | v1.50 adds cancellation, stable error mapping, presence checks and teardown precedence; physical negative-path evidence remains. |
-| Secret-containment review | PARTIAL v1.50 | BLOCKED | Static source/tests confirm public-profile separation, mutable provisioning-buffer clearing and no native secret logging; physical crash-output review remains. |
+| Secret-containment review | PARTIAL v1.51 | BLOCKED | Static source/tests confirm public-profile separation, mutable provisioning-buffer clearing, no native secret logging, and fixed generic platform errors that discard raw vendor diagnostics; physical crash/log-output review remains. |
 
 Phase 10 is complete only when the corresponding Definition of Done in `docs/development-plan.md` and every
 required row above pass on physical Android; iOS support is complete only after its equivalent column passes.

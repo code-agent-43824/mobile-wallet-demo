@@ -28,7 +28,7 @@ Current factual status of the project:
 milestone is an optional Rutoken custody backend for Android/iOS whose signing keys stay non-exporting after
 recoverable provisioning and which supports the same own-send, WalletConnect, and EIP-4527 AirGap flows.
 
-- **NOW — v1.50.0+61:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
+- **NOW — v1.51.0+62:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
   MetaMask-compatible EIP-4527 AirGap, per-operation authentication, hardened QR scanning, and the
   Rutoken custody/signature foundation, physically validated Android read/sign/provisioning, and the registered
   production backend are built. A compatible pre-provisioned card can be adopted read-only without rewriting its
@@ -400,8 +400,9 @@ recoverable provisioning in v1.47 is physically validated for both existing-back
 creation, including the expected EVM address. v1.48 registers the production backend and routes every existing
 signing transport through its transient native session. v1.49 adds existing-card adoption, registered-address
 binding, and biometric-gated PIN convenience. v1.50 adds cancellable Android NFC discovery, stable native failure
-categories, pre-operation card-presence checks, and teardown error precedence. Full physical signing dogfood and
-iOS remain.
+categories, pre-operation card-presence checks, and teardown error precedence. v1.51 prevents unknown raw native
+diagnostics from crossing the platform channel or reaching Dart error text. Full physical signing dogfood and iOS
+remain.
 
 > **Reference:** `docs/nfc-pkcs11-integration-notes.md` contains the vendor mechanisms, native-stack setup,
 > Ethereum corrections, and physical-device questions. The existing demo adapter is a test double, not an
@@ -477,13 +478,16 @@ Small, reviewable steps; each chunk records plan and result in `docs/worklog.md`
   session. A declined offer is remembered for that account, and neither public profile nor logs contain the PIN.
   Owner v1.49 dogfood passed ready-card adoption, biometric opt-in/release, and a Sepolia send. Different-card
   rejection remains automated-only until a second physical card is available.
-- **10.6 — ANDROID HARDENING DONE IN v1.50; iOS PENDING:** Android now provides cancellable NFC discovery,
-  stable sanitized PIN/timeout/NFC-loss errors, card-presence checks, and primary-failure-preserving teardown.
+- **10.6 — ANDROID HARDENING DONE IN v1.51; iOS PENDING:** Android now provides cancellable NFC discovery,
+  stable sanitized PIN/timeout/NFC-loss errors, card-presence checks, primary-failure-preserving teardown, and
+  fixed generic platform errors that do not surface raw vendor diagnostics.
   Port the proven shared contracts to the vendor iOS stack and run the same physical-device matrix. The public
   Rutoken SDK release 15.05.2026 contains signed generic `rtpkcs11ecp.xcframework` and `RtPcsc.xcframework`,
   but header inspection confirms that it does **not** expose the wallet-only BIP32 mechanisms. The compatible
-  cards require the distinct `wtpkcs11ecp.xcframework` used by the official iOS crypto-wallet demo. Obtain that
-  exact licensed provider (device + simulator slices, headers, and notice) before implementation; do not
+  cards require the distinct `wtpkcs11ecp.xcframework` used by the official iOS crypto-wallet demo. The owner
+  supplied the exact v2.17.8 framework on 2026-07-29 with device and simulator slices plus matching BIP32 headers;
+  it is retained privately and is not committed. The supplied archive contains no redistribution notice, so
+  clarify packaging/CI terms before placing the proprietary framework in the public repository. Do not
   substitute the generic provider or hand-roll Core NFC/APDUs.
 
 ### Definition of Done
@@ -611,6 +615,8 @@ Two interactions (app = signer):
   timeout, invalid/locked PIN and NFC-loss errors; detect a removed card before subsequent session operations;
   preserve the primary signing/account failure if teardown also reports; add source-level secret-containment and
   controller/native-adapter lifecycle regressions
+- `v1.51` — fail closed on unknown Rutoken native failures: the Android channel emits a fixed generic message and
+  Dart ignores raw vendor message/details; source and adapter regressions pin the no-diagnostic-leak boundary
 
 ## Current non-goals and validation limits
 - no iOS hardware-device SDK implementation yet; Android production signing is wired but still requires the

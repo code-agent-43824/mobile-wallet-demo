@@ -18,6 +18,35 @@ Entry template:
 
 ---
 
+## 2026-07-29 — Close code-verifiable Rutoken log-containment gap — branch fix/rutoken-log-containment — done
+- Plan: audit the Android/Dart Rutoken boundary for PIN, master-key, chain-code, mnemonic, and signature leakage
+  through logs, exceptions, platform-channel error details, and crash reporting. Replace any raw vendor/native
+  diagnostic that can cross into Dart with a fixed sanitized failure, strengthen the source regression so this
+  boundary cannot drift, and record precisely which physical checks still require an attached owner device.
+  Independently audit and retain the newly supplied official iOS demo-wallet archive as private vendor input;
+  verify that it contains the exact wallet-specific `wtpkcs11ecp.xcframework` and do not commit proprietary
+  binaries to the public repository.
+- Done: v1.51.0+62 closes the only code-level diagnostic leak found by the review. Unknown Android native
+  failures now cross the MethodChannel with a fixed generic message instead of `Throwable.message`, and the Dart
+  adapter discards raw `PlatformException.message` and `details` for unknown codes. Stable cancellation,
+  timeout, invalid/locked-PIN and NFC-loss categories remain specific but sanitized. Source regressions continue
+  to forbid native logging and secret-bearing result maps; a new adapter regression proves arbitrary vendor
+  diagnostics/details never appear in the public exception. The wider audit found no Rutoken `Log`, `println`,
+  stack-trace print, PIN/master-key/chain-code result payload, or mnemonic persistence path. Format and analyze
+  are clean; all 206 tests pass locally.
+  The supplied iOS archive is readable and path-safe, has SHA-256
+  `6c1da7d8fb257141bb6e12761730fc400df8774e11df12dc3334491a0960d768`, and contains the exact official
+  v2.17.8 `wtpkcs11ecp.xcframework`: iOS arm64 device, arm64/x86_64 simulator, matching headers, and every required
+  wallet-specific BIP32 mechanism/attribute. No credentials, private keys, certificates, provisioning profiles,
+  or secret config were found. The archive is retained outside the public repository as private vendor input.
+  It contains no `LICENSE`/`NOTICE`/redistribution grant, so the proprietary framework was not committed.
+- Next / open: capture and inspect real Android crash/log output during the owner's later physical negative-path
+  matrix; this cannot be claimed from source/tests alone. Physically reject a different registered card when a
+  second card is available. Before the future iOS implementation is wired into public CI/artifacts, obtain or
+  clarify redistribution terms for the supplied framework and choose a compliant private dependency path if
+  public redistribution is not allowed.
+- Refs: owner request in Telegram topic 7389; Phase 10 secret-containment gate.
+
 ## 2026-07-28 — Brief for a separate future production wallet — branch docs/future-production-wallet-brief — done
 - Plan: add one short, self-contained technical brief for a new production multi-chain wallet that will live in
   another repository. Mark the boundary prominently so the brief cannot be mistaken for this demo's roadmap;

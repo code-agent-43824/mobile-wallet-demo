@@ -106,7 +106,7 @@ internal class RutokenMethodChannel(
             "rutoken_pin_invalid" -> "Rutoken PIN is invalid."
             "rutoken_pin_locked" -> "Rutoken PIN is locked."
             "rutoken_nfc_lost" -> "Rutoken NFC connection was lost."
-            else -> error.message ?: error.javaClass.simpleName
+            else -> "Rutoken native operation failed."
         }
 
     companion object {

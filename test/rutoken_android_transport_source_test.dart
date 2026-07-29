@@ -139,6 +139,8 @@ void main() {
     expect(channel, contains('"rutoken_pin_invalid"'));
     expect(channel, contains('"rutoken_pin_locked"'));
     expect(channel, contains('"rutoken_nfc_lost"'));
+    expect(channel, contains('"Rutoken native operation failed."'));
+    expect(channel, isNot(contains('else -> error.message')));
     expect(channel, isNot(contains('mapOf("pin"')));
   });
 
@@ -156,5 +158,6 @@ void main() {
     expect(sources, isNot(contains('"pin" to')));
     expect(sources, isNot(contains('"masterPrivateKey" to')));
     expect(sources, isNot(contains('"chainCode" to')));
+    expect(sources, isNot(contains('result.error(error')));
   });
 }
