@@ -18,6 +18,36 @@ Entry template:
 
 ---
 
+## 2026-08-17 — Phase 10 physical signing matrix executed on v1.51 — branch claude/wonderful-rubin-eBDKZ — done (docs only)
+- Plan: run the deferred Phase 10 physical matrix end to end with the owner and record the evidence. Scope: the
+  Rutoken-backed WalletConnect and EIP-4527 AirGap flows, the negative NFC paths, the different-card rejection
+  (now testable — a second physical card became available), and invalid PIN. Order chosen to protect the cards:
+  harmless negative paths first, value flows next, PIN-counter tests last.
+- Done: executed on **Nothing Phone 3a / Android 16, v1.51.0+62**. PASS: NFC-wait cancel; 30-second timeout;
+  WalletConnect `personal_sign`, EIP-712 and transaction plus disconnect; EIP-4527 account export + MetaMask
+  import + **live-camera** dense-QR scan + signature return + broadcast; different-card rejection; invalid PIN.
+  Both broadcasts were verified independently against a public Sepolia RPC rather than trusted from the UI:
+  `0xe22d7a8491bd0d08eb2b7d257b5d1f5400e4e3e99d41f02a31202d56418847e5` (block 11507550) and
+  `0x9ff1e06b73143f83f2a8d68a8e1f4f9999a94e0b2716c7d0227005fbcaaf5a6e` (block 11507643, 0.1 ETH). Both are
+  `status 0x1`, `type 0x2`, `yParity 0x0`, low-s, sequential nonces, `from` = the registered card address. That
+  on-chain shape is direct evidence for the Phase 10 exit criterion "device signatures are byte-compatible with
+  the local EVM assembly rules, including low-s and recovery id", and the matching `from` proves MetaMask derived
+  the exported `crypto-hdkey` account correctly. Closes the different-card row deferred since v1.49 and the
+  dense-QR row open since v1.39. Two practical findings recorded for the next agent: the classic
+  `react-app.walletconnect.com` test dApp advertises only `eth_sendTransaction`/`personal_sign`, so EIP-712 needs
+  a dApp that actually requests typed data (Reown AppKit Lab); and the different-card test must be run with the
+  *presented* card's own PIN, because `openSession(pin:)` precedes `_verifyRegisteredAccount`.
+- **Open defect (found by this run):** removing the card mid-operation surfaces the generic
+  «Ошибка нативного модуля Рутокена.» instead of the specified «Связь с Рутокеном потеряна. Поднесите карту
+  заново.» — the Android layer does not classify that case as `rutoken_nfc_lost`, so it falls through to the
+  `_` branch of the error mapping. Teardown is otherwise correct: the next operation succeeds. User-visible
+  impact is a non-actionable message; no security or state impact.
+- Next / open: fix the NFC-loss categorization (Kotlin side must emit `rutoken_nfc_lost` for card removal during
+  an operation, not only while waiting), then have the owner retest that single step. Remaining Phase 10 items
+  are the physical crash/log-output review (needs adb) and iOS, still blocked on the licensed
+  `wtpkcs11ecp.xcframework`.
+- Refs: owner dogfood 2026-08-17; `docs/device-test-matrix.md`; this commit.
+
 ## 2026-07-29 — Close code-verifiable Rutoken log-containment gap — branch fix/rutoken-log-containment — done
 - Plan: audit the Android/Dart Rutoken boundary for PIN, master-key, chain-code, mnemonic, and signature leakage
   through logs, exceptions, platform-channel error details, and crash reporting. Replace any raw vendor/native

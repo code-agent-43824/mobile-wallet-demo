@@ -17,8 +17,9 @@ Current factual status of the project:
 - ✅ Phase 8 — only the WC v2 codec (`WalletConnectV2RequestCodec`) and the vault `TransactionService.assembleSignedTransfer` seam survive. The obsolete custom AirGap codec was removed in Phase 12.5; the **outbound** direction originally shipped by Phase 8 was removed in chunk 9.0
 - ✅ Phase 9 (real **wallet-side** inbound signing — WalletConnect v2 + AirGap — plus a connections screen and an incoming-request approval flow) is **feature-complete**. WalletConnect is device-validated on Android through a confirmed Sepolia broadcast; AirGap now uses the MetaMask-compatible EIP-4527 / BC-UR implementation completed in Phase 12
 - 🟡 Phase 10 is **in progress**: library-independent custody/EVM assembly, physically validated Android
-  read/sign/provisioning and production-backend wiring are implemented; full physical signing dogfood and iOS
-  remain
+  read/sign/provisioning and production-backend wiring are implemented. The full Android signing matrix
+  (WalletConnect, EIP-4527 AirGap, different-card rejection, invalid PIN, cancel/timeout) passed owner dogfood on
+  v1.51.0+62; one open defect (NFC-loss error categorization), the physical log/crash review, and iOS remain
 - ✅ Phase 11 is complete: read-only app open plus fresh authentication for every private-key operation
 - ✅ Phase 12 is complete: MetaMask-compatible EIP-4527 / BC-UR AirGap signer
 
@@ -35,10 +36,14 @@ recoverable provisioning and which supports the same own-send, WalletConnect, an
   key; every later card is bound to the registered address; an explicit one-time opt-in can keep the PIN in a
   separate biometric-gated secret store; and Android NFC discovery is cancellable with stable sanitized
   PIN/timeout/NFC-loss errors and primary-failure-preserving teardown.
-- **NEXT — Phase 10 completion:** v1.49 ready-card adoption plus biometric PIN release and one Sepolia send passed
-  owner dogfood. Physically validate the deferred
-  WalletConnect/AirGap and negative-path matrix. A different-card check remains pending until a second compatible
-  card is available. iOS follows proven Android behavior once the exact vendor framework is available.
+- **NEXT — Phase 10 completion:** the deferred physical matrix was executed in full on v1.51.0+62
+  (Nothing Phone 3a / Android 16, 2026-08-17) and **Android now passes every required row except one**:
+  Rutoken-backed WalletConnect `personal_sign`/EIP-712/transaction, EIP-4527 AirGap export + live-camera scan +
+  signature return, different-card rejection (a second card is now available), and invalid-PIN handling all pass,
+  with both Sepolia broadcasts verified on-chain (`0xe22d7a84…47e5`, `0x9ff1e06b…5a6e`). Two items remain:
+  (1) an **open defect** — removing the card mid-operation reports the generic native error instead of the
+  specified NFC-loss message (teardown itself is correct); (2) the physical crash/log-output review, which needs
+  adb capture. iOS follows proven Android behavior once the exact vendor framework is available.
 - **LATER:** optional lock-on-open privacy, broader device/platform integration tests, and only then additional
   chains/accounts if product scope changes. They are not Phase 10 prerequisites.
 
