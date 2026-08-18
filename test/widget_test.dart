@@ -326,6 +326,7 @@ void main() {
     // locked screen — the device "tap + PIN" path runs per private-key op.
     await _openSendSheet(tester);
     expect(find.text('Подготовка и отправка перевода'), findsOneWidget);
+    await _closeSheet(tester);
 
     // The read-only statement and the technical backend label moved off the
     // wallet screen: the first to «Настройки», the second into its
@@ -400,6 +401,7 @@ void main() {
     await tester.pumpAndSettle();
     await _openSendSheet(tester);
     expect(find.text('Подготовка и отправка перевода'), findsOneWidget);
+    await _closeSheet(tester);
     await tester.tap(find.text('Настройки'));
     await tester.pumpAndSettle();
 
@@ -543,9 +545,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('SepoliaETH'), findsWidgets);
-    expect(find.text('Доступно: 0.1 SepoliaETH'), findsOneWidget);
 
     await _openSendSheet(tester);
+    // The available-balance line is part of the transfer form, so it is only on
+    // screen once the sheet is open.
+    expect(find.text('Доступно: 0.1 SepoliaETH'), findsOneWidget);
     final sendFields = find.byType(TextField);
     await tester.enterText(
       sendFields.at(0),
@@ -879,5 +883,12 @@ Future<void> _enterOperationPin(WidgetTester tester, String pin) async {
 /// so every send flow starts by tapping «Отправить».
 Future<void> _openSendSheet(WidgetTester tester) async {
   await tester.tap(find.text('Отправить'));
+  await tester.pumpAndSettle();
+}
+
+/// Dismisses the open modal sheet. A sheet's barrier covers the tab bar, so a
+/// test must close it before navigating to another tab.
+Future<void> _closeSheet(WidgetTester tester) async {
+  await tester.tap(find.byType(ModalBarrier).last);
   await tester.pumpAndSettle();
 }
