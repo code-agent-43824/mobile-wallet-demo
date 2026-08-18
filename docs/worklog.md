@@ -18,6 +18,32 @@ Entry template:
 
 ---
 
+## 2026-08-18 — Phase 13 chunk 13.2: four-tab shell + shared chain data — branch claude/wonderful-rubin-eBDKZ — in progress
+- Plan: replace the single scrolling card with the redesign's four-tab navigation, and lift the chain data so
+  more than one tab can render it.
+- Done: `design/app_shell.dart` renders the shell — a platform-appropriate header, the tab body and the bottom
+  bar — with the two pattern sets kept fully separate: iOS gets a 44pt bar, a large left-aligned title and a
+  translucent tab bar blurred over the content with a hairline rule; Android gets a 56dp app bar, an inline
+  title and an opaque navigation bar whose selected icon sits on a filled accent pill. Windows reuses the
+  Android set inside a 460px centred column. `ChainDataController` (+ tests) lifts the selected network,
+  snapshot and loading/error state out of `_UnlockedStageState`, preserving the v1.34 race guard (a reply is
+  applied only if it is still the newest **and** its network is still selected) and dropping the old snapshot
+  the moment the network or address changes. `WalletFlowScreen` now splits into `_buildMainApp` (tabs) and
+  `_buildOnboarding` (unchanged full-screen flow); `connections` remains a controller stage, so selecting that
+  tab enters it and leaving returns to the dashboard, which keeps the existing entry button and its tests
+  working. New `wallet_flow_screen_tabs.dart` adds a real **Активность** tab (history, empty and offline-cache
+  states from the shared controller) and a **Настройки** tab that moves the technical rows — RPC endpoint,
+  fetch time, data source, PKCS#11 session id and operation count — into a «Подробности» sheet, per design
+  decision 5. Three tabs showing identical content would have been worse than no tabs, so Активность and
+  Настройки were built for real rather than stubbed.
+- Verified before pushing (no Flutter locally, only `dart format`): the sole `Wallet Demo` assertion is on the
+  onboarding welcome screen, which still renders `_Header`; the connections entry button still exists in the
+  wallet tab; and none of the four tab labels collide with a `findsOneWidget` assertion.
+- Next / open: **13.3** restyles the Кошелёк tab itself (balance hero, assets, skeleton/empty states) — it still
+  renders the old dashboard body, including its "Wallet runtime" block, which should shrink once its technical
+  rows live in «Подробности». Copy in the new tabs is still inline Russian; it moves into ARB with 13.3/13.6.
+- Refs: this commit; `2e8435b` (shell), `baba262` (chain data).
+
 ## 2026-08-18 — Phase 13 chunk 13.1: Nocturne foundation + RU/EN scaffolding — branch claude/wonderful-rubin-eBDKZ — done (v1.52.0+63)
 - Plan: start the UI redesign from the owner's Claude Design handoff. Do the **foundation first** — tokens,
   theme, the platform seam, the typeface and the localization scaffolding — and let the existing screens inherit

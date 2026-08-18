@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_wallet_demo/src/blockchain/blockchain_models.dart';
 import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
 import 'package:mobile_wallet_demo/src/chain_data_controller.dart';

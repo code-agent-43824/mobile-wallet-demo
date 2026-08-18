@@ -15,6 +15,9 @@ import 'auth/external_digest_signer.dart';
 import 'auth/wallet_operation_auth.dart';
 import 'blockchain/blockchain_provider.dart';
 import 'blockchain/network_config.dart';
+import '../l10n/app_localizations.dart';
+import 'chain_data_controller.dart';
+import 'design/app_shell.dart';
 import 'design/nocturne.dart';
 import 'key_storage/backend_registry.dart';
 import 'key_storage/custody_backend.dart';
@@ -43,6 +46,7 @@ part 'wallet_flow_controller.dart';
 part 'wallet_flow_screen_widgets.dart';
 part 'wallet_flow_screen_onboarding.dart';
 part 'wallet_flow_screen_unlocked.dart';
+part 'wallet_flow_screen_tabs.dart';
 part 'wallet_flow_screen_connections.dart';
 
 enum WalletFlowStage {
@@ -94,6 +98,11 @@ class WalletFlowScreen extends StatefulWidget {
 
 class _WalletFlowScreenState extends State<WalletFlowScreen> {
   late final WalletFlowController _controller;
+  late final ChainDataController _chainData;
+
+  /// Which tab of the redesigned shell is showing. Pure presentation state, so
+  /// it lives here rather than in the domain controller.
+  AppTab _selectedTab = AppTab.wallet;
   bool _rutokenBiometricDialogOpen = false;
 
   @override
@@ -110,11 +119,17 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       qrScanner: widget.qrScanner,
       rutokenNativeAdapter: widget.rutokenNativeAdapter,
     )..addListener(_onControllerChanged);
+    _chainData = ChainDataController(
+      blockchainProvider: widget.blockchainProvider,
+    );
     _controller.loadInitialState();
   }
 
   void _onControllerChanged() {
     if (mounted) {
+      // Keep the shared chain data pointed at whatever wallet is active; the
+      // controller ignores a repeated address, so this is cheap on every tick.
+      _chainData.setAddress(_controller.summary?.address);
       setState(() {});
       _scheduleRutokenBiometricOffer();
     }
@@ -167,11 +182,138 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
   void dispose() {
     _controller.removeListener(_onControllerChanged);
     _controller.dispose();
+    _chainData.dispose();
     super.dispose();
+  }
+
+  /// Whether the current stage is part of the main app (which the redesign
+  /// presents as four tabs) rather than the onboarding/auth flow (which stays
+  /// full-screen, with no tab bar).
+  bool get _isMainAppStage =>
+      _controller.stage == WalletFlowStage.unlocked ||
+      _controller.stage == WalletFlowStage.connections;
+
+  void _onTabSelected(AppTab tab) {
+    // `connections` is still a controller stage, so selecting its tab enters
+    // that stage and leaving it returns to the dashboard.
+    if (tab == AppTab.connections) {
+      if (_controller.stage != WalletFlowStage.connections) {
+        _controller.openConnections();
+      }
+    } else if (_controller.stage == WalletFlowStage.connections) {
+      _controller.closeConnections();
+    }
+    setState(() => _selectedTab = tab);
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isMainAppStage) {
+      return _buildMainApp(context);
+    }
+    return _buildOnboarding(context);
+  }
+
+  Widget _buildMainApp(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    // The tab the shell shows follows the controller when it drives the stage
+    // itself (e.g. an incoming WalletConnect request opens Connections).
+    final tab = _controller.stage == WalletFlowStage.connections
+        ? AppTab.connections
+        : _selectedTab;
+    final errorMessage = _controller.errorMessage;
+
+    return Stack(
+      children: [
+        AppShell(
+          title: switch (tab) {
+            AppTab.wallet => l10n.tabWallet,
+            AppTab.activity => l10n.tabActivity,
+            AppTab.connections => l10n.tabConnections,
+            AppTab.settings => l10n.tabSettings,
+          },
+          tabs: <AppTabItem>[
+            AppTabItem(
+              tab: AppTab.wallet,
+              label: l10n.tabWallet,
+              icon: Icons.account_balance_wallet_outlined,
+            ),
+            AppTabItem(
+              tab: AppTab.activity,
+              label: l10n.tabActivity,
+              icon: Icons.history,
+            ),
+            AppTabItem(
+              tab: AppTab.connections,
+              label: l10n.tabConnections,
+              icon: Icons.hub_outlined,
+            ),
+            AppTabItem(
+              tab: AppTab.settings,
+              label: l10n.tabSettings,
+              icon: Icons.settings_outlined,
+            ),
+          ],
+          currentTab: tab,
+          onTabSelected: _onTabSelected,
+          banner: errorMessage == null
+              ? null
+              : Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    NocturneSpacing.gutter,
+                    0,
+                    NocturneSpacing.gutter,
+                    NocturneSpacing.x3,
+                  ),
+                  child: _ErrorBanner(message: errorMessage),
+                ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(
+              NocturneSpacing.gutter,
+              0,
+              NocturneSpacing.gutter,
+              NocturneSpacing.x8,
+            ),
+            child: _buildTabBody(tab),
+          ),
+        ),
+        if (_controller.busyMessage case final String message)
+          _BusyOverlay(
+            message: message,
+            onCancel: _controller.canCancelBusyOperation
+                ? _controller.cancelBusyOperation
+                : null,
+            cancellationRequested: _controller.isBusyCancellationRequested,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildTabBody(AppTab tab) {
+    switch (tab) {
+      case AppTab.wallet:
+      case AppTab.connections:
+        // The dashboard and the connections screen keep their existing bodies;
+        // 13.3 restyles the wallet content itself.
+        return _buildStageBody();
+      case AppTab.activity:
+        return _ActivityTab(chainData: _chainData);
+      case AppTab.settings:
+        return _SettingsTab(
+          chainData: _chainData,
+          address: _controller.summary?.address ?? '—',
+          backendLabel: _controller.backendLabel,
+          biometricsEnabled: _controller.biometricsEnabled,
+          isHardwareCustody:
+              _controller.activeBackend is WalletCustodyBackend &&
+              _controller.activeBackend is! ExternalDeviceDemoBackend,
+          externalRuntimeState: _controller.externalRuntimeState,
+          onLock: _controller.lockWallet,
+        );
+    }
+  }
+
+  Widget _buildOnboarding(BuildContext context) {
     final theme = Theme.of(context);
     final errorMessage = _controller.errorMessage;
 
@@ -329,7 +471,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
         // unlocked == the read-only dashboard. No key material is held here; the
         // send form authorizes per-op via controller.authorizeAndSubmitTransfer.
         return _UnlockedStage(
-          blockchainProvider: widget.blockchainProvider,
+          chainData: _chainData,
           transactionService: widget.transactionService,
           trackingTransport: widget.trackingTransport,
           activeBackend: controller.activeBackend,

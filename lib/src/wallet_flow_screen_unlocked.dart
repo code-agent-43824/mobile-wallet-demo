@@ -6,7 +6,7 @@ part of 'wallet_flow_screen.dart';
 /// prompt and a freshly-unlocked sign via [onAuthorizeAndSubmit].
 class _UnlockedStage extends StatefulWidget {
   const _UnlockedStage({
-    required this.blockchainProvider,
+    required this.chainData,
     required this.transactionService,
     required this.trackingTransport,
     required this.activeBackend,
@@ -27,7 +27,9 @@ class _UnlockedStage extends StatefulWidget {
     required this.onOpenConnections,
   });
 
-  final BlockchainProvider blockchainProvider;
+  /// Shared network/snapshot state, lifted so the Активность tab can render
+  /// the same data without loading it twice.
+  final ChainDataController chainData;
   final TransactionService transactionService;
   final JsonRpcTransport trackingTransport;
   final WalletBackend activeBackend;
@@ -68,57 +70,41 @@ typedef AuthorizeAndSubmitTransfer =
     });
 
 class _UnlockedStageState extends State<_UnlockedStage> {
-  EvmNetwork _selectedNetwork = EvmNetwork.ethereumMainnet;
-  WalletChainSnapshot? _snapshot;
-  String? _error;
-  bool _isLoading = false;
-  int _refreshId = 0;
+  ChainDataController get _chainData => widget.chainData;
+
+  EvmNetwork get _selectedNetwork => _chainData.selectedNetwork;
+  WalletChainSnapshot? get _snapshot => _chainData.snapshot;
+  String? get _error => _chainData.errorMessage;
+  bool get _isLoading => _chainData.isLoading;
 
   @override
   void initState() {
     super.initState();
-    _refresh();
+    _chainData.addListener(_onChainData);
   }
 
-  Future<void> _refresh() async {
-    final address = widget.summary?.address;
-    if (address == null) {
-      return;
-    }
-    final network = _selectedNetwork;
-    final refreshId = ++_refreshId;
-
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      final snapshot = await widget.blockchainProvider.loadSnapshot(
-        network: network,
-        address: address,
-      );
-      if (!mounted || refreshId != _refreshId || network != _selectedNetwork) {
-        return;
-      }
-      setState(() {
-        _snapshot = snapshot;
-      });
-    } on BlockchainFailure catch (error) {
-      if (!mounted || refreshId != _refreshId || network != _selectedNetwork) {
-        return;
-      }
-      setState(() {
-        _error = error.message;
-      });
-    } finally {
-      if (mounted && refreshId == _refreshId && network == _selectedNetwork) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+  @override
+  void didUpdateWidget(covariant _UnlockedStage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.chainData, widget.chainData)) {
+      oldWidget.chainData.removeListener(_onChainData);
+      widget.chainData.addListener(_onChainData);
     }
   }
+
+  @override
+  void dispose() {
+    _chainData.removeListener(_onChainData);
+    super.dispose();
+  }
+
+  void _onChainData() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _refresh() => _chainData.refresh();
 
   @override
   Widget build(BuildContext context) {
@@ -231,12 +217,7 @@ class _UnlockedStageState extends State<_UnlockedStage> {
               return;
             }
 
-            setState(() {
-              _selectedNetwork = network;
-              _snapshot = null;
-              _error = null;
-            });
-            _refresh();
+            _chainData.selectNetwork(network);
           },
         ),
         const SizedBox(height: 16),
