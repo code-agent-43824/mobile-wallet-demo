@@ -710,6 +710,56 @@ class _RequestCard extends StatelessWidget {
     }
   }
 
+  /// Human name of the chain the request targets; falls back to the numeric id
+  /// for a chain the wallet does not carry a config for.
+  String _networkName(int chainId) {
+    for (final config in evmNetworkConfigs.values) {
+      if (config.chainId == chainId) {
+        return config.name;
+      }
+    }
+    return 'chain $chainId';
+  }
+
+  String _nativeSymbol(int chainId) {
+    for (final config in evmNetworkConfigs.values) {
+      if (config.chainId == chainId) {
+        return config.nativeSymbol;
+      }
+    }
+    return '';
+  }
+
+  /// Wei arrives as a hex or decimal string depending on the dApp.
+  BigInt _parseWei(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.startsWith('0x') || trimmed.startsWith('0X')) {
+      return BigInt.tryParse(trimmed.substring(2), radix: 16) ?? BigInt.zero;
+    }
+    return BigInt.tryParse(trimmed) ?? BigInt.zero;
+  }
+
+  String _shortAddress(String address) {
+    if (address.length <= 14) {
+      return address;
+    }
+    return '${address.substring(0, 8)}…${address.substring(address.length - 6)}';
+  }
+
+  /// One line saying what the dApp is asking for, in the user's terms.
+  String _requestSummary() {
+    if (codec.isTransactionMethod(request.method)) {
+      return 'Приложение просит подписать перевод.';
+    }
+    if (codec.isMessageSignMethod(request.method)) {
+      return 'Приложение просит подписать сообщение.';
+    }
+    if (codec.isTypedDataMethod(request.method)) {
+      return 'Приложение просит подписать структурированные данные.';
+    }
+    return 'Приложение просит подтвердить действие.';
+  }
+
   String _formatUnits(BigInt value, int decimals) {
     final negative = value.isNegative;
     final digits = value.abs().toString().padLeft(decimals + 1, '0');
@@ -758,14 +808,32 @@ class _RequestCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Text('Метод: ${request.method}'),
-          Text('Сеть: ${request.chainId}'),
+          // Plain language: what is being asked, in units a person reads. The
+          // raw method name, the numeric chain id and the wei value are
+          // developer detail and stay out of the request card.
+          Text(_requestSummary(), style: theme.textTheme.bodyMedium),
+          Text(
+            'Сеть: ${_networkName(request.chainId)}',
+            style: theme.textTheme.bodySmall,
+          ),
           if (chainSwitchTarget != null)
-            Text('Переключить на: $chainSwitchTarget'),
-          if (from != null) Text('Отправитель: $from'),
-          if (to != null) Text('Получатель: $to'),
-          if (value != null) Text('Сумма (wei): $value'),
-          if (message != null) Text('Сообщение: $message'),
+            Text('Переключить на: ${_networkName(chainSwitchTarget)}'),
+          if (to != null) ...[
+            const SizedBox(height: 4),
+            Text('Кому: ${_shortAddress(to)}'),
+          ],
+          if (value != null && isTransaction) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Сумма: ${_formatUnits(_parseWei(value), 18)} '
+              '${_nativeSymbol(request.chainId)}',
+              style: theme.textTheme.titleMedium,
+            ),
+          ],
+          if (message != null) ...[
+            const SizedBox(height: 4),
+            Text('Сообщение: $message'),
+          ],
           if (typedData != null) Text('EIP-712: $typedData'),
           if (isPreviewLoading) ...[
             const SizedBox(height: 8),

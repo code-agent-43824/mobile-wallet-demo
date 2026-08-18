@@ -237,7 +237,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Входящий запрос на подпись'), findsOneWidget);
-    expect(find.text('Метод: eth_sendTransaction'), findsOneWidget);
+    // The card states the request in plain language now; the raw method name is
+    // developer detail and no longer shown.
+    expect(find.text('Приложение просит подписать перевод.'), findsOneWidget);
     expect(find.text('Тип: вызов смарт-контракта'), findsOneWidget);
     expect(find.textContaining('selector 0x12345678'), findsOneWidget);
     expect(find.textContaining('Gas limit: 120000'), findsOneWidget);
