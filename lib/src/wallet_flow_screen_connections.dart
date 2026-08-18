@@ -97,6 +97,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
   bool get _biometricsOffered => widget.canUnlockWithBiometrics;
 
   Future<void> _approveRequest() async {
+    final l10n = AppLocalizations.of(context);
     const codec = WalletConnectV2RequestCodec();
     final request = widget.pendingRequest;
     if (request != null && codec.isChainSwitchMethod(request.method)) {
@@ -107,8 +108,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
     }
     final credential = await _promptForAuth(
       context,
-      reason:
-          'Одобрение входящего запроса требует доступа к приватному ключу для подписи.',
+      reason: l10n.wcApproveNeedsKey,
       biometricsOffered: _biometricsOffered,
     );
     if (credential == null) {
@@ -177,6 +177,10 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final proposal = widget.pendingProposal;
     final request = widget.pendingRequest;
@@ -197,18 +201,16 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
           children: [
             _StatusChip(
               label: widget.isAvailable
-                  ? 'WalletConnect доступен'
-                  : 'WalletConnect не настроен',
+                  ? l10n.wcAvailable
+                  : l10n.wcNotConfigured,
             ),
             _StatusChip(label: 'Активных сессий: ${sessions.length}'),
           ],
         ),
         const SizedBox(height: 24),
-        const _SectionTitle('Новое подключение'),
+        _SectionTitle(l10n.wcNewConnection),
         const SizedBox(height: 8),
-        const Text(
-          'Вставьте wc: URI из dApp (обычно из QR-кода), чтобы создать пару.',
-        ),
+        Text(l10n.wcPasteUri),
         const SizedBox(height: 12),
         TextField(
           controller: _uriController,
@@ -232,7 +234,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
                 onPressed: () =>
                     _fillFrom(_uriController, widget.onLoadQrFromFile),
                 icon: const Icon(Icons.image_outlined),
-                label: const Text('Загрузить wc: из файла'),
+                label: Text(l10n.wcLoadFromFile),
               ),
             if (widget.isQrCameraAvailable)
               OutlinedButton.icon(
@@ -265,11 +267,11 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
           ),
         ],
         const SizedBox(height: 24),
-        const _SectionTitle('Активные сессии'),
+        _SectionTitle(l10n.wcActiveSessions),
         const SizedBox(height: 12),
         if (sessions.isEmpty)
           Text(
-            'Нет активных подключений.',
+            l10n.wcNoSessions,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -285,18 +287,14 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
             ),
           ),
         const SizedBox(height: 24),
-        const _SectionTitle('AirGap через MetaMask'),
+        _SectionTitle(l10n.airgapTitle),
         const SizedBox(height: 8),
-        const Text(
-          'Ключ остаётся в этом приложении. MetaMask собирает перевод и '
-          'отправляет его в сеть, а приложение показывает, что именно '
-          'подписывает, и подписывает.',
-        ),
+        Text(l10n.airgapIntro),
         const SizedBox(height: 12),
         _AirGapProgress(currentStep: _airGapStep()),
         const SizedBox(height: 12),
         _AirGapStepCard(
-          title: 'Добавьте кошелёк в MetaMask',
+          title: l10n.airgapStep1Title,
           stepNumber: 1,
           description:
               'В MetaMask выберите «Аппаратный кошелёк по QR» и наведите камеру '
@@ -318,7 +316,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
                 const SizedBox(height: 12),
                 _UrQrDisplay(
                   payload: accountExport,
-                  semanticsLabel: 'QR публичного аккаунта для MetaMask',
+                  semanticsLabel: l10n.airgapAccountQr,
                 ),
               ],
             ],
@@ -326,7 +324,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
         ),
         const SizedBox(height: 12),
         _AirGapStepCard(
-          title: 'Отсканируйте перевод из MetaMask',
+          title: l10n.airgapStep2Title,
           stepNumber: 2,
           description:
               'MetaMask собрал перевод и показал QR. Наведите на него камеру — '
@@ -348,7 +346,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
                     OutlinedButton.icon(
                       onPressed: widget.onLoadAirGapRequest,
                       icon: const Icon(Icons.image_outlined),
-                      label: const Text('Загрузить QR из файла'),
+                      label: Text(l10n.airgapLoadQrFile),
                     ),
                 ],
               ),
@@ -371,14 +369,14 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
         if (airGapResponse != null) ...[
           const SizedBox(height: 12),
           _AirGapStepCard(
-            title: 'Верните подпись в MetaMask',
+            title: l10n.airgapStep3Title,
             stepNumber: 3,
             description:
                 'Покажите этот код камере MetaMask. Он отправит перевод в сеть — '
                 'со стороны кошелька ничего больше не нужно.',
             child: _UrQrDisplay(
               payload: airGapResponse,
-              semanticsLabel: 'QR подписи транзакции для MetaMask',
+              semanticsLabel: l10n.airgapSignatureQr,
             ),
           ),
           const SizedBox(height: 8),
@@ -392,7 +390,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
         OutlinedButton.icon(
           onPressed: widget.onBack,
           icon: const Icon(Icons.arrow_back),
-          label: const Text('Назад к кошельку'),
+          label: Text(l10n.wcBackToWallet),
         ),
       ],
     );
@@ -477,6 +475,7 @@ class _AirGapTransactionPreviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -500,7 +499,7 @@ class _AirGapTransactionPreviewCard extends StatelessWidget {
           value: '${preview.maximumFeeEth} ETH',
         ),
         _SummaryTile(
-          label: 'Данные контракта',
+          label: l10n.wcContractData,
           value: preview.dataLength == 0
               ? 'нет'
               : '${preview.dataLength} байт, selector ${preview.selector ?? 'нет'}',
@@ -650,6 +649,7 @@ class _ProposalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
 
     return Container(
@@ -663,7 +663,7 @@ class _ProposalCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Запрос на подключение',
+            l10n.wcConnectionRequest,
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
             ),
@@ -835,6 +835,7 @@ class _RequestCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final tx = request.params.isNotEmpty && request.params.first is Map
         ? (request.params.first! as Map).cast<String, Object?>()
@@ -862,8 +863,8 @@ class _RequestCard extends StatelessWidget {
         children: [
           Text(
             chainSwitchTarget == null
-                ? 'Входящий запрос на подпись'
-                : 'Запрос на переключение сети',
+                ? l10n.wcSignRequest
+                : l10n.wcChainSwitchRequest,
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
             ),
