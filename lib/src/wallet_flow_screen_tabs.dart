@@ -326,10 +326,6 @@ class _WalletTab extends StatefulWidget {
 }
 
 class _WalletTabState extends State<_WalletTab> {
-  /// The send form is inline and open by default for now; 13.4 turns it into
-  /// the design's send sheet, at which point this toggle goes away.
-  bool _sendOpen = true;
-
   @override
   Widget build(BuildContext context) {
     final chainData = widget.chainData;
@@ -378,13 +374,45 @@ class _WalletTabState extends State<_WalletTab> {
           _QuickActions(
             onSend: snapshot == null
                 ? null
-                : () => setState(() => _sendOpen = !_sendOpen),
+                : () => _showSendSheet(context, snapshot, config),
             onReceive: () => _showReceiveSheet(context),
             onScan: widget.onScan,
           ),
-          if (snapshot != null && _sendOpen) ...[
+          if (snapshot != null) ...[
             const SizedBox(height: NocturneSpacing.x8),
-            _TransferPreparationSection(
+            _AssetList(snapshot: snapshot, nativeSymbol: config.nativeSymbol),
+          ],
+        ],
+      ],
+    );
+  }
+
+  /// The transfer form lives in a sheet rather than on the wallet screen, so
+  /// the screen shows balance and assets and the form appears only when asked
+  /// for. Scroll-controlled and inset-aware because the form is tall and the
+  /// keyboard covers it otherwise.
+  void _showSendSheet(
+    BuildContext context,
+    WalletChainSnapshot snapshot,
+    EvmNetworkConfig config,
+  ) {
+    final style = PlatformStyle.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: NocturneColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: style.sheetBorderRadius),
+      isScrollControlled: true,
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.9,
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(NocturneSpacing.gutter),
+            child: _TransferPreparationSection(
               snapshot: snapshot,
               fromAddress: widget.address,
               networkConfig: config,
@@ -393,13 +421,9 @@ class _WalletTabState extends State<_WalletTab> {
               canUnlockWithBiometrics: widget.canUnlockWithBiometrics,
               onAuthorizeAndSubmit: widget.onAuthorizeAndSubmit,
             ),
-          ],
-          if (snapshot != null) ...[
-            const SizedBox(height: NocturneSpacing.x8),
-            _AssetList(snapshot: snapshot, nativeSymbol: config.nativeSymbol),
-          ],
-        ],
-      ],
+          ),
+        ),
+      ),
     );
   }
 

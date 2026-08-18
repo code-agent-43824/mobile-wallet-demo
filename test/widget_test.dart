@@ -324,6 +324,7 @@ void main() {
 
     // Connecting the device now lands straight on the read-only dashboard, not a
     // locked screen — the device "tap + PIN" path runs per private-key op.
+    await _openSendSheet(tester);
     expect(find.text('Подготовка и отправка перевода'), findsOneWidget);
 
     // The read-only statement and the technical backend label moved off the
@@ -397,6 +398,7 @@ void main() {
     // then come back to finish exercising the device controls.
     await tester.tap(find.text('Кошелёк'));
     await tester.pumpAndSettle();
+    await _openSendSheet(tester);
     expect(find.text('Подготовка и отправка перевода'), findsOneWidget);
     await tester.tap(find.text('Настройки'));
     await tester.pumpAndSettle();
@@ -484,6 +486,7 @@ void main() {
     await tester.tap(find.text('Пока без биометрии'));
     await tester.pumpAndSettle();
 
+    await _openSendSheet(tester);
     expect(find.text('Подготовка и отправка перевода'), findsOneWidget);
 
     // Building the preview is read-only and must not prompt for auth.
@@ -542,6 +545,7 @@ void main() {
     expect(find.text('SepoliaETH'), findsWidgets);
     expect(find.text('Доступно: 0.1 SepoliaETH'), findsOneWidget);
 
+    await _openSendSheet(tester);
     final sendFields = find.byType(TextField);
     await tester.enterText(
       sendFields.at(0),
@@ -647,6 +651,7 @@ void main() {
     await tester.tap(find.textContaining('Включить биометрию'));
     await tester.pumpAndSettle();
 
+    await _openSendSheet(tester);
     expect(find.text('Подготовка и отправка перевода'), findsOneWidget);
 
     final sendFields = find.byType(TextField);
@@ -704,6 +709,7 @@ void main() {
     await tester.tap(find.text('Пока без биометрии'));
     await tester.pumpAndSettle();
 
+    await _openSendSheet(tester);
     final sendFields = find.byType(TextField);
     await tester.enterText(
       sendFields.at(0),
@@ -763,6 +769,7 @@ void main() {
     await tester.tap(find.text('Пока без биометрии'));
     await tester.pumpAndSettle();
 
+    await _openSendSheet(tester);
     final sendFields = find.byType(TextField);
     await tester.enterText(
       sendFields.at(0),
@@ -834,6 +841,7 @@ void main() {
     await tester.tap(find.text('Пока без биометрии'));
     await tester.pumpAndSettle();
 
+    await _openSendSheet(tester);
     final sendFields = find.byType(TextField);
     await tester.enterText(
       sendFields.at(0),
@@ -865,4 +873,11 @@ Future<void> _enterOperationPin(WidgetTester tester, String pin) async {
     await tester.tap(find.byKey(ValueKey<String>('pin-key-$digit')));
     await tester.pump();
   }
+}
+
+/// Opens the transfer sheet. The redesign moved the form off the wallet screen,
+/// so every send flow starts by tapping «Отправить».
+Future<void> _openSendSheet(WidgetTester tester) async {
+  await tester.tap(find.text('Отправить'));
+  await tester.pumpAndSettle();
 }

@@ -198,6 +198,7 @@ void main() {
     await tester.tap(back);
     await tester.pumpAndSettle();
 
+    await _openSendSheet(tester);
     expect(find.text('Подготовка и отправка перевода'), findsOneWidget);
   });
 
@@ -440,4 +441,11 @@ Future<void> _enterOperationPin(WidgetTester tester, String pin) async {
     await tester.tap(find.byKey(ValueKey<String>('pin-key-$digit')));
     await tester.pump();
   }
+}
+
+/// Opens the transfer sheet. The redesign moved the form off the wallet screen,
+/// so every send flow starts by tapping «Отправить».
+Future<void> _openSendSheet(WidgetTester tester) async {
+  await tester.tap(find.text('Отправить'));
+  await tester.pumpAndSettle();
 }
