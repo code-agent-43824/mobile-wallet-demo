@@ -76,5 +76,8 @@
   "airgapStep3Title": "Верните подпись в MetaMask",
   "airgapAccountQr": "QR публичного аккаунта для MetaMask",
   "airgapSignatureQr": "QR подписи транзакции для MetaMask",
-  "airgapLoadQrFile": "Загрузить QR из файла"
+  "airgapLoadQrFile": "Загрузить QR из файла",
+  "busyTakesSeconds": "Это занимает несколько секунд.",
+  "busyCancelNfc": "Отменить ожидание NFC",
+  "busyCancelling": "Отменяем ожидание…"
 }

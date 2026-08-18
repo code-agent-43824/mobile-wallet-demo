@@ -415,7 +415,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _Header(stage: _controller.stage),
+                          const _Header(),
                           if (errorMessage != null) ...[
                             const SizedBox(height: 20),
                             _ErrorBanner(message: errorMessage),

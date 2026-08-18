@@ -109,5 +109,8 @@
   "airgapStep3Title": "Return the signature to MetaMask",
   "airgapAccountQr": "Public account QR for MetaMask",
   "airgapSignatureQr": "Transaction signature QR for MetaMask",
-  "airgapLoadQrFile": "Load a QR from a file"
+  "airgapLoadQrFile": "Load a QR from a file",
+  "busyTakesSeconds": "This takes a few seconds.",
+  "busyCancelNfc": "Cancel waiting for the card",
+  "busyCancelling": "Cancelling…"
 }

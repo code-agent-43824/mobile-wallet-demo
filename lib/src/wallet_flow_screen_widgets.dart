@@ -22,6 +22,7 @@ class _BusyOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     return Positioned.fill(
       child: ColoredBox(
@@ -49,10 +50,7 @@ class _BusyOverlay extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    awaitingCard
-                        ? 'Держите карту у задней стороны телефона. '
-                              'Ключ с карты не считывается.'
-                        : 'Это занимает несколько секунд.',
+                    awaitingCard ? l10n.tapCardBody : l10n.busyTakesSeconds,
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
@@ -64,8 +62,8 @@ class _BusyOverlay extends StatelessWidget {
                       onPressed: cancellationRequested ? null : onCancel,
                       child: Text(
                         cancellationRequested
-                            ? 'Отменяем ожидание…'
-                            : 'Отменить ожидание NFC',
+                            ? l10n.busyCancelling
+                            : l10n.busyCancelNfc,
                       ),
                     ),
                   ],
@@ -80,9 +78,7 @@ class _BusyOverlay extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.stage});
-
-  final WalletFlowStage stage;
+  const _Header();
 
   @override
   Widget build(BuildContext context) {
@@ -111,45 +107,8 @@ class _Header extends StatelessWidget {
             fontWeight: FontWeight.w700,
           ),
         ),
-        const SizedBox(height: 12),
-        Text(
-          _descriptionFor(stage),
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            height: 1.45,
-          ),
-        ),
       ],
     );
-  }
-
-  String _descriptionFor(WalletFlowStage stage) {
-    switch (stage) {
-      case WalletFlowStage.loading:
-        return 'Проверяю текущее состояние кошелька и подготавливаю onboarding shell.';
-      case WalletFlowStage.welcome:
-        return 'Следующий шаг после foundation: пользовательский onboarding flow с выбором create/import, обязательным PIN и дальнейшим переходом в lock/unlock shell.';
-      case WalletFlowStage.createWallet:
-        return 'Новый кошелёк начнётся с обязательного PIN, а затем приложение создаст seed-фразу и покажет её один раз.';
-      case WalletFlowStage.importWallet:
-        return 'Импортируем существующую seed-фразу, задаём PIN и переводим приложение в тот же защищённый shell, что и для нового кошелька.';
-      case WalletFlowStage.showSeed:
-        return 'Это одноразовый экран резервного сохранения seed-фразы. После закрытия приложения seed больше не должен показываться в открытом виде.';
-      case WalletFlowStage.rutokenCreate:
-        return 'Создаём восстанавливаемый BIP-39 backup перед записью master key на Рутокен.';
-      case WalletFlowStage.rutokenImport:
-        return 'Импортируем существующий BIP-39 backup в пустой Рутокен.';
-      case WalletFlowStage.rutokenBackup:
-        return 'Требуем подтверждение полного offline backup до аппаратного provisioning.';
-      case WalletFlowStage.biometricPrompt:
-        return 'После PIN можно включить биометрию как удобный путь разблокировки: реальную на мобильных платформах и имитацию на Windows для demo-сценария.';
-      case WalletFlowStage.locked:
-        return 'Кошелёк инициализирован, но заблокирован. Дальше доступ в приложение идёт через PIN, а при включённой биометрии — ещё и через быстрый biometric unlock.';
-      case WalletFlowStage.unlocked:
-        return 'Onboarding/auth shell готов. Теперь поверх него строим первый действительно полезный read-only wallet слой: баланс, токены, история и локальный кэш.';
-      case WalletFlowStage.connections:
-        return 'Подключения WalletConnect: dApp подключается к этому кошельку, присылает запросы на подпись, а кошелёк одобряет их и подписывает локальным vault. Пока работает поверх фейкового сервиса — реальный реле/SDK подключим позже.';
-    }
   }
 }
 
