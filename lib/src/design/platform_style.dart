@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show TargetPlatform, immutable;
 import 'package:flutter/material.dart' show Theme;
 import 'package:flutter/widgets.dart';
 
