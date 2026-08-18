@@ -325,7 +325,17 @@ void main() {
     // Connecting the device now lands straight on the read-only dashboard, not a
     // locked screen — the device "tap + PIN" path runs per private-key op.
     expect(find.text('Подготовка и отправка перевода'), findsOneWidget);
+
+    // The read-only statement and the technical backend label moved off the
+    // wallet screen: the first to «Настройки», the second into its
+    // «Подробности» sheet, per the redesign's split of user-facing copy from
+    // developer detail.
+    await tester.tap(find.text('Настройки'));
+    await tester.pumpAndSettle();
     expect(find.text('Только просмотр'), findsOneWidget);
+
+    await tester.tap(find.text('Подробности'));
+    await tester.pumpAndSettle();
     expect(find.text('External NFC demo device'), findsAtLeastNWidgets(1));
   });
 
@@ -354,10 +364,13 @@ void main() {
     await tester.tap(find.text('Подключить устройство'));
     await tester.pumpAndSettle();
 
-    // Connecting lands on the read-only dashboard; the device controls live at
-    // the bottom of a tall scroll view, so each must be scrolled into view
-    // before tapping. Offline/reconnect now STAY on the dashboard and just
-    // refresh the runtime tiles — there is no locked screen / re-enter-PIN step.
+    // Connecting lands on the read-only wallet tab. The redesign moves the
+    // demo-device controls out of the wallet screen into «Настройки», so switch
+    // there first. Offline/reconnect still just refresh the runtime state —
+    // there is no locked screen / re-enter-PIN step.
+    await tester.tap(find.text('Настройки'));
+    await tester.pumpAndSettle();
+
     final offlineButton = find.text('Симулировать offline');
     await tester.ensureVisible(offlineButton);
     await tester.tap(offlineButton);
@@ -375,11 +388,18 @@ void main() {
     await tester.tap(reconnectButton);
     await tester.pumpAndSettle();
 
-    // Reconnect just flips availability back online on the same dashboard; the
-    // send section is still there and the device session control is offered.
+    // Reconnect flips availability back online and the session control is
+    // offered again.
     expect(find.text('Device online'), findsOneWidget);
-    expect(find.text('Подготовка и отправка перевода'), findsOneWidget);
     expect(find.text('Разорвать device session'), findsOneWidget);
+
+    // The send form now lives on the Кошелёк tab; confirm it is still there,
+    // then come back to finish exercising the device controls.
+    await tester.tap(find.text('Кошелёк'));
+    await tester.pumpAndSettle();
+    expect(find.text('Подготовка и отправка перевода'), findsOneWidget);
+    await tester.tap(find.text('Настройки'));
+    await tester.pumpAndSettle();
 
     // Post-refactor the device is locked at rest (no PKCS#11 session until the
     // next private-key op opens one via tap + PIN). Ping / read-address run the

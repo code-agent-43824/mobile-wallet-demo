@@ -110,7 +110,9 @@ Future<void> _createUnlock(WidgetTester tester) async {
 }
 
 Future<void> _openConnections(WidgetTester tester) async {
-  final entry = find.text('Подключения (WalletConnect)');
+  // The redesign reaches Connections through the shell's «Связи» tab; the old
+  // dashboard entry button is gone.
+  final entry = find.text('Связи');
   await tester.ensureVisible(entry);
   await tester.tap(entry);
   await tester.pumpAndSettle();

@@ -293,9 +293,35 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
   Widget _buildTabBody(AppTab tab) {
     switch (tab) {
       case AppTab.wallet:
+        return _WalletTab(
+          chainData: _chainData,
+          address: _controller.summary?.address ?? '—',
+          transactionService: widget.transactionService,
+          trackingTransport: widget.trackingTransport,
+          canUnlockWithBiometrics: _controller.canUnlockWithBiometrics,
+          onAuthorizeAndSubmit:
+              ({
+                required snapshot,
+                required fromAddress,
+                required toAddress,
+                required amountText,
+                required asset,
+                required tracker,
+                pin,
+                useBiometrics = false,
+              }) => _controller.authorizeAndSubmitTransfer(
+                snapshot: snapshot,
+                fromAddress: fromAddress,
+                toAddress: toAddress,
+                amountText: amountText,
+                asset: asset,
+                tracker: tracker,
+                pin: pin,
+                useBiometrics: useBiometrics,
+              ),
+          onScan: () => _onTabSelected(AppTab.connections),
+        );
       case AppTab.connections:
-        // The dashboard and the connections screen keep their existing bodies;
-        // 13.3 restyles the wallet content itself.
         return _buildStageBody();
       case AppTab.activity:
         return _ActivityTab(chainData: _chainData);
@@ -310,6 +336,22 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
               _controller.activeBackend is! ExternalDeviceDemoBackend,
           externalRuntimeState: _controller.externalRuntimeState,
           onLock: _controller.lockWallet,
+          onRefresh: _chainData.refresh,
+          onReconnectExternalDevice: _controller.isDemoExternalBackendSelected
+              ? _controller.reconnectExternalDevice
+              : null,
+          onDisconnectExternalSession: _controller.isDemoExternalBackendSelected
+              ? _controller.disconnectExternalSession
+              : null,
+          onSimulateExternalOffline: _controller.isDemoExternalBackendSelected
+              ? _controller.simulateExternalDeviceOffline
+              : null,
+          onPingExternalDevice: _controller.isDemoExternalBackendSelected
+              ? _controller.pingExternalDevice
+              : null,
+          onReadExternalAddress: _controller.isDemoExternalBackendSelected
+              ? _controller.readExternalAddress
+              : null,
         );
     }
   }
@@ -469,63 +511,9 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
               : null,
         );
       case WalletFlowStage.unlocked:
-        // unlocked == the read-only dashboard. No key material is held here; the
-        // send form authorizes per-op via controller.authorizeAndSubmitTransfer.
-        return _UnlockedStage(
-          chainData: _chainData,
-          transactionService: widget.transactionService,
-          trackingTransport: widget.trackingTransport,
-          activeBackend: controller.activeBackend,
-          summary: controller.summary,
-          backendLabel: controller.backendLabel,
-          externalRuntimeState: controller.externalRuntimeState,
-          biometricsEnabled: controller.biometricsEnabled,
-          canUnlockWithBiometrics: controller.canUnlockWithBiometrics,
-          onAuthorizeAndSubmit:
-              ({
-                required snapshot,
-                required fromAddress,
-                required toAddress,
-                required amountText,
-                required asset,
-                required tracker,
-                pin,
-                useBiometrics = false,
-              }) => controller.authorizeAndSubmitTransfer(
-                snapshot: snapshot,
-                fromAddress: fromAddress,
-                toAddress: toAddress,
-                amountText: amountText,
-                asset: asset,
-                tracker: tracker,
-                pin: pin,
-                useBiometrics: useBiometrics,
-              ),
-          onLock: controller.lockWallet,
-          isHardwareCustody:
-              controller.activeBackend is WalletCustodyBackend &&
-              controller.activeBackend is! ExternalDeviceDemoBackend,
-          onReconnectExternalDevice: controller.isDemoExternalBackendSelected
-              ? controller.reconnectExternalDevice
-              : null,
-          onDisconnectExternalSession: controller.isDemoExternalBackendSelected
-              ? controller.disconnectExternalSession
-              : null,
-          onSimulateExternalOffline: controller.isDemoExternalBackendSelected
-              ? controller.simulateExternalDeviceOffline
-              : null,
-          onPingExternalDevice: controller.isDemoExternalBackendSelected
-              ? controller.pingExternalDevice
-              : null,
-          onReadExternalAddress: controller.isDemoExternalBackendSelected
-              ? controller.readExternalAddress
-              : null,
-          onRefreshExternalRuntimeState:
-              controller.isDemoExternalBackendSelected
-              ? controller.refreshExternalRuntimeState
-              : null,
-          onOpenConnections: controller.openConnections,
-        );
+        // Reached only through the tab shell, which renders _WalletTab; this
+        // arm keeps the switch exhaustive.
+        return const SizedBox.shrink();
       case WalletFlowStage.connections:
         return _ConnectionsStage(
           isAvailable: controller.isWalletConnectAvailable,
