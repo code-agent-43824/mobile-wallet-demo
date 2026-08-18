@@ -364,12 +364,14 @@ class PhoneSecureVault implements KeyStorageBackend {
   /// Renders the wait as minutes once it exceeds a minute — "через 300 с" is
   /// technically right and practically unreadable.
   static String _formatRemaining(Duration remaining) {
-    final seconds = remaining.inSeconds + 1;
-    if (seconds < 60) {
-      return '$seconds с';
+    final seconds = remaining.inSeconds;
+    // Round a sub-minute wait up so it never reads "0 с"; longer waits round up
+    // to whole minutes from the true remainder, so a fresh five-minute lockout
+    // says five and not six.
+    if (seconds < 59) {
+      return '${seconds + 1} с';
     }
-    final minutes = (seconds / 60).ceil();
-    return '$minutes мин';
+    return '${(seconds / 60).ceil()} мин';
   }
 
   Future<void> _registerFailedUnlock(_VaultPayload payload) async {
