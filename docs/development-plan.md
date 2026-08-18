@@ -630,7 +630,10 @@ icons; no pure black or white; elevation is a hairline edge plus ambient darknes
   tap → result are still stacked sheets rather than sequential — functionally fine (the tap overlay is above
   every route) but not yet the design's shape.
 - **13.6** — Настройки + the «Подробности» developer sheet + the RU/EN language switch.
-- **13.7** — onboarding variant B, seed backup, and biometric opt-in.
+- **13.7 — DONE (CI green)** — onboarding variant B: «Кошелёк за минуту» replaces the storage-backend question,
+  three actions choose the backend implicitly, and the card's actions are disclosed only after the user says
+  they have one. Backend ids resolve from the catalogue by kind. Copy stranded by the simulation's removal
+  (create/import "external backend" branches) went with it.
 
 ### Constraints
 - **Do not change the Rutoken step structure.** The card flows (create/import/backup, PIN entry, the NFC wait

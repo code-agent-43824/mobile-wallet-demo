@@ -18,6 +18,29 @@ Entry template:
 
 ---
 
+## 2026-08-18 — Phase 13 chunk 13.7: onboarding variant B — branch claude/wonderful-rubin-eBDKZ — done (CI green)
+- The first screen opened with a storage-backend question and a picker listing three options. That asks someone
+  who has just installed a wallet to decide something they have no basis to decide.
+- Done: variant B, the owner's choice — «Кошелёк за минуту», make the phone wallet now, offer the card as a
+  later upgrade. Three actions (create / «У меня есть карта» / import seed) and the backend follows from which
+  is pressed, so the picker is gone. The card's own four actions appear only after the user says they have one,
+  which keeps the first screen short. Backend ids resolve from the catalogue **by kind** rather than as string
+  literals, so the screen cannot drift from the registry.
+- Also removed copy stranded by the simulation's deletion: the create and import stages still branched on
+  "external backend" to describe a demo device that no longer exists. Those branches were already unreachable —
+  exactly the kind of dead text a later reader mistakes for live behaviour — and their parameters went too.
+- Net −84 lines; the redesign keeps shrinking the code rather than growing it.
+- One test failure, and the assertion was wrong rather than the screen: the welcome-shell test injects no card
+  adapter, so no card backend is registered and «У меня есть карта» is correctly absent. Offering to connect a
+  card on a platform without card support would be the bug. Fixed the expectation and pointed it at the Rutoken
+  test that covers the present case.
+- CI: `32183268084` green on all five jobs.
+- Next / open: **13.6** — the RU/EN switch, the last redesign chunk. Deliberately left until now: migrating copy
+  out of screens that were about to be rewritten would have been done twice. All screens are final now, so the
+  migration is single-pass. Open question for the owner: migrate everything (~270 strings) or the main surfaces
+  only, leaving the card-provisioning screens Russian.
+- Refs: `3c63708`, `2935e54`.
+
 ## 2026-08-18 — Remove the simulated external-device backend — branch claude/wonderful-rubin-eBDKZ — done (v1.53.0+64)
 - Owner call after dogfooding: the real Rutoken works well enough that the Phase 7 simulation is dead weight —
   "можно удалять мертвый код который никому больше не нужен".
