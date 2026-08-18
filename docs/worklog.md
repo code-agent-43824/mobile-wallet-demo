@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-08-18 — Phase 13 chunk 13.2: four-tab shell + shared chain data — branch claude/wonderful-rubin-eBDKZ — in progress
+## 2026-08-18 — Phase 13 chunk 13.2: four-tab shell + shared chain data — branch claude/wonderful-rubin-eBDKZ — done (CI green)
 - Plan: replace the single scrolling card with the redesign's four-tab navigation, and lift the chain data so
   more than one tab can render it.
 - Done: `design/app_shell.dart` renders the shell — a platform-appropriate header, the tab body and the bottom
@@ -39,6 +39,13 @@ Entry template:
 - Verified before pushing (no Flutter locally, only `dart format`): the sole `Wallet Demo` assertion is on the
   onboarding welcome screen, which still renders `_Header`; the connections entry button still exists in the
   wallet tab; and none of the four tab labels collide with a `findsOneWidget` assertion.
+- CI: run `32121058420` is green across all five jobs — Validate (format, analyze, **the full test suite**) plus
+  Android APK, iOS Simulator, unsigned iOS Device and Windows x64. That is the first run in which the tests
+  actually executed against the new structure (three earlier runs stopped at `analyze`), so it confirms both
+  that the ~163 copy assertions survive the tab restructure and that the bundled Inter asset, the new
+  `flutter_localizations`/`intl` dependencies and the generated `AppLocalizations` package correctly on every
+  platform. Three consecutive analyze-only failures came from unresolved/redundant imports: there is no Flutter
+  toolchain on this host, only `dart format`, which catches syntax but not name resolution.
 - Next / open: **13.3** restyles the Кошелёк tab itself (balance hero, assets, skeleton/empty states) — it still
   renders the old dashboard body, including its "Wallet runtime" block, which should shrink once its technical
   rows live in «Подробности». Copy in the new tabs is still inline Russian; it moves into ARB with 13.3/13.6.

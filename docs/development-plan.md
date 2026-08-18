@@ -610,7 +610,11 @@ icons; no pure black or white; elevation is a hairline edge plus ambient darknes
   OFL, Cyrillic verified), `flutter_localizations` + `lib/l10n/*.arb` + the resolution callback, and the build
   strip. The existing screens inherit the dark theme unchanged — they carry **no hard-coded colours**, which is
   what makes a theme-first rollout safe.
-- **13.2** — app shell: the four-tab navigation per platform, the shared header, and the sheet presentation.
+- **13.2 — DONE (CI green)** — the app shell: `design/app_shell.dart` renders the four-tab navigation with the
+  iOS and Android pattern sets kept fully separate, `ChainDataController` lifts the network/snapshot/loading
+  state so more than one tab can render it (preserving the v1.34 race guard), and `WalletFlowScreen` splits into
+  a tabbed main app and the untouched full-screen onboarding. Activity and Settings are real tabs, and the
+  technical rows moved into a «Подробности» sheet per design decision 5.
 - **13.3** — Кошелёк + Активность: balance, assets, history, and the skeleton/empty/offline states.
 - **13.4** — operations: send/receive plus the unified PIN → tap → result confirmation and the PIN lockout.
 - **13.5** — Связи: the plain-language WalletConnect request and the three-step AirGap wizard.
