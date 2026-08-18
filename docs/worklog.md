@@ -18,6 +18,35 @@ Entry template:
 
 ---
 
+## 2026-08-18 — Phase 13 chunk 13.5: Связи in plain language — branch claude/wonderful-rubin-eBDKZ — done (CI green)
+- **13.5a — WalletConnect requests.** The card read like a protocol dump: `Метод: eth_sendTransaction`,
+  `Сеть: 11155111`, `Сумма (wei): 100000000000000000`. That is the screen where a person decides whether to
+  part with money, and none of it helps them decide. It now leads with what is being asked, names the network,
+  shows the amount in the chain's native unit, and shortens the recipient. The raw method name is gone — the
+  contract-call summary and the simulation result already carry the substance. The sender line was removed on
+  purpose: it is this wallet, so it competed for attention with the fields that matter. Wei arrives hex from
+  some dApps and decimal from others, so the parser takes both instead of assuming.
+- **13.5b — AirGap.** The section explained itself as "QR-based hardware wallet", "публичный crypto-hdkey",
+  "eth-sign-request". The flow already spans two devices; learning the wire format on top of that is not the
+  user's job. The three steps now use the design's copy — add the wallet to MetaMask, scan the transfer it
+  built, hand the signature back — and state that only public data leaves while the key stays here, which is
+  the reassurance the screen exists to give. Added a three-segment progress bar and moved the step number into
+  a badge. The current step is derived from state that already exists (a signature means 3, a scanned request
+  means 2), so no new state has to be kept in sync.
+- **Deliberate deviation, recorded rather than silently skipped:** the design wants form → PIN → tap → result to
+  be sequential; they are still stacked sheets. Closing the send sheet on submit would dispose the form's state
+  mid-operation and lose the pending→confirmed tracking the owner values, so the honest fix is to move the
+  result onto its own surface — a refactor of a heavily-tested component, not a tweak. Functionally the stack
+  is now fine: the card-tap overlay sits above every route, and the sheet has a close control. Revisit if it
+  proves annoying in use.
+- Process note: three CI failures in 13.5a came from assuming signatures instead of checking them (`chainId` is
+  a String in CAIP-2 form, `codec` is a local not a field, and a local went unused). Verifying every new symbol
+  and orphaned local before pushing made 13.5b pass first time; that check is cheap and CI feedback is not.
+- CI: `32175924356` green on all five jobs.
+- Next / open: **13.6** — the RU/EN language switch, which needs the copy migrated into ARB first, since a
+  half-translated UI is why the locale is pinned to Russian today. Then **13.7** onboarding B.
+- Refs: `4ca7ce9`, `83023c1`, `00f11d3`, `d2ebcc7`.
+
 ## 2026-08-18 — Dogfood fixes + tester conveniences — branch claude/wonderful-rubin-eBDKZ — done (CI green)
 - Owner dogfood of 13.4 confirmed: PIN keypad, the card-tap rings, and card signing all work; the send sheet
   opens as intended. Two defects and two requests came out of it.

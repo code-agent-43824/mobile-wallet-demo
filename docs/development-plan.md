@@ -624,7 +624,11 @@ icons; no pure black or white; elevation is a hairline edge plus ambient darknes
   operation (and off the system keyboard), the transfer form moved into a send sheet, a pulsing card-tap
   affordance driven by an explicit `isAwaitingCard`, and the design's five-minute PIN lockout stated in readable
   units. Step order untouched, so Phase 10 evidence stands; owner re-runs one card signature to confirm.
-- **13.5** — Связи: the plain-language WalletConnect request and the three-step AirGap wizard.
+- **13.5 — DONE (CI green)** — Связи in plain language: the WalletConnect request card states what is asked,
+  in named networks and native units rather than method names, chain ids and wei; AirGap became a three-step
+  wizard with progress and the design's copy, dropping the protocol vocabulary. Known deviation: form → PIN →
+  tap → result are still stacked sheets rather than sequential — functionally fine (the tap overlay is above
+  every route) but not yet the design's shape.
 - **13.6** — Настройки + the «Подробности» developer sheet + the RU/EN language switch.
 - **13.7** — onboarding variant B, seed backup, and biometric opt-in.
 
