@@ -18,6 +18,35 @@ Entry template:
 
 ---
 
+## 2026-08-18 — Phase 13 chunk 13.6 (in progress): copy into ARB — branch claude/wonderful-rubin-eBDKZ — partial (CI green)
+- Plan: migrate UI copy into ARB so the RU/EN switch can be enabled. The locale stays **pinned to Russian**
+  throughout the migration and the ARB values are the existing Russian strings, so no step is user-visible and
+  no test expectation changes; the pin comes off only when every screen is migrated.
+- Done so far: **13.6a** wallet / activity / settings / wallet-switcher / receive / details; **13.6b** Связи —
+  WalletConnect status, pairing, session list, request cards and the AirGap wizard; plus the busy/NFC overlay.
+- **Scope decision, stated rather than assumed:** protocol diagnostics stay untranslated — calldata byte counts
+  and selectors, BC-UR frame counters, requested method and account lists. Translating
+  "Calldata: 68 байт; selector 0x12345678" buys nothing, and the design already files that material as
+  developer detail. Transaction direction/status labels are also left: they come from the blockchain models, so
+  localizing them belongs with those models, not the widget.
+- **Found while migrating, and worth more than the migration:** the onboarding header printed a per-stage
+  description that was engineering notes — "Onboarding/auth shell готов. Теперь поверх него строим первый
+  действительно полезный read-only wallet слой", "Следующий шаг после foundation…". A user read that on the
+  first screen after install. It surfaced precisely because translating it was awkward, which is a good signal
+  that it was awkward to read. Removed with the twelve strings behind it; each stage already carries its own
+  title and copy.
+- **Process, after three mechanical CI failures in a row:** bulk edits must be verified by a *different* method
+  than the one that made them. The insertion rule missed a method with a multi-line signature; then the
+  verification reproduced the same blind spot; then an off-by-one between a 1-based line number and a 0-based
+  index stacked four declarations inside one method. Now insertion uses character offsets from a brace-matching
+  scan and the check runs both ways — no method uses `l10n` without declaring it, none declares it unused.
+- Next / open: the transfer form, onboarding and card screens; then unpin the locale and add the switch.
+  **Open decision for the owner:** ~47 controller messages (errors and statuses) have no `BuildContext`. Either
+  inject a message source into the controller — matching the repo's DI convention and testable — or have the
+  controller emit codes the UI translates. Worth choosing deliberately rather than silently.
+- CI: `32186950299` green on all five jobs.
+- Refs: `f9af87a`, `0766ab5`, `88c4f88`, `650f756`, `1e6551a`.
+
 ## 2026-08-18 — Phase 13 chunk 13.7: onboarding variant B — branch claude/wonderful-rubin-eBDKZ — done (CI green)
 - The first screen opened with a storage-backend question and a picker listing three options. That asks someone
   who has just installed a wallet to decide something they have no basis to decide.
