@@ -750,10 +750,3 @@ Future<void> _openSendSheet(WidgetTester tester) async {
   await tester.tap(find.text('Отправить'));
   await tester.pumpAndSettle();
 }
-
-/// Dismisses the open modal sheet. A sheet's barrier covers the tab bar, so a
-/// test must close it before navigating to another tab.
-Future<void> _closeSheet(WidgetTester tester) async {
-  await tester.tap(find.byType(ModalBarrier).last);
-  await tester.pumpAndSettle();
-}

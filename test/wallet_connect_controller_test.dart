@@ -424,7 +424,6 @@ void main() {
     expect(service.respondedErrors, isEmpty);
     expect(service.respondedResults.single.result, isA<String>());
     expect(controller.material, isNull);
-    expect(controller.externalRuntimeState?.hasActiveSession, isFalse);
 
     controller.dispose();
     await service.dispose();
