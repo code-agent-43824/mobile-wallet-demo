@@ -162,6 +162,7 @@ class WalletFlowController extends ChangeNotifier {
   String? _seedPhraseToShow;
   String? _errorMessage;
   String? _busyMessage;
+  bool _awaitingCard = false;
   Future<void> Function()? _busyCancelAction;
   bool _busyCancellationRequested = false;
   String? _pendingBiometricPin;
@@ -204,6 +205,12 @@ class WalletFlowController extends ChangeNotifier {
   /// progress overlay with this message so key derivation isn't a frozen screen.
   String? get busyMessage => _busyMessage;
   bool get canCancelBusyOperation => _busyCancelAction != null;
+
+  /// True while the app is waiting for the user to hold the card against the
+  /// phone. The UI renders the tap animation for this state, so it is an
+  /// explicit flag rather than an inference from the busy message or from the
+  /// operation happening to be cancellable.
+  bool get isAwaitingCard => _awaitingCard;
   bool get isBusyCancellationRequested => _busyCancellationRequested;
   String? get selectedBackendId => _selectedBackendId;
   ExternalDeviceDemoRuntimeState? get externalRuntimeState =>
@@ -420,6 +427,7 @@ class WalletFlowController extends ChangeNotifier {
         }
       },
       onCancel: adapter.cancelPendingOperation,
+      awaitingCard: true,
     );
   }
 
@@ -539,6 +547,7 @@ class WalletFlowController extends ChangeNotifier {
         await _queueRutokenBiometricOffer(pin);
       },
       onCancel: _rutokenNativeAdapter?.cancelPendingOperation,
+      awaitingCard: true,
     );
   }
 
@@ -583,6 +592,7 @@ class WalletFlowController extends ChangeNotifier {
         await _queueRutokenBiometricOffer(pin);
       },
       onCancel: _rutokenNativeAdapter?.cancelPendingOperation,
+      awaitingCard: true,
     );
   }
 
@@ -1132,6 +1142,7 @@ class WalletFlowController extends ChangeNotifier {
           }
         }
       },
+      awaitingCard: activeBackend is RutokenCustodyBackend,
       onCancel: activeBackend is RutokenCustodyBackend
           ? _rutokenNativeAdapter?.cancelPendingOperation
           : null,
@@ -1415,10 +1426,12 @@ class WalletFlowController extends ChangeNotifier {
     String message,
     Future<void> Function() action, {
     Future<void> Function()? onCancel,
+    bool awaitingCard = false,
   }) async {
     _busyMessage = message;
     _busyCancelAction = onCancel;
     _busyCancellationRequested = false;
+    _awaitingCard = awaitingCard;
     _notify();
     try {
       await _runGuarded(action);
@@ -1426,6 +1439,7 @@ class WalletFlowController extends ChangeNotifier {
       _busyMessage = null;
       _busyCancelAction = null;
       _busyCancellationRequested = false;
+      _awaitingCard = false;
       _notify();
     }
   }

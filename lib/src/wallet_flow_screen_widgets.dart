@@ -8,11 +8,17 @@ class _BusyOverlay extends StatelessWidget {
     required this.message,
     required this.onCancel,
     required this.cancellationRequested,
+    this.awaitingCard = false,
   });
 
   final String message;
   final Future<void> Function()? onCancel;
   final bool cancellationRequested;
+
+  /// Waiting for the user to hold the card against the phone. The design gives
+  /// this its own affordance — a pulsing target — instead of a generic spinner,
+  /// because it asks the user to *do* something rather than just wait.
+  final bool awaitingCard;
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +37,10 @@ class _BusyOverlay extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const CircularProgressIndicator(),
+                  if (awaitingCard)
+                    const _CardTapPulse()
+                  else
+                    const CircularProgressIndicator(),
                   const SizedBox(height: 20),
                   Text(
                     message,
@@ -40,9 +49,10 @@ class _BusyOverlay extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    onCancel == null
-                        ? 'Это занимает несколько секунд.'
-                        : 'Удерживайте карту у NFC до завершения.',
+                    awaitingCard
+                        ? 'Держите карту у задней стороны телефона. '
+                              'Ключ с карты не считывается.'
+                        : 'Это занимает несколько секунд.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
@@ -227,5 +237,77 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Chip(label: Text(label), visualDensity: VisualDensity.compact);
+  }
+}
+
+/// The card-tap target: concentric rings expanding and fading on a two-second
+/// loop, per the design's NFC animation.
+class _CardTapPulse extends StatefulWidget {
+  const _CardTapPulse();
+
+  @override
+  State<_CardTapPulse> createState() => _CardTapPulseState();
+}
+
+class _CardTapPulseState extends State<_CardTapPulse>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 2),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 140,
+      height: 140,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              // Two rings a half-cycle apart, so one is always expanding.
+              for (final phase in const <double>[0, 0.5])
+                _PulseRing(progress: (_controller.value + phase) % 1),
+              const Icon(
+                Icons.contactless_outlined,
+                size: 44,
+                color: NocturneColors.accent,
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PulseRing extends StatelessWidget {
+  const _PulseRing({required this.progress});
+
+  /// 0 → collapsed and opaque, 1 → fully expanded and transparent.
+  final double progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = 60 + 80 * progress;
+    return Opacity(
+      opacity: (1 - progress).clamp(0.0, 1.0),
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: NocturneColors.accent),
+        ),
+      ),
+    );
   }
 }

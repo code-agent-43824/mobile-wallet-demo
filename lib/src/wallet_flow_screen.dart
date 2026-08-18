@@ -302,6 +302,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
                 ? _controller.cancelBusyOperation
                 : null,
             cancellationRequested: _controller.isBusyCancellationRequested,
+            awaitingCard: _controller.isAwaitingCard,
           ),
       ],
     );
@@ -420,6 +421,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
                   ? _controller.cancelBusyOperation
                   : null,
               cancellationRequested: _controller.isBusyCancellationRequested,
+              awaitingCard: _controller.isAwaitingCard,
             ),
         ],
       ),
