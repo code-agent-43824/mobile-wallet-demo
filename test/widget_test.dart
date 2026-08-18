@@ -251,8 +251,11 @@ void main() {
     expect(find.text('Кошелёк за минуту'), findsOneWidget);
     expect(find.text('Phone Secure Vault'), findsNothing);
     expect(find.text('Создать кошелёк'), findsOneWidget);
-    expect(find.text('У меня есть карта'), findsOneWidget);
     expect(find.text('Импортировать seed-фразу'), findsOneWidget);
+    // No card adapter is injected here, so no card backend is registered and
+    // the card action is correctly absent. The Rutoken test below asserts it
+    // appears when an adapter is present.
+    expect(find.text('У меня есть карта'), findsNothing);
   });
 
   testWidgets('requires complete backup before Rutoken provisioning', (
