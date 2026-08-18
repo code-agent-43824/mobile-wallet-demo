@@ -18,6 +18,39 @@ Entry template:
 
 ---
 
+## 2026-08-18 — Phase 13 chunk 13.4: operations + the unified confirmation — branch claude/wonderful-rubin-eBDKZ — done (CI green)
+- Plan: give every signature one confirmation pattern — PIN → card tap → result — and move the transfer form
+  off the wallet screen. Delivered in four reviewable steps rather than one lump.
+- **13.4a** — the per-operation auth sheet (the one every signature goes through: own sends, WalletConnect,
+  AirGap) swaps its text field for the design's keypad. Dots show length only; keys take shape from
+  `PlatformStyle` (circular on a faint tint for iOS, 16dp on the surface for Android — the tokens added in 13.1
+  finally used). A security side effect worth stating: the PIN no longer passes through the system keyboard, so
+  it stays out of the clipboard, autofill and prediction paths. Keys carry stable `ValueKey`s so tests tap by
+  key rather than matching a digit that could appear elsewhere. Also removed developer copy the owner spotted on
+  the send form ("Phase 6: Поддержка retries…") and renamed «Оценить и показать preview» → «Проверить перевод».
+- **13.4b** — the transfer form moved into a sheet opened from «Отправить»; the wallet screen now shows balance,
+  actions and assets. Scroll-controlled, capped at 90% height, keyboard-inset aware.
+- **13.4c** — waiting for the card gets its own affordance: concentric accent rings expanding and fading on a
+  two-second loop, instead of a generic spinner, because the state asks the user to *do* something. The state is
+  an explicit `isAwaitingCard` on the controller rather than an inference from the busy message or from the
+  operation being cancellable — both happen to work today and both would silently mislead later. Wired into
+  both overlay sites (the tabbed app and onboarding, where provisioning waits for the card).
+- **13.4d** — the design's five-minute PIN lockout. The mechanism already existed (five attempts, then a window
+  that rejects even the correct PIN) but defaulted to one minute. Raised it, and made the wait readable: "через
+  300 с" is accurate and useless, so waits over a minute are stated in minutes. The test written alongside then
+  caught a real rounding bug — the +1 that avoids "0 с" was applied before the minute conversion, so a fresh
+  five-minute lockout announced six.
+- Test updates in the same changes: keypad entry via keys, `_openSendSheet` before every form interaction, and
+  `_closeSheet` before leaving the wallet tab (a sheet's barrier covers the tab bar — true for the user too).
+  Coverage was verified by scripting over every `testWidgets` block rather than by eye; that found four tests
+  reaching the form without opening the sheet, and would have been missed by grepping for one label.
+- **Step order is untouched**, so the Phase 10 physical evidence still stands — only the confirmation screens'
+  presentation changed.
+- CI: run `32158658484` green on all five jobs.
+- Next / open: owner runs **one card signature** on the new build (steps unchanged, but the whole confirmation
+  surface was reworked). Then **13.5** — plain-language WalletConnect requests and the three-step AirGap wizard.
+- Refs: `dce08f1`, `8ed9aef`, `7f508d2`, `4e6a84e`, `f8f7513`, `ede74f5`.
+
 ## 2026-08-18 — Unbounded network requests wedged the wallet tab — branch claude/wonderful-rubin-eBDKZ — done (CI green)
 - Trigger: owner dogfood of the 13.3 build — switching Mainnet → Sepolia left an empty screen.
 - Root cause (pre-existing, not a redesign regression): **nothing bounded a network round trip**. `HttpClient`

@@ -620,7 +620,10 @@ icons; no pure black or white; elevation is a hairline edge plus ambient darknes
   to Настройки, its technical rows to «Подробности». Two real defects surfaced and were fixed rather than
   papered over: an empty tab after leaving Связи, and the tabs not rebuilding on chain-data changes. The UI
   locale is pinned to Russian until 13.6, since most copy is still inline.
-- **13.4** — operations: send/receive plus the unified PIN → tap → result confirmation and the PIN lockout.
+- **13.4 — DONE (CI green)** — operations and the unified confirmation: a PIN keypad for every private-key
+  operation (and off the system keyboard), the transfer form moved into a send sheet, a pulsing card-tap
+  affordance driven by an explicit `isAwaitingCard`, and the design's five-minute PIN lockout stated in readable
+  units. Step order untouched, so Phase 10 evidence stands; owner re-runs one card signature to confirm.
 - **13.5** — Связи: the plain-language WalletConnect request and the three-step AirGap wizard.
 - **13.6** — Настройки + the «Подробности» developer sheet + the RU/EN language switch.
 - **13.7** — onboarding variant B, seed backup, and biometric opt-in.
