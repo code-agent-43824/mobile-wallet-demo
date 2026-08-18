@@ -712,23 +712,30 @@ class _RequestCard extends StatelessWidget {
 
   /// Human name of the chain the request targets; falls back to the numeric id
   /// for a chain the wallet does not carry a config for.
-  String _networkName(int chainId) {
-    for (final config in evmNetworkConfigs.values) {
-      if (config.chainId == chainId) {
-        return config.name;
-      }
-    }
-    return 'chain $chainId';
+  /// Chain ids arrive CAIP-2 style ("eip155:11155111") or bare ("11155111").
+  int? _numericChainId(String chainId) {
+    final tail = chainId.contains(':') ? chainId.split(':').last : chainId;
+    return int.tryParse(tail.trim());
   }
 
-  String _nativeSymbol(int chainId) {
+  EvmNetworkConfig? _configForChain(String chainId) {
+    final numeric = _numericChainId(chainId);
+    if (numeric == null) {
+      return null;
+    }
     for (final config in evmNetworkConfigs.values) {
-      if (config.chainId == chainId) {
-        return config.nativeSymbol;
+      if (config.chainId == numeric) {
+        return config;
       }
     }
-    return '';
+    return null;
   }
+
+  String _networkName(String chainId) =>
+      _configForChain(chainId)?.name ?? chainId;
+
+  String _nativeSymbol(String chainId) =>
+      _configForChain(chainId)?.nativeSymbol ?? '';
 
   /// Wei arrives as a hex or decimal string depending on the dApp.
   BigInt _parseWei(String raw) {
@@ -748,6 +755,7 @@ class _RequestCard extends StatelessWidget {
 
   /// One line saying what the dApp is asking for, in the user's terms.
   String _requestSummary() {
+    const codec = WalletConnectV2RequestCodec();
     if (codec.isTransactionMethod(request.method)) {
       return 'Приложение просит подписать перевод.';
     }
