@@ -25,20 +25,25 @@ abstract interface class JsonRpcTransport {
 }
 
 class HttpJsonRpcTransport implements JsonRpcTransport {
-  HttpJsonRpcTransport({HttpClient? client}) : _client = client ?? HttpClient();
+  HttpJsonRpcTransport({HttpClient? client, Duration? timeout})
+    : _client = client ?? HttpClient(),
+      _timeout = timeout ?? networkRequestTimeout {
+    _client.connectionTimeout = _timeout;
+  }
 
   final HttpClient _client;
+  final Duration _timeout;
 
   @override
   Future<Map<String, dynamic>> post({
     required Uri uri,
     required Map<String, dynamic> payload,
   }) async {
-    final request = await _client.postUrl(uri);
+    final request = await _client.postUrl(uri).timeout(_timeout);
     request.headers.contentType = ContentType.json;
     request.write(jsonEncode(payload));
-    final response = await request.close();
-    final body = await utf8.decodeStream(response);
+    final response = await request.close().timeout(_timeout);
+    final body = await utf8.decodeStream(response).timeout(_timeout);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw BlockchainFailure(

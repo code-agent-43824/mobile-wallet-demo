@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show SocketException;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
@@ -44,6 +45,15 @@ class _ControllableProvider implements BlockchainProvider {
         loadedFromCache: fromCache,
       ),
     );
+  }
+
+  /// Fails with an error the provider does not wrap in [BlockchainFailure] —
+  /// e.g. a cache read outside its retry loop, or a timeout.
+  void failRaw(EvmNetwork network, Object error) {
+    pending
+        .firstWhere((e) => e.network == network && !e.completer.isCompleted)
+        .completer
+        .completeError(error);
   }
 
   void fail(EvmNetwork network, String message) {
@@ -157,6 +167,23 @@ void main() {
       expect(controller.snapshot?.nativeBalanceFormatted, '7');
     },
   );
+
+  test('an unwrapped error still reaches the UI as a message', () async {
+    // Regression guard: only BlockchainFailure was caught, so any other error
+    // left the controller with no snapshot, no error and isLoading false — the
+    // wallet screen then had nothing at all to render.
+    final pending = controller.setAddress('0xabc');
+    provider.failRaw(
+      EvmNetwork.ethereumMainnet,
+      const SocketException('connection reset'),
+    );
+    await pending;
+
+    expect(controller.isLoading, isFalse);
+    expect(controller.snapshot, isNull);
+    expect(controller.errorMessage, isNotNull);
+    expect(controller.errorMessage, contains('Не удалось загрузить'));
+  });
 
   test('notifies listeners as loading state changes', () async {
     var notifications = 0;

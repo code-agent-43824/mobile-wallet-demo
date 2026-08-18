@@ -354,13 +354,26 @@ class _WalletTabState extends State<_WalletTab> {
           ],
           if (chainData.errorMessage case final String error) ...[
             _ErrorBanner(message: error),
+            const SizedBox(height: NocturneSpacing.x4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: chainData.refresh,
+                icon: const Icon(Icons.refresh, size: 18),
+                child: const Text('Повторить'),
+              ),
+            ),
             const SizedBox(height: NocturneSpacing.x6),
           ],
           if (snapshot != null)
             _BalanceHero(
               amount: snapshot.nativeBalanceFormatted,
               symbol: config.nativeSymbol,
-            ),
+            )
+          else if (chainData.errorMessage == null)
+            // Never leave the tab blank: with no snapshot, no error and nothing
+            // loading there would otherwise be only the chip and the actions.
+            _NoDataYet(onRetry: chainData.refresh),
           const SizedBox(height: NocturneSpacing.x8),
           _QuickActions(
             onSend: snapshot == null
@@ -782,6 +795,41 @@ class _EmptyWallet extends StatelessWidget {
           'перевод.',
           style: theme.textTheme.bodyMedium?.copyWith(
             color: NocturneColors.textMuted,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Shown when the tab has no snapshot to render and no error to explain why —
+/// a state that must never render as an empty screen.
+class _NoDataYet extends StatelessWidget {
+  const _NoDataYet({required this.onRetry});
+
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Нет данных о сети', style: theme.textTheme.titleLarge),
+        const SizedBox(height: NocturneSpacing.x2),
+        Text(
+          'Не удалось получить баланс. Проверьте связь и повторите.',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: NocturneColors.textMuted,
+          ),
+        ),
+        const SizedBox(height: NocturneSpacing.x4),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh, size: 18),
+            child: const Text('Повторить'),
           ),
         ),
       ],

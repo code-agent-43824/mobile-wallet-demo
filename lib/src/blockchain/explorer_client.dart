@@ -9,15 +9,20 @@ abstract interface class JsonApiTransport {
 }
 
 class HttpJsonApiTransport implements JsonApiTransport {
-  HttpJsonApiTransport({HttpClient? client}) : _client = client ?? HttpClient();
+  HttpJsonApiTransport({HttpClient? client, Duration? timeout})
+    : _client = client ?? HttpClient(),
+      _timeout = timeout ?? networkRequestTimeout {
+    _client.connectionTimeout = _timeout;
+  }
 
   final HttpClient _client;
+  final Duration _timeout;
 
   @override
   Future<dynamic> get({required Uri uri}) async {
-    final request = await _client.getUrl(uri);
-    final response = await request.close();
-    final body = await utf8.decodeStream(response);
+    final request = await _client.getUrl(uri).timeout(_timeout);
+    final response = await request.close().timeout(_timeout);
+    final body = await utf8.decodeStream(response).timeout(_timeout);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw BlockchainFailure(

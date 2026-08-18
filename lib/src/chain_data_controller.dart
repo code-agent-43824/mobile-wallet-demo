@@ -104,6 +104,14 @@ class ChainDataController extends ChangeNotifier {
         return;
       }
       _errorMessage = error.message;
+    } catch (error) {
+      // Anything the provider does not wrap — a cache read outside its retry
+      // loop, a timeout, a decode failure — must still reach the UI. Swallowing
+      // it here left the screen with no snapshot, no error and nothing to show.
+      if (!_isCurrent(refreshId, network)) {
+        return;
+      }
+      _errorMessage = 'Не удалось загрузить данные сети: $error';
     } finally {
       if (_isCurrent(refreshId, network)) {
         _isLoading = false;
