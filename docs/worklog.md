@@ -18,6 +18,28 @@ Entry template:
 
 ---
 
+## 2026-08-18 — Unbounded network requests wedged the wallet tab — branch claude/wonderful-rubin-eBDKZ — done (CI green)
+- Trigger: owner dogfood of the 13.3 build — switching Mainnet → Sepolia left an empty screen.
+- Root cause (pre-existing, not a redesign regression): **nothing bounded a network round trip**. `HttpClient`
+  was constructed without a `connectionTimeout` and no future carried a `.timeout()`, so a public endpoint that
+  accepts the connection and then stalls wedged the snapshot load forever — `isLoading` stayed true with no
+  snapshot. Worse, the provider's multi-RPC fallback chain never advanced past the stalled endpoint, so the
+  redundancy it was built for could not engage. The old dashboard hid this behind a progress bar and a page of
+  summary tiles; the redesigned tab renders from the snapshot, so it showed as blank.
+- Done: both HTTP transports (`HttpJsonRpcTransport`, `HttpJsonApiTransport`) take an injectable timeout
+  (`networkRequestTimeout`, 12s, in `blockchain_models.dart` so both can see it) and set `connectionTimeout`;
+  a stalled endpoint now fails over to the next URL. `ChainDataController` catches **every** error rather than
+  only `BlockchainFailure` — the cache read sits outside the provider's retry loop, and timeouts/decode failures
+  are unwrapped too, so such an error previously left no snapshot, no message and nothing to draw; a regression
+  test covers it. The wallet tab can no longer render blank: the error state gained a «Повторить» action, and
+  "no snapshot, no error, not loading" renders an explicit «Нет данных о сети» with retry.
+- Note: the timeout deliberately lives in the transports, not in the controller. A controller-level timer would
+  leave a pending timer in widget tests that hold a request open on purpose.
+- CI: run `32145405509` green on all five jobs.
+- Next / open: owner re-checks the network switch on the new build — either Sepolia loads (the timeout lets the
+  fallback chain reach a live RPC) or a readable error appears; the silent blank is gone either way.
+- Refs: `f1c8f7d`, `4f71a91`.
+
 ## 2026-08-18 — Phase 13 chunk 13.3: the redesigned Кошелёк tab — branch claude/wonderful-rubin-eBDKZ — done (CI green)
 - Plan: replace the developer-dump dashboard with the designed wallet screen and retire `_UnlockedStage`.
 - Done: `_WalletTab` renders the network chip, the balance hero (a 40px figure over a muted label), the
