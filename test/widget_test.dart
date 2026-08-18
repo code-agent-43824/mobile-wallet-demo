@@ -246,11 +246,12 @@ void main() {
 
     expect(find.text('Wallet Demo'), findsOneWidget);
     expect(find.text('v1.53.0+64'), findsOneWidget);
-    expect(find.text('Phone Secure Vault'), findsOneWidget);
-    // The simulated NFC backend is gone; the real card is the only hardware
-    // custody option now.
-    expect(find.text('External NFC demo device'), findsNothing);
-    expect(find.text('Создать новый кошелёк'), findsOneWidget);
+    // Onboarding variant B: no storage picker on the first screen — the
+    // backend follows from which action is taken.
+    expect(find.text('Кошелёк за минуту'), findsOneWidget);
+    expect(find.text('Phone Secure Vault'), findsNothing);
+    expect(find.text('Создать кошелёк'), findsOneWidget);
+    expect(find.text('У меня есть карта'), findsOneWidget);
     expect(find.text('Импортировать seed-фразу'), findsOneWidget);
   });
 
@@ -267,6 +268,10 @@ void main() {
         rutokenNativeAdapter: _UnusedRutokenAdapter(),
       ),
     );
+    await tester.pumpAndSettle();
+
+    // The card actions are behind «У меня есть карта» now.
+    await tester.tap(find.text('У меня есть карта'));
     await tester.pumpAndSettle();
 
     expect(find.text('Создать на Рутокене'), findsOneWidget);
@@ -309,7 +314,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final createButton = find.text('Создать новый кошелёк');
+    final createButton = find.text('Создать кошелёк');
     await tester.ensureVisible(createButton);
     await tester.tap(createButton);
     await tester.pumpAndSettle();
@@ -338,7 +343,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Создать новый кошелёк'));
+    await tester.tap(find.text('Создать кошелёк'));
     await tester.pumpAndSettle();
 
     final setupFields = find.byType(TextField);
@@ -388,7 +393,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Создать новый кошелёк'));
+    await tester.tap(find.text('Создать кошелёк'));
     await tester.pumpAndSettle();
 
     final setupFields = find.byType(TextField);
@@ -445,7 +450,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Создать новый кошелёк'));
+    await tester.tap(find.text('Создать кошелёк'));
     await tester.pumpAndSettle();
     final setupFields = find.byType(TextField);
     await tester.enterText(setupFields.at(0), '1234');
@@ -504,7 +509,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Создать новый кошелёк'));
+    await tester.tap(find.text('Создать кошелёк'));
     await tester.pumpAndSettle();
 
     final setupFields = find.byType(TextField);
@@ -563,7 +568,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Создать новый кошелёк'));
+    await tester.tap(find.text('Создать кошелёк'));
     await tester.pumpAndSettle();
 
     final setupFields = find.byType(TextField);
@@ -623,7 +628,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Создать новый кошелёк'));
+    await tester.tap(find.text('Создать кошелёк'));
     await tester.pumpAndSettle();
 
     final setupFields = find.byType(TextField);
@@ -695,7 +700,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Создать новый кошелёк'));
+    await tester.tap(find.text('Создать кошелёк'));
     await tester.pumpAndSettle();
 
     final setupFields = find.byType(TextField);

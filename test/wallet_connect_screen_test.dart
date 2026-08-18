@@ -94,7 +94,7 @@ class _FakeBlockchainProvider implements BlockchainProvider {
 }
 
 Future<void> _createUnlock(WidgetTester tester) async {
-  await tester.tap(find.text('Создать новый кошелёк'));
+  await tester.tap(find.text('Создать кошелёк'));
   await tester.pumpAndSettle();
   final setupFields = find.byType(TextField);
   await tester.enterText(setupFields.at(0), '1234');

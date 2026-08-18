@@ -3,8 +3,6 @@ part of 'wallet_flow_screen.dart';
 class _WelcomeStage extends StatelessWidget {
   const _WelcomeStage({
     required this.backendEntries,
-    required this.selectedBackendId,
-    required this.isExternalBackendSelected,
     required this.isRutokenSelected,
     required this.onBackendSelected,
     required this.onCreatePressed,
@@ -18,8 +16,6 @@ class _WelcomeStage extends StatelessWidget {
   });
 
   final List<WalletBackendCatalogEntry> backendEntries;
-  final String selectedBackendId;
-  final bool isExternalBackendSelected;
   final bool isRutokenSelected;
   final Future<void> Function(String backendId) onBackendSelected;
   final VoidCallback onCreatePressed;
@@ -31,57 +27,71 @@ class _WelcomeStage extends StatelessWidget {
   final String? rutokenDiagnosticResult;
   final String? rutokenProvisioningResult;
 
+  /// The phone vault's id, from the catalogue rather than a literal.
+  String get _phoneBackendId => backendEntries
+      .firstWhere(
+        (entry) => entry.descriptor.kind == WalletBackendKind.phoneSecureVault,
+      )
+      .descriptor
+      .id;
+
+  /// The card backend's id, or null when no hardware backend is available on
+  /// this platform.
+  String? get _cardBackendId {
+    for (final entry in backendEntries) {
+      if (entry.descriptor.kind == WalletBackendKind.externalDevice) {
+        return entry.descriptor.id;
+      }
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle('Выбери стартовый сценарий'),
+        // Onboarding variant B ("Кошелёк за минуту"), the owner's choice: make
+        // a phone wallet immediately and offer the card as a later upgrade,
+        // rather than opening with a storage-backend question most people
+        // cannot answer yet. The backend is chosen by which button is pressed,
+        // so there is no separate picker on this screen.
+        const _SectionTitle('Кошелёк за минуту'),
         const SizedBox(height: 12),
         const Text(
-          'Выбери локальный phone vault, учебный demo backend или настоящий '
-          'Rutoken NFC. Активный backend определяет, где хранится ключ и как '
-          'подтверждается каждая подпись.',
-        ),
-        const SizedBox(height: 20),
-        _BackendSelectionCard(
-          entries: backendEntries,
-          selectedBackendId: selectedBackendId,
-          onSelected: onBackendSelected,
+          'Создадим кошелёк на телефоне прямо сейчас. Подключить карту и '
+          'усилить защиту можно в любой момент — мы напомним.',
         ),
         const SizedBox(height: 24),
         FilledButton.icon(
-          onPressed: onCreatePressed,
-          icon: Icon(
-            isExternalBackendSelected
-                ? Icons.nfc_outlined
-                : Icons.add_circle_outline,
-          ),
-          label: Text(
-            isRutokenSelected
-                ? 'Создать кошелёк на Рутокене'
-                : isExternalBackendSelected
-                ? 'Подключить demo NFC-устройство'
-                : 'Создать новый кошелёк',
-          ),
+          onPressed: () async {
+            await onBackendSelected(_phoneBackendId);
+            onCreatePressed();
+          },
+          icon: const Icon(Icons.add_circle_outline),
+          label: const Text('Создать кошелёк'),
         ),
         const SizedBox(height: 12),
+        if (_cardBackendId case final String cardBackendId)
+          OutlinedButton.icon(
+            onPressed: isRutokenSelected
+                ? null
+                : () => onBackendSelected(cardBackendId),
+            icon: const Icon(Icons.nfc_outlined),
+            label: const Text('У меня есть карта'),
+          ),
+        const SizedBox(height: 12),
         OutlinedButton.icon(
-          onPressed: onImportPressed,
-          icon: Icon(
-            isExternalBackendSelected
-                ? Icons.memory_outlined
-                : Icons.download_outlined,
-          ),
-          label: Text(
-            isRutokenSelected
-                ? 'Импортировать seed в Рутокен'
-                : isExternalBackendSelected
-                ? 'Импортировать seed в demo device'
-                : 'Импортировать seed-фразу',
-          ),
+          onPressed: () async {
+            await onBackendSelected(_phoneBackendId);
+            onImportPressed();
+          },
+          icon: const Icon(Icons.download_outlined),
+          label: const Text('Импортировать seed-фразу'),
         ),
-        if (onRutokenDiagnostic != null) ...[
+        // Progressive disclosure: the card's own actions appear only after the
+        // user says they have one. Variant B's first screen stays short.
+        if (onRutokenDiagnostic != null && isRutokenSelected) ...[
           const SizedBox(height: 20),
           const Divider(),
           const SizedBox(height: 12),
@@ -463,87 +473,6 @@ class _RutokenBackupStageState extends State<_RutokenBackupStage> {
   }
 }
 
-class _BackendSelectionCard extends StatelessWidget {
-  const _BackendSelectionCard({
-    required this.entries,
-    required this.selectedBackendId,
-    required this.onSelected,
-  });
-
-  final List<WalletBackendCatalogEntry> entries;
-  final String selectedBackendId;
-  final Future<void> Function(String backendId) onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _SectionTitle('Активное хранилище ключей'),
-        const SizedBox(height: 12),
-        for (final entry in entries) ...[
-          Card(
-            elevation: 0,
-            margin: const EdgeInsets.only(bottom: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-              side: BorderSide(
-                color: entry.descriptor.id == selectedBackendId
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.outlineVariant,
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          entry.descriptor.label,
-                          style: theme.textTheme.titleMedium,
-                        ),
-                      ),
-                      if (entry.descriptor.isAvailable)
-                        ChoiceChip(
-                          selected: entry.descriptor.id == selectedBackendId,
-                          label: Text(
-                            entry.descriptor.id == selectedBackendId
-                                ? 'Выбрано'
-                                : 'Выбрать',
-                          ),
-                          onSelected: (_) => onSelected(entry.descriptor.id),
-                        )
-                      else
-                        const Chip(label: Text('Скоро')),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(entry.descriptor.description),
-                  if (entry.descriptor.availabilityNote
-                      case final String note) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      note,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
 class _PinSetupStage extends StatefulWidget {
   const _PinSetupStage({
     required this.title,
@@ -650,13 +579,8 @@ class _PinSetupStageState extends State<_PinSetupStage> {
 }
 
 class _ImportWalletStage extends StatefulWidget {
-  const _ImportWalletStage({
-    required this.isExternalBackendSelected,
-    required this.onSubmit,
-    required this.onBack,
-  });
+  const _ImportWalletStage({required this.onSubmit, required this.onBack});
 
-  final bool isExternalBackendSelected;
   final Future<void> Function({required String mnemonic, required String pin})
   onSubmit;
   final VoidCallback onBack;
@@ -718,16 +642,11 @@ class _ImportWalletStageState extends State<_ImportWalletStage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(
-          widget.isExternalBackendSelected
-              ? 'Импорт seed в demo NFC-устройство'
-              : 'Импорт существующего кошелька',
-        ),
+        const _SectionTitle('Импорт существующего кошелька'),
         const SizedBox(height: 12),
-        Text(
-          widget.isExternalBackendSelected
-              ? 'Отдельная UX-ветка для внешнего backend: seed уходит в demo device runtime, а дальше операции идут как у внешнего подписанта.'
-              : 'Вставь свою seed-фразу, затем задай локальный PIN для защиты secure vault на устройстве.',
+        const Text(
+          'Вставьте свою seed-фразу, затем задайте PIN — им будет зашифрован '
+          'кошелёк на этом телефоне.',
         ),
         const SizedBox(height: 20),
         TextField(
@@ -770,11 +689,7 @@ class _ImportWalletStageState extends State<_ImportWalletStage> {
           children: [
             FilledButton(
               onPressed: _handleSubmit,
-              child: Text(
-                widget.isExternalBackendSelected
-                    ? 'Импортировать в устройство'
-                    : 'Импортировать кошелёк',
-              ),
+              child: const Text('Импортировать кошелёк'),
             ),
             TextButton(onPressed: widget.onBack, child: const Text('Назад')),
           ],

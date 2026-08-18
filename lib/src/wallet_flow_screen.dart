@@ -443,8 +443,6 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       case WalletFlowStage.welcome:
         return _WelcomeStage(
           backendEntries: controller.backendEntries,
-          selectedBackendId: controller.effectiveBackendId,
-          isExternalBackendSelected: controller.isExternalBackendSelected,
           isRutokenSelected: controller.isRutokenSelected,
           onBackendSelected: controller.selectBackend,
           onCreatePressed: controller.goToCreateWallet,
@@ -465,22 +463,20 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           rutokenProvisioningResult: controller.rutokenProvisioningResult,
         );
       case WalletFlowStage.createWallet:
+        // The card has its own provisioning stages, so this one is always the
+        // phone wallet.
         return _PinSetupStage(
-          title: controller.isExternalBackendSelected
-              ? 'Подключить demo NFC-устройство'
-              : 'Создать новый кошелёк',
-          description: controller.isExternalBackendSelected
-              ? 'Это отдельная UX-ветка для внешнего backend. Задаём PIN устройства для demo-подписанта и сохраняем linked-device runtime.'
-              : 'Сначала задаём обязательный PIN. После этого приложение создаст seed-фразу и покажет её один раз для резервного сохранения.',
-          actionLabel: controller.isExternalBackendSelected
-              ? 'Подключить устройство'
-              : 'Создать кошелёк',
+          title: 'Кошелёк на этом телефоне',
+          description:
+              'Сначала задайте PIN — им будет зашифрован кошелёк. Потом '
+              'приложение создаст seed-фразу и покажет её один раз, чтобы вы '
+              'сохранили резервную копию.',
+          actionLabel: 'Создать кошелёк',
           onSubmit: controller.createWallet,
           onBack: controller.goToWelcome,
         );
       case WalletFlowStage.importWallet:
         return _ImportWalletStage(
-          isExternalBackendSelected: controller.isExternalBackendSelected,
           onSubmit: controller.importWallet,
           onBack: controller.goToWelcome,
         );
