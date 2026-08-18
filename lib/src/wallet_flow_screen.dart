@@ -19,6 +19,7 @@ import '../l10n/app_localizations.dart';
 import 'chain_data_controller.dart';
 import 'design/app_shell.dart';
 import 'design/nocturne.dart';
+import 'design/platform_style.dart';
 import 'key_storage/backend_registry.dart';
 import 'key_storage/custody_backend.dart';
 import 'key_storage/external_device_demo_backend.dart';
