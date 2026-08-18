@@ -18,6 +18,37 @@ Entry template:
 
 ---
 
+## 2026-08-18 — Phase 13 chunk 13.3: the redesigned Кошелёк tab — branch claude/wonderful-rubin-eBDKZ — done (CI green)
+- Plan: replace the developer-dump dashboard with the designed wallet screen and retire `_UnlockedStage`.
+- Done: `_WalletTab` renders the network chip, the balance hero (a 40px figure over a muted label), the
+  Отправить / Получить / Сканировать actions and the asset list with the native coin first, plus the states the
+  design models — a skeleton for the first load (not a spinner, so the layout does not jump), an offline-cache
+  banner, an empty-wallet state that says what to do next, and an inline error. Получить and the network picker
+  are sheets whose radius follows the platform; Сканировать routes to Связи, where scanning actually happens, so
+  none of the three actions is dead. `_UnlockedStage` and its now-unused token/transaction sections are deleted
+  (~500 lines); the demo-device controls and the read-only key-access statement moved to Настройки and the
+  technical rows to «Подробности».
+- **Two real defects surfaced by the test suite, not by the analyzer:**
+  1. Leaving Связи through the connections screen's own back action changed the stage but not the selected tab,
+     so the shell rendered an empty tab. The tab now follows the controller when it leaves that stage.
+  2. The listener that rebuilt the screen on network/snapshot changes lived in the deleted `_UnlockedStage`, and
+     the new tabs never registered one — a snapshot arriving after a network switch never reached the UI, so the
+     balance stayed on its skeleton. The shell now listens to `ChainDataController` directly, covering all four
+     tabs.
+  Both would have reached the user. This is why the failing assertions were diagnosed rather than relaxed.
+- Also fixed: the app resolved to English in tests (and would on an English phone) because `en` is a supported
+  locale, while most copy is still inline Russian — the locale is pinned to Russian until 13.6 migrates the
+  strings and adds the switch.
+- Test updates (same change, as agreed): Связи is reached through its tab, and `ensureVisible` no longer wraps a
+  tab tap because the bottom navigation bar has no `Scrollable` ancestor; the device-lifecycle test drives
+  Настройки and hops to Кошелёк for the send form; the backend label is asserted inside «Подробности»; the
+  balance assertions follow the hero's split of figure and symbol; and the late-snapshot race test settles the
+  network sheet before tapping (the pending Completer keeps the race intact).
+- CI: run `32124374056` green on all five jobs. The failure sequence was 12 → 2 → 1 → 0.
+- Next / open: **13.4** — turn the inline send form into the design's send sheet and add the unified
+  PIN → NFC tap → result confirmation with the five-minute PIN lockout.
+- Refs: `5fafb17`, `afb564d`, `8523426`, `30cd3be`, `4b9d03c`.
+
 ## 2026-08-18 — Phase 13 chunk 13.2: four-tab shell + shared chain data — branch claude/wonderful-rubin-eBDKZ — done (CI green)
 - Plan: replace the single scrolling card with the redesign's four-tab navigation, and lift the chain data so
   more than one tab can render it.

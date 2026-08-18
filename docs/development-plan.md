@@ -615,7 +615,11 @@ icons; no pure black or white; elevation is a hairline edge plus ambient darknes
   state so more than one tab can render it (preserving the v1.34 race guard), and `WalletFlowScreen` splits into
   a tabbed main app and the untouched full-screen onboarding. Activity and Settings are real tabs, and the
   technical rows moved into a «Подробности» sheet per design decision 5.
-- **13.3** — Кошелёк + Активность: balance, assets, history, and the skeleton/empty/offline states.
+- **13.3 — DONE (CI green)** — the Кошелёк tab: network chip, balance hero, quick actions, asset list, and the
+  skeleton / empty / offline-cache states. `_UnlockedStage` retired; its device controls and key-access line moved
+  to Настройки, its technical rows to «Подробности». Two real defects surfaced and were fixed rather than
+  papered over: an empty tab after leaving Связи, and the tabs not rebuilding on chain-data changes. The UI
+  locale is pinned to Russian until 13.6, since most copy is still inline.
 - **13.4** — operations: send/receive plus the unified PIN → tap → result confirmation and the PIN lockout.
 - **13.5** — Связи: the plain-language WalletConnect request and the three-step AirGap wizard.
 - **13.6** — Настройки + the «Подробности» developer sheet + the RU/EN language switch.
