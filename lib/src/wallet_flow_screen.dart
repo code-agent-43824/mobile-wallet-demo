@@ -122,8 +122,17 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
     )..addListener(_onControllerChanged);
     _chainData = ChainDataController(
       blockchainProvider: widget.blockchainProvider,
-    );
+    )..addListener(_onChainDataChanged);
     _controller.loadInitialState();
+  }
+
+  /// The tabs render from [_chainData], so the shell must rebuild when a
+  /// snapshot, network or loading state changes — not only when the wallet
+  /// controller ticks.
+  void _onChainDataChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _onControllerChanged() {
@@ -190,6 +199,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
   void dispose() {
     _controller.removeListener(_onControllerChanged);
     _controller.dispose();
+    _chainData.removeListener(_onChainDataChanged);
     _chainData.dispose();
     super.dispose();
   }
