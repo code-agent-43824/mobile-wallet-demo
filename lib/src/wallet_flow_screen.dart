@@ -131,6 +131,13 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       // Keep the shared chain data pointed at whatever wallet is active; the
       // controller ignores a repeated address, so this is cheap on every tick.
       _chainData.setAddress(_controller.summary?.address);
+      // The controller can leave the connections stage on its own (its own back
+      // action, or a rejected request). Follow it back to the wallet tab,
+      // otherwise the shell would keep showing an emptied Связи tab.
+      if (_selectedTab == AppTab.connections &&
+          _controller.stage != WalletFlowStage.connections) {
+        _selectedTab = AppTab.wallet;
+      }
       setState(() {});
       _scheduleRutokenBiometricOffer();
     }

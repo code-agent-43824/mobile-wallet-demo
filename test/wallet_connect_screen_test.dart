@@ -112,9 +112,9 @@ Future<void> _createUnlock(WidgetTester tester) async {
 Future<void> _openConnections(WidgetTester tester) async {
   // The redesign reaches Connections through the shell's «Связи» tab; the old
   // dashboard entry button is gone.
-  final entry = find.text('Связи');
-  await tester.ensureVisible(entry);
-  await tester.tap(entry);
+  // The tab sits in the bottom navigation bar, which is not inside a
+  // Scrollable, so ensureVisible would throw instead of scrolling.
+  await tester.tap(find.text('Связи'));
   await tester.pumpAndSettle();
 }
 

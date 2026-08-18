@@ -107,7 +107,10 @@ class MobileWalletDemoApp extends StatelessWidget {
       theme: theme,
       darkTheme: theme,
       themeMode: ThemeMode.dark,
-      locale: _locale,
+      // Russian is the product's language and most copy is still inline
+      // Russian, so pin it until 13.6 migrates the strings and adds the
+      // language switch. A half-translated UI is worse than a consistent one.
+      locale: _locale ?? const Locale('ru'),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       // Russian is the product's primary language: an unsupported system locale

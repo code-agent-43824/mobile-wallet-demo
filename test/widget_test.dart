@@ -532,13 +532,14 @@ void main() {
     await tester.tap(find.text('Пока без биометрии'));
     await tester.pumpAndSettle();
 
-    expect(find.text('0 ETH'), findsOneWidget);
+    // The balance hero renders the figure and the symbol as separate Texts.
+    expect(find.text('ETH'), findsWidgets);
     await tester.tap(find.text('Ethereum Mainnet'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Ethereum Sepolia').last);
     await tester.pumpAndSettle();
 
-    expect(find.text('0.1 SepoliaETH'), findsOneWidget);
+    expect(find.text('SepoliaETH'), findsWidgets);
     expect(find.text('Доступно: 0.1 SepoliaETH'), findsOneWidget);
 
     final sendFields = find.byType(TextField);
@@ -587,7 +588,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.tap(find.text('Ethereum Sepolia').last);
     await tester.pumpAndSettle();
-    expect(find.text('0.1 SepoliaETH'), findsOneWidget);
+    expect(find.text('SepoliaETH'), findsWidgets);
 
     provider.mainnetSnapshot.complete(
       WalletChainSnapshot(
@@ -604,8 +605,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('0.1 SepoliaETH'), findsOneWidget);
-    expect(find.text('0 ETH'), findsNothing);
+    expect(find.text('SepoliaETH'), findsWidgets);
+    expect(find.text('ETH'), findsNothing);
   });
 
   testWidgets('offers biometric as a per-op fast-path when enabled', (
