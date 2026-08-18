@@ -178,9 +178,6 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final l10n = AppLocalizations.of(context);
-    final l10n = AppLocalizations.of(context);
-    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final proposal = widget.pendingProposal;
     final request = widget.pendingRequest;
