@@ -584,8 +584,12 @@ void main() {
     await tester.tap(find.text('Пока без биометрии'));
     await tester.pump();
 
+    // The network picker is a modal sheet now, so let it finish opening before
+    // tapping an entry. This does not weaken the race the test guards: the
+    // mainnet request stays pending because pumpAndSettle never completes a
+    // Completer.
     await tester.tap(find.text('Ethereum Mainnet'));
-    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Ethereum Sepolia').last);
     await tester.pumpAndSettle();
     expect(find.text('SepoliaETH'), findsWidgets);
