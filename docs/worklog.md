@@ -18,6 +18,31 @@ Entry template:
 
 ---
 
+## 2026-08-18 — Dogfood fixes + tester conveniences — branch claude/wonderful-rubin-eBDKZ — done (CI green)
+- Owner dogfood of 13.4 confirmed: PIN keypad, the card-tap rings, and card signing all work; the send sheet
+  opens as intended. Two defects and two requests came out of it.
+- **Defect (functional, not cosmetic):** the send sheet covered the card-tap overlay *and its cancel action*.
+  Cancelling an NFC wait is behaviour validated on hardware in Phase 10, so 13.4b had silently regressed it.
+  The overlay was rendered inside the page while a modal sheet is a route above it — a page can never cover a
+  route. It now lives in the root `Overlay`, above every route, and the two in-page renderings are gone.
+- **Defect:** the send sheet keeps showing the result after the operation but offered no way out; the back
+  gesture is not an affordance. Added a close control.
+- **Request — refresh:** pull-to-refresh on every tab. One snapshot feeds balance, assets and history, so a
+  single gesture reloads whichever tab is showing.
+- **Request — wallet switching:** a switcher in Настройки listing each storage backend and whether it already
+  holds a wallet. The existing `selectBackend` only records the choice; switching through it would have left
+  the previous wallet's address on screen. New `switchActiveWallet` reloads summary, biometrics and runtime
+  state the way startup resolution does, drops held material, and routes a backend with no wallet into its own
+  onboarding.
+- **Clarified for the owner:** the five-minute lockout is the *phone vault* PIN. The card's PIN is checked by
+  the card, its retry counter is the vendor's, and the app neither controls nor can extend it — so the owner's
+  card-PIN attempt was testing something the app does not implement. The ask had been ambiguous.
+- Known and deliberate: the send sheet still stays open during signing. Functionally fine now that the overlay
+  is above it, but the design wants form → PIN → tap → result to be sequential rather than stacked; that lands
+  with the 13.5 confirmation pass.
+- CI: run `32173256014` green on all five jobs.
+- Refs: `4a2f821`.
+
 ## 2026-08-18 — Phase 13 chunk 13.4: operations + the unified confirmation — branch claude/wonderful-rubin-eBDKZ — done (CI green)
 - Plan: give every signature one confirmation pattern — PIN → card tap → result — and move the transfer form
   off the wallet screen. Delivered in four reviewable steps rather than one lump.
