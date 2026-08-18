@@ -431,6 +431,58 @@ class WalletFlowController extends ChangeNotifier {
     );
   }
 
+  /// The wallets the user can switch between: each available storage backend
+  /// with whether it already holds a wallet. Exposed for the Настройки
+  /// switcher; the label is the catalogue's own, so this stays a thin view.
+  Future<List<({String id, String label, bool hasWallet})>>
+  listSwitchableWallets() async {
+    final result = <({String id, String label, bool hasWallet})>[];
+    for (final entry in _backendRegistry.availableEntries) {
+      final backend = entry.backend;
+      if (backend == null) {
+        continue;
+      }
+      result.add((
+        id: entry.descriptor.id,
+        label: entry.descriptor.label,
+        hasWallet: await backend.hasWallet(),
+      ));
+    }
+    return result;
+  }
+
+  /// Switches the active wallet to [backendId] and reloads everything that
+  /// describes it.
+  ///
+  /// [selectBackend] alone only records the choice — it does not reload the
+  /// summary, so using it to switch would leave the previous wallet's address
+  /// on screen. This mirrors the resolution [loadInitialState] performs, and
+  /// drops any held material so nothing survives the switch.
+  Future<void> switchActiveWallet(String backendId) async {
+    if (backendId == effectiveBackendId) {
+      return;
+    }
+    await _runBusy('Переключаем кошелёк…', () async {
+      await _backendRegistry.selectBackend(backendId);
+      final backend = _backendRegistry.backendById(backendId) ?? _vault;
+      final summary = await backend.getWalletSummary();
+      _selectedBackendId = backendId;
+      _summary = summary;
+      _material = null;
+      _biometricsEnabled = await backend.isBiometricUnlockEnabled();
+      _biometricsAvailable = await backend.isBiometricUnlockAvailable();
+      _externalRuntimeState = backend is ExternalDeviceDemoBackend
+          ? await backend.loadRuntimeState()
+          : null;
+      // A backend with no wallet yet starts its own onboarding rather than
+      // showing an empty dashboard.
+      _stage = summary == null
+          ? WalletFlowStage.welcome
+          : WalletFlowStage.unlocked;
+      _errorMessage = null;
+    });
+  }
+
   Future<void> selectBackend(String backendId) async {
     await _runGuarded(() async {
       await _backendRegistry.selectBackend(backendId);

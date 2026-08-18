@@ -106,6 +106,11 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
   AppTab _selectedTab = AppTab.wallet;
   bool _rutokenBiometricDialogOpen = false;
 
+  /// The busy/NFC overlay lives in the ROOT overlay, not in the page, so it
+  /// covers modal sheets too. Rendered inside the page it sat *below* the send
+  /// sheet, which hid the card-tap prompt — and with it the cancel action.
+  OverlayEntry? _busyEntry;
+
   @override
   void initState() {
     super.initState();
@@ -148,8 +153,34 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
         _selectedTab = AppTab.wallet;
       }
       setState(() {});
+      _syncBusyOverlay();
       _scheduleRutokenBiometricOffer();
     }
+  }
+
+  void _syncBusyOverlay() {
+    final message = _controller.busyMessage;
+    if (message == null) {
+      _busyEntry?.remove();
+      _busyEntry = null;
+      return;
+    }
+    if (_busyEntry case final OverlayEntry entry) {
+      entry.markNeedsBuild();
+      return;
+    }
+    final entry = OverlayEntry(
+      builder: (_) => _BusyOverlay(
+        message: _controller.busyMessage ?? message,
+        onCancel: _controller.canCancelBusyOperation
+            ? _controller.cancelBusyOperation
+            : null,
+        cancellationRequested: _controller.isBusyCancellationRequested,
+        awaitingCard: _controller.isAwaitingCard,
+      ),
+    );
+    _busyEntry = entry;
+    Overlay.of(context, rootOverlay: true).insert(entry);
   }
 
   void _scheduleRutokenBiometricOffer() {
@@ -197,6 +228,8 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
 
   @override
   void dispose() {
+    _busyEntry?.remove();
+    _busyEntry = null;
     _controller.removeListener(_onControllerChanged);
     _controller.dispose();
     _chainData.removeListener(_onChainDataChanged);
@@ -285,25 +318,25 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
                   ),
                   child: _ErrorBanner(message: errorMessage),
                 ),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(
-              NocturneSpacing.gutter,
-              0,
-              NocturneSpacing.gutter,
-              NocturneSpacing.x8,
+          // Pull to refresh on every tab: the balance, the asset list and the
+          // history all come from the same snapshot, so one gesture reloads
+          // whichever tab is showing.
+          child: RefreshIndicator(
+            onRefresh: _chainData.refresh,
+            color: NocturneColors.accent,
+            backgroundColor: NocturneColors.surface,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(
+                NocturneSpacing.gutter,
+                0,
+                NocturneSpacing.gutter,
+                NocturneSpacing.x8,
+              ),
+              child: _buildTabBody(tab),
             ),
-            child: _buildTabBody(tab),
           ),
         ),
-        if (_controller.busyMessage case final String message)
-          _BusyOverlay(
-            message: message,
-            onCancel: _controller.canCancelBusyOperation
-                ? _controller.cancelBusyOperation
-                : null,
-            cancellationRequested: _controller.isBusyCancellationRequested,
-            awaitingCard: _controller.isAwaitingCard,
-          ),
       ],
     );
   }
@@ -348,6 +381,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           chainData: _chainData,
           address: _controller.summary?.address ?? '—',
           backendLabel: _controller.backendLabel,
+          currentBackendId: _controller.effectiveBackendId,
           biometricsEnabled: _controller.biometricsEnabled,
           isHardwareCustody:
               _controller.activeBackend is WalletCustodyBackend &&
@@ -370,6 +404,8 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           onReadExternalAddress: _controller.isDemoExternalBackendSelected
               ? _controller.readExternalAddress
               : null,
+          onListWallets: _controller.listSwitchableWallets,
+          onSwitchWallet: _controller.switchActiveWallet,
         );
     }
   }
@@ -414,15 +450,6 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
               ),
             ),
           ),
-          if (_controller.busyMessage case final String message)
-            _BusyOverlay(
-              message: message,
-              onCancel: _controller.canCancelBusyOperation
-                  ? _controller.cancelBusyOperation
-                  : null,
-              cancellationRequested: _controller.isBusyCancellationRequested,
-              awaitingCard: _controller.isAwaitingCard,
-            ),
         ],
       ),
     );

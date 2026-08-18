@@ -75,6 +75,7 @@ class _SettingsTab extends StatelessWidget {
     required this.chainData,
     required this.address,
     required this.backendLabel,
+    required this.currentBackendId,
     required this.biometricsEnabled,
     required this.isHardwareCustody,
     required this.externalRuntimeState,
@@ -85,11 +86,14 @@ class _SettingsTab extends StatelessWidget {
     required this.onSimulateExternalOffline,
     required this.onPingExternalDevice,
     required this.onReadExternalAddress,
+    required this.onListWallets,
+    required this.onSwitchWallet,
   });
 
   final ChainDataController chainData;
   final String address;
   final String backendLabel;
+  final String currentBackendId;
   final bool biometricsEnabled;
   final bool isHardwareCustody;
   final ExternalDeviceDemoRuntimeState? externalRuntimeState;
@@ -100,6 +104,9 @@ class _SettingsTab extends StatelessWidget {
   final Future<void> Function()? onSimulateExternalOffline;
   final Future<void> Function()? onPingExternalDevice;
   final Future<void> Function()? onReadExternalAddress;
+  final Future<List<({String id, String label, bool hasWallet})>> Function()
+  onListWallets;
+  final Future<void> Function(String backendId) onSwitchWallet;
 
   @override
   Widget build(BuildContext context) {
@@ -132,6 +139,12 @@ class _SettingsTab extends StatelessWidget {
           ],
         ],
         const SizedBox(height: NocturneSpacing.x6),
+        OutlinedButton.icon(
+          onPressed: () => _showWalletSwitcher(context),
+          icon: const Icon(Icons.swap_horiz),
+          label: const Text('Переключить кошелёк'),
+        ),
+        const SizedBox(height: NocturneSpacing.x3),
         OutlinedButton(
           onPressed: () => _showDetailsSheet(context),
           child: const Text('Подробности'),
@@ -186,6 +199,76 @@ class _SettingsTab extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+
+  /// Switches between the storage backends that can hold a wallet — the phone
+  /// vault, the demo device and a registered card. Deliberately plain for now:
+  /// it exists so a tester can move between wallets without reinstalling.
+  void _showWalletSwitcher(BuildContext context) {
+    final style = PlatformStyle.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: NocturneColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: style.sheetBorderRadius),
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(NocturneSpacing.gutter),
+            child:
+                FutureBuilder<
+                  List<({String id, String label, bool hasWallet})>
+                >(
+                  future: onListWallets(),
+                  builder: (builderContext, snapshot) {
+                    final wallets = snapshot.data;
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text('Кошельки', style: theme.textTheme.titleLarge),
+                        const SizedBox(height: NocturneSpacing.x4),
+                        if (wallets == null)
+                          const Padding(
+                            padding: EdgeInsets.all(NocturneSpacing.x8),
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        else
+                          for (final wallet in wallets)
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(wallet.label),
+                              subtitle: Text(
+                                wallet.hasWallet
+                                    ? 'Кошелёк создан'
+                                    : 'Пока пусто — откроется создание',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                              trailing: wallet.id == currentBackendId
+                                  ? const Icon(
+                                      Icons.check,
+                                      color: NocturneColors.accent,
+                                    )
+                                  : null,
+                              onTap: () {
+                                Navigator.of(sheetContext).pop();
+                                onSwitchWallet(wallet.id);
+                              },
+                            ),
+                        const SizedBox(height: NocturneSpacing.x4),
+                        OutlinedButton(
+                          onPressed: () => Navigator.of(sheetContext).pop(),
+                          child: const Text('Закрыть'),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+          ),
+        );
+      },
     );
   }
 
@@ -412,14 +495,30 @@ class _WalletTabState extends State<_WalletTab> {
           ),
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(NocturneSpacing.gutter),
-            child: _TransferPreparationSection(
-              snapshot: snapshot,
-              fromAddress: widget.address,
-              networkConfig: config,
-              transactionService: widget.transactionService,
-              trackingTransport: widget.trackingTransport,
-              canUnlockWithBiometrics: widget.canUnlockWithBiometrics,
-              onAuthorizeAndSubmit: widget.onAuthorizeAndSubmit,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // The sheet keeps showing the send result after the operation,
+                // so it needs its own way out — the back gesture alone is not
+                // an affordance.
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Закрыть',
+                  ),
+                ),
+                _TransferPreparationSection(
+                  snapshot: snapshot,
+                  fromAddress: widget.address,
+                  networkConfig: config,
+                  transactionService: widget.transactionService,
+                  trackingTransport: widget.trackingTransport,
+                  canUnlockWithBiometrics: widget.canUnlockWithBiometrics,
+                  onAuthorizeAndSubmit: widget.onAuthorizeAndSubmit,
+                ),
+              ],
             ),
           ),
         ),
