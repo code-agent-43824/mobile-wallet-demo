@@ -397,7 +397,7 @@ void main() {
     await tester.ensureVisible(sign);
     await tester.tap(sign);
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).last, '1234');
+    await _enterOperationPin(tester, '1234');
     await tester.tap(find.text('Подтвердить'));
     await tester.pumpAndSettle();
 
@@ -431,4 +431,13 @@ void main() {
       expect(find.text('wc:scanned@2'), findsOneWidget);
     },
   );
+}
+
+/// Enters an operation PIN on the redesigned keypad. The per-op auth sheet no
+/// longer uses a text field, so the digits are tapped.
+Future<void> _enterOperationPin(WidgetTester tester, String pin) async {
+  for (final digit in pin.split('')) {
+    await tester.tap(find.byKey(ValueKey<String>('pin-key-$digit')));
+    await tester.pump();
+  }
 }

@@ -289,10 +289,6 @@ class _TransferPreparationSectionState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _SectionTitle('Подготовка и отправка перевода'),
-        const SizedBox(height: 12),
-        const Text(
-          'Phase 6: Поддержка retries, замены транзакций, gas price increase, tracking.',
-        ),
         const SizedBox(height: 16),
         if (_replacementTransfer)
           Container(
@@ -390,7 +386,7 @@ class _TransferPreparationSectionState
               FilledButton.icon(
                 onPressed: _isSubmitting ? null : _buildPreview,
                 icon: const Icon(Icons.visibility_outlined),
-                label: const Text('Оценить и показать preview'),
+                label: const Text('Проверить перевод'),
               ),
               FilledButton.icon(
                 onPressed: _isSubmitting ? null : _signAndSubmit,

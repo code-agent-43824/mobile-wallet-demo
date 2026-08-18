@@ -493,7 +493,7 @@ void main() {
       '0x1111111111111111111111111111111111111111',
     );
     await tester.enterText(sendFields.at(1), '0.1');
-    final previewButton = find.text('Оценить и показать preview');
+    final previewButton = find.text('Проверить перевод');
     await tester.ensureVisible(previewButton);
     await tester.tap(previewButton);
     await tester.pumpAndSettle();
@@ -548,7 +548,7 @@ void main() {
       '0x1111111111111111111111111111111111111111',
     );
     await tester.enterText(sendFields.at(1), '0.05');
-    final previewButton = find.text('Оценить и показать preview');
+    final previewButton = find.text('Проверить перевод');
     await tester.ensureVisible(previewButton);
     await tester.tap(previewButton);
     await tester.pumpAndSettle();
@@ -718,7 +718,7 @@ void main() {
 
     // Sending is a private-key op: confirm the per-op auth sheet with the PIN.
     expect(find.text('Подтвердите операцию'), findsOneWidget);
-    await tester.enterText(find.byType(TextField).last, '1234');
+    await _enterOperationPin(tester, '1234');
     await tester.tap(find.text('Подтвердить'));
     await tester.pump();
     await tester.pumpAndSettle();
@@ -778,7 +778,7 @@ void main() {
     // Confirm the per-op auth sheet; the unlock+submit then completes while
     // receipt tracking stays pending (delayed transport).
     expect(find.text('Подтвердите операцию'), findsOneWidget);
-    await tester.enterText(find.byType(TextField).last, '1234');
+    await _enterOperationPin(tester, '1234');
     await tester.tap(find.text('Подтвердить'));
 
     // The auth sheet exit + the (microtask-fast, override=2) unlock+submit + the
@@ -848,7 +848,7 @@ void main() {
 
     // Confirm the per-op auth sheet; the broadcast then fails downstream.
     expect(find.text('Подтвердите операцию'), findsOneWidget);
-    await tester.enterText(find.byType(TextField).last, '1234');
+    await _enterOperationPin(tester, '1234');
     await tester.tap(find.text('Подтвердить'));
     await tester.pump();
     await tester.pumpAndSettle();
@@ -856,4 +856,13 @@ void main() {
     expect(find.textContaining('execution reverted'), findsOneWidget);
     expect(find.text('Успешная отправка'), findsNothing);
   });
+}
+
+/// Enters an operation PIN on the redesigned keypad. The per-op auth sheet no
+/// longer uses a text field, so the digits are tapped.
+Future<void> _enterOperationPin(WidgetTester tester, String pin) async {
+  for (final digit in pin.split('')) {
+    await tester.tap(find.byKey(ValueKey<String>('pin-key-$digit')));
+    await tester.pump();
+  }
 }

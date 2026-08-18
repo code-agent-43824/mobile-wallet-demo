@@ -836,3 +836,141 @@ class _NoDataYet extends StatelessWidget {
     );
   }
 }
+
+/// The entered-PIN indicator: one filled dot per digit.
+///
+/// Shows length only — never the digits — so a shoulder-surfer learns nothing
+/// beyond how long the PIN is.
+class _PinDots extends StatelessWidget {
+  const _PinDots({required this.length});
+
+  final int length;
+
+  /// Dots always drawn, so the row does not jump as the PIN grows.
+  static const int _slots = 4;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = length > _slots ? length : _slots;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (var i = 0; i < count; i++)
+          Container(
+            width: 12,
+            height: 12,
+            margin: const EdgeInsets.symmetric(horizontal: NocturneSpacing.x2),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: i < length ? NocturneColors.accent : Colors.transparent,
+              border: Border.all(
+                color: i < length
+                    ? NocturneColors.accent
+                    : NocturneColors.outlineFaint,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// The numeric keypad. Key shape and fill come from [PlatformStyle]: circular
+/// keys on a faint tint for iOS, 16dp rounded keys on the surface for Android.
+class _PinKeypad extends StatelessWidget {
+  const _PinKeypad({
+    required this.style,
+    required this.onDigit,
+    required this.onBackspace,
+  });
+
+  final PlatformStyle style;
+  final ValueChanged<String> onDigit;
+  final VoidCallback onBackspace;
+
+  @override
+  Widget build(BuildContext context) {
+    const rows = <List<String>>[
+      ['1', '2', '3'],
+      ['4', '5', '6'],
+      ['7', '8', '9'],
+      ['', '0', 'del'],
+    ];
+
+    return Column(
+      children: [
+        for (final row in rows)
+          Padding(
+            padding: const EdgeInsets.only(bottom: NocturneSpacing.x3),
+            child: Row(
+              children: [
+                for (final key in row)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: NocturneSpacing.x2,
+                      ),
+                      child: _PinKey(
+                        key: ValueKey<String>('pin-key-$key'),
+                        label: key,
+                        style: style,
+                        onTap: key.isEmpty
+                            ? null
+                            : key == 'del'
+                            ? onBackspace
+                            : () => onDigit(key),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _PinKey extends StatelessWidget {
+  const _PinKey({
+    super.key,
+    required this.label,
+    required this.style,
+    required this.onTap,
+  });
+
+  final String label;
+  final PlatformStyle style;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (label.isEmpty) {
+      return const SizedBox(height: 56);
+    }
+    final radius = BorderRadius.circular(style.keypadKeyRadius);
+    return Material(
+      color: style.keypadKeyFill,
+      borderRadius: radius,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        child: SizedBox(
+          height: 56,
+          child: Center(
+            child: label == 'del'
+                ? const Icon(Icons.backspace_outlined, size: 20)
+                : Text(
+                    label,
+                    style: const TextStyle(
+                      fontFamily: NocturneType.family,
+                      fontSize: 24,
+                      fontWeight: NocturneType.medium,
+                      color: NocturneColors.text,
+                    ),
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}

@@ -1058,21 +1058,33 @@ class _OperationAuthSheet extends StatefulWidget {
 }
 
 class _OperationAuthSheetState extends State<_OperationAuthSheet> {
-  final _pinController = TextEditingController();
+  /// Digits entered so far. The redesign replaces the text field with a keypad,
+  /// so the PIN never reaches the system keyboard (and its clipboard, autofill
+  /// and prediction paths).
+  String _pin = '';
 
-  @override
-  void dispose() {
-    _pinController.dispose();
-    super.dispose();
+  static const int _maxPinLength = 12;
+
+  void _append(String digit) {
+    if (_pin.length >= _maxPinLength) {
+      return;
+    }
+    setState(() => _pin += digit);
+  }
+
+  void _backspace() {
+    if (_pin.isEmpty) {
+      return;
+    }
+    setState(() => _pin = _pin.substring(0, _pin.length - 1));
   }
 
   void _confirmPin() {
-    final pin = _pinController.text.trim();
-    if (pin.isEmpty) {
+    if (_pin.isEmpty) {
       return;
     }
     // Pop with the credential BEFORE the caller runs the backend op.
-    Navigator.of(context).pop((pin: pin, useBiometrics: false));
+    Navigator.of(context).pop((pin: _pin, useBiometrics: false));
   }
 
   void _confirmBiometrics() {
@@ -1082,54 +1094,53 @@ class _OperationAuthSheetState extends State<_OperationAuthSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final style = PlatformStyle.of(context);
 
     return Padding(
       padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 24,
-        bottom: 24 + MediaQuery.of(context).viewInsets.bottom,
+        left: NocturneSpacing.gutter,
+        right: NocturneSpacing.gutter,
+        top: NocturneSpacing.x8,
+        bottom: NocturneSpacing.x8 + MediaQuery.viewInsetsOf(context).bottom,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const _SectionTitle('Подтвердите операцию'),
-          const SizedBox(height: 12),
+          Text(
+            'Подтвердите операцию',
+            style: theme.textTheme.titleLarge,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: NocturneSpacing.x3),
           Text(
             widget.reason,
+            textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+              color: NocturneColors.textMuted,
             ),
           ),
-          const SizedBox(height: 20),
-          TextField(
-            controller: _pinController,
-            obscureText: true,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'PIN',
-              border: OutlineInputBorder(),
-            ),
-            onSubmitted: (_) => _confirmPin(),
+          const SizedBox(height: NocturneSpacing.x8),
+          _PinDots(length: _pin.length),
+          const SizedBox(height: NocturneSpacing.x8),
+          _PinKeypad(style: style, onDigit: _append, onBackspace: _backspace),
+          const SizedBox(height: NocturneSpacing.x6),
+          OutlinedButton(
+            onPressed: _pin.isEmpty ? null : _confirmPin,
+            child: const Text('Подтвердить'),
           ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              FilledButton.icon(
-                onPressed: _confirmPin,
-                icon: const Icon(Icons.lock_open),
-                label: const Text('Подтвердить'),
-              ),
-              if (widget.biometricsOffered)
-                OutlinedButton.icon(
-                  onPressed: _confirmBiometrics,
-                  icon: const Icon(Icons.fingerprint),
-                  label: const Text('Разблокировать биометрией'),
-                ),
-            ],
+          if (widget.biometricsOffered) ...[
+            const SizedBox(height: NocturneSpacing.x3),
+            TextButton.icon(
+              onPressed: _confirmBiometrics,
+              icon: const Icon(Icons.fingerprint, size: 20),
+              label: const Text('Разблокировать биометрией'),
+            ),
+          ],
+          const SizedBox(height: NocturneSpacing.x3),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Отмена'),
           ),
         ],
       ),
