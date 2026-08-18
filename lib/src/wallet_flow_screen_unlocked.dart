@@ -1,5 +1,21 @@
 part of 'wallet_flow_screen.dart';
 
+/// Signature for the send-form authorize+sign+submit callback: the widget keeps
+/// the read-only preview, this runs the private-key part (auth → unlock → sign →
+/// submit) in the controller. Returns null if the user cancelled the auth
+/// prompt; throws [TransactionFailure]/[VaultFailure] on a real failure.
+typedef AuthorizeAndSubmitTransfer =
+    Future<HardenedSubmitResult?> Function({
+      required WalletChainSnapshot snapshot,
+      required String fromAddress,
+      required String toAddress,
+      required String amountText,
+      required TransferAssetOption asset,
+      required TransactionTracker tracker,
+      String? pin,
+      bool useBiometrics,
+    });
+
 /// The transfer form. No key material is held while it is shown; submitting it
 /// triggers a per-operation auth prompt and a freshly-unlocked sign via
 /// [onAuthorizeAndSubmit].
