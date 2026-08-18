@@ -121,6 +121,19 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
     );
   }
 
+  /// Which AirGap step the user is on, derived from state that already exists:
+  /// a returned signature means step 3, a scanned request means step 2, and
+  /// otherwise the pairing QR is still the task.
+  int _airGapStep() {
+    if (widget.airGapResponsePayload != null) {
+      return 3;
+    }
+    if (widget.airGapRequest != null) {
+      return 2;
+    }
+    return 1;
+  }
+
   Future<void> _prepareAirGapAccountExport() async {
     final credential = await _promptForAuth(
       context,
@@ -275,14 +288,20 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
         const _SectionTitle('AirGap через MetaMask'),
         const SizedBox(height: 8),
         const Text(
-          'Wallet Demo хранит ключ и работает как QR hardware wallet. MetaMask '
-          'создаёт и отправляет транзакцию, а приложение только проверяет и подписывает её.',
+          'Ключ остаётся в этом приложении. MetaMask собирает перевод и '
+          'отправляет его в сеть, а приложение показывает, что именно '
+          'подписывает, и подписывает.',
         ),
         const SizedBox(height: 12),
+        _AirGapProgress(currentStep: _airGapStep()),
+        const SizedBox(height: 12),
         _AirGapStepCard(
-          title: '1. Добавьте аккаунт в MetaMask',
+          title: 'Добавьте кошелёк в MetaMask',
+          stepNumber: 1,
           description:
-              'В MetaMask выберите добавление QR-based hardware wallet и отсканируйте публичный crypto-hdkey.',
+              'В MetaMask выберите «Аппаратный кошелёк по QR» и наведите камеру '
+              'на этот код. Мы передаём только публичные данные — ключ остаётся '
+              'здесь.',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -307,9 +326,11 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
         ),
         const SizedBox(height: 12),
         _AirGapStepCard(
-          title: '2. Отсканируйте запрос транзакции',
+          title: 'Отсканируйте перевод из MetaMask',
+          stepNumber: 2,
           description:
-              'После отправки ETH в MetaMask отсканируйте показанный eth-sign-request. Поддерживаются Mainnet и Sepolia.',
+              'MetaMask собрал перевод и показал QR. Наведите на него камеру — '
+              'мы разберём код и покажем, что именно подпишем.',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -350,9 +371,11 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
         if (airGapResponse != null) ...[
           const SizedBox(height: 12),
           _AirGapStepCard(
-            title: '3. Верните подпись в MetaMask',
+            title: 'Верните подпись в MetaMask',
+            stepNumber: 3,
             description:
-                'Покажите этот eth-signature QR камере MetaMask. MetaMask соберёт и отправит транзакцию в сеть.',
+                'Покажите этот код камере MetaMask. Он отправит перевод в сеть — '
+                'со стороны кошелька ничего больше не нужно.',
             child: _UrQrDisplay(
               payload: airGapResponse,
               semanticsLabel: 'QR подписи транзакции для MetaMask',
@@ -379,11 +402,13 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
 class _AirGapStepCard extends StatelessWidget {
   const _AirGapStepCard({
     required this.title,
+    required this.stepNumber,
     required this.description,
     required this.child,
   });
 
   final String title;
+  final int stepNumber;
   final String description;
   final Widget child;
 
@@ -401,7 +426,36 @@ class _AirGapStepCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: NocturneColors.accent800,
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  '$stepNumber',
+                  style: const TextStyle(
+                    fontFamily: NocturneType.family,
+                    fontSize: 12,
+                    fontWeight: NocturneType.semibold,
+                    color: NocturneColors.accent100,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 6),
           Text(description),
           const SizedBox(height: 12),
@@ -979,6 +1033,37 @@ class _SessionCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Three-segment progress for the AirGap flow, so the user can see where they
+/// are in a process that spans two devices.
+class _AirGapProgress extends StatelessWidget {
+  const _AirGapProgress({required this.currentStep});
+
+  final int currentStep;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (var step = 1; step <= 3; step++)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Container(
+                height: 3,
+                decoration: BoxDecoration(
+                  color: step <= currentStep
+                      ? NocturneColors.accent
+                      : NocturneColors.neutral800,
+                  borderRadius: NocturneRadius.smAll,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

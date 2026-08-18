@@ -404,7 +404,8 @@ void main() {
     await tester.tap(find.text('Подтвердить'));
     await tester.pumpAndSettle();
 
-    expect(find.text('3. Верните подпись в MetaMask'), findsOneWidget);
+    // The step number moved into a badge, so the title is the title alone.
+    expect(find.text('Верните подпись в MetaMask'), findsOneWidget);
     expect(find.textContaining('BC-UR'), findsWidgets);
   });
 
