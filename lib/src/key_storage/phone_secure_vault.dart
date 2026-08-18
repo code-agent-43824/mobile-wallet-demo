@@ -23,7 +23,7 @@ class PhoneSecureVault implements KeyStorageBackend {
     PinUnlockSession? session,
     Duration unlockTtl = const Duration(minutes: 5),
     int maxUnlockAttempts = 5,
-    Duration unlockLockout = const Duration(minutes: 1),
+    Duration unlockLockout = const Duration(minutes: 5),
     DateTime Function()? now,
     int pbkdf2Iterations = _defaultPinIterations,
     Random? random,
@@ -354,11 +354,22 @@ class PhoneSecureVault implements KeyStorageBackend {
     }
     final nowUtc = _now();
     if (nowUtc.isBefore(lockedUntil)) {
-      final remainingSeconds = lockedUntil.difference(nowUtc).inSeconds + 1;
       throw VaultLockedOutFailure(
-        'Слишком много неверных попыток. Повторите через $remainingSeconds с.',
+        'Слишком много неверных попыток. '
+        'Повторите через ${_formatRemaining(lockedUntil.difference(nowUtc))}.',
       );
     }
+  }
+
+  /// Renders the wait as minutes once it exceeds a minute — "через 300 с" is
+  /// technically right and practically unreadable.
+  static String _formatRemaining(Duration remaining) {
+    final seconds = remaining.inSeconds + 1;
+    if (seconds < 60) {
+      return '$seconds с';
+    }
+    final minutes = (seconds / 60).ceil();
+    return '$minutes мин';
   }
 
   Future<void> _registerFailedUnlock(_VaultPayload payload) async {

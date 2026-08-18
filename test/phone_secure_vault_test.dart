@@ -110,6 +110,49 @@ void main() {
       },
     );
 
+    test('states the remaining lockout in minutes, not raw seconds', () async {
+      var fakeNow = DateTime.utc(2026, 1, 1, 12, 0, 0);
+      vault = PhoneSecureVault(
+        store: store,
+        maxUnlockAttempts: 1,
+        unlockLockout: const Duration(minutes: 5),
+        now: () => fakeNow,
+        pbkdf2Iterations: 1000,
+      );
+
+      await vault.createWallet(pin: '123456');
+      vault.lock();
+      await expectLater(
+        vault.unlock(pin: '000000'),
+        throwsA(isA<InvalidPinFailure>()),
+      );
+
+      // "через 300 с" is accurate and unreadable; the wait is stated in minutes.
+      await expectLater(
+        vault.unlock(pin: '123456'),
+        throwsA(
+          isA<VaultLockedOutFailure>().having(
+            (failure) => failure.message,
+            'message',
+            allOf(contains('5 мин'), isNot(contains(' с.'))),
+          ),
+        ),
+      );
+
+      // Under a minute it still reads in seconds.
+      fakeNow = fakeNow.add(const Duration(minutes: 4, seconds: 40));
+      await expectLater(
+        vault.unlock(pin: '123456'),
+        throwsA(
+          isA<VaultLockedOutFailure>().having(
+            (failure) => failure.message,
+            'message',
+            contains(' с.'),
+          ),
+        ),
+      );
+    });
+
     test('locks out after too many failed unlock attempts', () async {
       var fakeNow = DateTime.utc(2026, 1, 1, 12, 0, 0);
       vault = PhoneSecureVault(
