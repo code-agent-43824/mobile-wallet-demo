@@ -882,23 +882,17 @@ class _LockedStage extends StatefulWidget {
     required this.summary,
     required this.backendLabel,
     required this.isExternalBackend,
-    required this.externalRuntimeState,
     required this.biometricsEnabled,
     required this.onUnlock,
     required this.onUnlockWithBiometrics,
-    required this.onReconnectExternalDevice,
-    required this.onSimulateExternalOffline,
   });
 
   final StoredWalletSummary? summary;
   final String backendLabel;
   final bool isExternalBackend;
-  final ExternalDeviceDemoRuntimeState? externalRuntimeState;
   final bool biometricsEnabled;
   final Future<void> Function(String pin) onUnlock;
   final Future<void> Function()? onUnlockWithBiometrics;
-  final Future<void> Function()? onReconnectExternalDevice;
-  final Future<void> Function()? onSimulateExternalOffline;
 
   @override
   State<_LockedStage> createState() => _LockedStageState();
@@ -916,7 +910,6 @@ class _LockedStageState extends State<_LockedStage> {
   @override
   Widget build(BuildContext context) {
     final summary = widget.summary;
-    final externalRuntimeState = widget.externalRuntimeState;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -946,15 +939,6 @@ class _LockedStageState extends State<_LockedStage> {
             const _StatusChip(label: 'Locked'),
             if (widget.biometricsEnabled)
               const _StatusChip(label: 'Biometrics enabled'),
-            if (widget.isExternalBackend && externalRuntimeState != null)
-              _StatusChip(
-                label: externalRuntimeState.isAvailable
-                    ? 'Device online'
-                    : 'Device offline',
-              ),
-            if (widget.isExternalBackend &&
-                externalRuntimeState?.lastError != null)
-              const _StatusChip(label: 'Last error recorded'),
           ],
         ),
         const SizedBox(height: 20),
@@ -968,25 +952,6 @@ class _LockedStageState extends State<_LockedStage> {
             border: const OutlineInputBorder(),
           ),
         ),
-        if (widget.isExternalBackend && externalRuntimeState != null) ...[
-          const SizedBox(height: 16),
-          _SummaryTile(
-            label: 'Состояние demo device',
-            value: externalRuntimeState.isAvailable ? 'Доступно' : 'Недоступно',
-          ),
-          if (externalRuntimeState.connectedAtUtc
-              case final DateTime connectedAt) ...[
-            const SizedBox(height: 10),
-            _SummaryTile(
-              label: 'Последняя device session',
-              value: connectedAt.toIso8601String(),
-            ),
-          ],
-          if (externalRuntimeState.lastError case final String error) ...[
-            const SizedBox(height: 10),
-            _ErrorBanner(message: error),
-          ],
-        ],
         const SizedBox(height: 16),
         Wrap(
           spacing: 12,
@@ -1005,17 +970,6 @@ class _LockedStageState extends State<_LockedStage> {
                 onPressed: widget.onUnlockWithBiometrics,
                 icon: const Icon(Icons.fingerprint),
                 label: const Text('Разблокировать биометрией'),
-              ),
-            if (widget.onReconnectExternalDevice != null)
-              OutlinedButton.icon(
-                onPressed: widget.onReconnectExternalDevice,
-                icon: const Icon(Icons.usb),
-                label: const Text('Переподключить demo device'),
-              ),
-            if (widget.onSimulateExternalOffline != null)
-              TextButton(
-                onPressed: widget.onSimulateExternalOffline,
-                child: const Text('Симулировать offline'),
               ),
           ],
         ),

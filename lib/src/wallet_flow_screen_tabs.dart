@@ -68,8 +68,8 @@ class _ActivityTab extends StatelessWidget {
 /// The **Настройки** tab.
 ///
 /// Holds the wallet-level switches, and is where the redesign parks the
-/// technical rows (RPC endpoint, fetch time, data source, PKCS#11 session)
-/// behind a «Подробности» sheet instead of showing them on the main screen.
+/// technical rows (RPC endpoint, fetch time, data source) behind a
+/// «Подробности» sheet instead of showing them on the main screen.
 class _SettingsTab extends StatelessWidget {
   const _SettingsTab({
     required this.chainData,
@@ -78,14 +78,8 @@ class _SettingsTab extends StatelessWidget {
     required this.currentBackendId,
     required this.biometricsEnabled,
     required this.isHardwareCustody,
-    required this.externalRuntimeState,
     required this.onLock,
     required this.onRefresh,
-    required this.onReconnectExternalDevice,
-    required this.onDisconnectExternalSession,
-    required this.onSimulateExternalOffline,
-    required this.onPingExternalDevice,
-    required this.onReadExternalAddress,
     required this.onListWallets,
     required this.onSwitchWallet,
   });
@@ -96,14 +90,8 @@ class _SettingsTab extends StatelessWidget {
   final String currentBackendId;
   final bool biometricsEnabled;
   final bool isHardwareCustody;
-  final ExternalDeviceDemoRuntimeState? externalRuntimeState;
   final VoidCallback onLock;
   final Future<void> Function() onRefresh;
-  final Future<void> Function()? onReconnectExternalDevice;
-  final Future<void> Function()? onDisconnectExternalSession;
-  final Future<void> Function()? onSimulateExternalOffline;
-  final Future<void> Function()? onPingExternalDevice;
-  final Future<void> Function()? onReadExternalAddress;
   final Future<List<({String id, String label, bool hasWallet})>> Function()
   onListWallets;
   final Future<void> Function(String backendId) onSwitchWallet;
@@ -126,18 +114,6 @@ class _SettingsTab extends StatelessWidget {
           label: 'Биометрия',
           value: biometricsEnabled ? 'Включена' : 'Выключена',
         ),
-        if (externalRuntimeState
-            case final ExternalDeviceDemoRuntimeState runtime) ...[
-          const SizedBox(height: NocturneSpacing.x3),
-          _SummaryTile(
-            label: 'Demo device',
-            value: runtime.isAvailable ? 'Device online' : 'Device offline',
-          ),
-          if (runtime.lastError case final String error) ...[
-            const SizedBox(height: NocturneSpacing.x3),
-            _ErrorBanner(message: error),
-          ],
-        ],
         const SizedBox(height: NocturneSpacing.x6),
         OutlinedButton.icon(
           onPressed: () => _showWalletSwitcher(context),
@@ -150,8 +126,6 @@ class _SettingsTab extends StatelessWidget {
           child: const Text('Подробности'),
         ),
         const SizedBox(height: NocturneSpacing.x6),
-        // Device lifecycle controls for the simulated external backend. They
-        // are diagnostics, so the redesign keeps them out of the wallet screen.
         Wrap(
           spacing: NocturneSpacing.x4,
           runSpacing: NocturneSpacing.x4,
@@ -167,35 +141,6 @@ class _SettingsTab extends StatelessWidget {
                 icon: const Icon(Icons.lock_outline),
                 label: const Text('Заблокировать снова'),
               ),
-            if (onDisconnectExternalSession != null)
-              OutlinedButton.icon(
-                onPressed: onDisconnectExternalSession,
-                icon: const Icon(Icons.link_off),
-                label: const Text('Разорвать device session'),
-              ),
-            if (onReconnectExternalDevice != null)
-              OutlinedButton.icon(
-                onPressed: onReconnectExternalDevice,
-                icon: const Icon(Icons.usb),
-                label: const Text('Переподключить demo device'),
-              ),
-            if (onPingExternalDevice != null)
-              OutlinedButton.icon(
-                onPressed: onPingExternalDevice,
-                icon: const Icon(Icons.wifi_tethering),
-                label: const Text('Проверить PKCS#11 session'),
-              ),
-            if (onReadExternalAddress != null)
-              OutlinedButton.icon(
-                onPressed: onReadExternalAddress,
-                icon: const Icon(Icons.badge_outlined),
-                label: const Text('Прочитать адрес через PKCS#11'),
-              ),
-            if (onSimulateExternalOffline != null)
-              TextButton(
-                onPressed: onSimulateExternalOffline,
-                child: const Text('Симулировать offline'),
-              ),
           ],
         ),
       ],
@@ -203,7 +148,7 @@ class _SettingsTab extends StatelessWidget {
   }
 
   /// Switches between the storage backends that can hold a wallet — the phone
-  /// vault, the demo device and a registered card. Deliberately plain for now:
+  /// vault and a registered card. Deliberately plain for now:
   /// it exists so a tester can move between wallets without reinstalling.
   void _showWalletSwitcher(BuildContext context) {
     final style = PlatformStyle.of(context);
@@ -277,7 +222,6 @@ class _SettingsTab extends StatelessWidget {
   void _showDetailsSheet(BuildContext context) {
     final style = PlatformStyle.of(context);
     final snapshot = chainData.snapshot;
-    final runtime = externalRuntimeState;
 
     showModalBottomSheet<void>(
       context: context,
@@ -319,20 +263,6 @@ class _SettingsTab extends StatelessWidget {
                       value: snapshot.loadedFromCache
                           ? 'Локальный кэш'
                           : 'Живой запрос к сети',
-                    ),
-                  ],
-                  if (runtime?.session
-                      case final ExternalDevicePkcs11SessionSnapshot
-                          session) ...[
-                    const SizedBox(height: NocturneSpacing.x3),
-                    _SummaryTile(
-                      label: 'PKCS#11 session id',
-                      value: session.sessionId,
-                    ),
-                    const SizedBox(height: NocturneSpacing.x3),
-                    _SummaryTile(
-                      label: 'PKCS#11 operations',
-                      value: session.operationCount.toString(),
                     ),
                   ],
                   const SizedBox(height: NocturneSpacing.x6),

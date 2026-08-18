@@ -22,8 +22,6 @@ import 'design/nocturne.dart';
 import 'design/platform_style.dart';
 import 'key_storage/backend_registry.dart';
 import 'key_storage/custody_backend.dart';
-import 'key_storage/external_device_demo_backend.dart';
-import 'key_storage/external_device_pkcs11.dart';
 import 'key_storage/key_storage_backend.dart';
 import 'key_storage/phone_secure_vault.dart';
 import 'key_storage/rutoken_biometric_pin_store.dart';
@@ -383,27 +381,9 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           backendLabel: _controller.backendLabel,
           currentBackendId: _controller.effectiveBackendId,
           biometricsEnabled: _controller.biometricsEnabled,
-          isHardwareCustody:
-              _controller.activeBackend is WalletCustodyBackend &&
-              _controller.activeBackend is! ExternalDeviceDemoBackend,
-          externalRuntimeState: _controller.externalRuntimeState,
+          isHardwareCustody: _controller.activeBackend is WalletCustodyBackend,
           onLock: _controller.lockWallet,
           onRefresh: _chainData.refresh,
-          onReconnectExternalDevice: _controller.isDemoExternalBackendSelected
-              ? _controller.reconnectExternalDevice
-              : null,
-          onDisconnectExternalSession: _controller.isDemoExternalBackendSelected
-              ? _controller.disconnectExternalSession
-              : null,
-          onSimulateExternalOffline: _controller.isDemoExternalBackendSelected
-              ? _controller.simulateExternalDeviceOffline
-              : null,
-          onPingExternalDevice: _controller.isDemoExternalBackendSelected
-              ? _controller.pingExternalDevice
-              : null,
-          onReadExternalAddress: _controller.isDemoExternalBackendSelected
-              ? _controller.readExternalAddress
-              : null,
           onListWallets: _controller.listSwitchableWallets,
           onSwitchWallet: _controller.switchActiveWallet,
         );
@@ -543,17 +523,10 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           summary: controller.summary,
           backendLabel: controller.backendLabel,
           isExternalBackend: controller.isExternalBackendSelected,
-          externalRuntimeState: controller.externalRuntimeState,
           biometricsEnabled: controller.biometricsEnabled,
           onUnlock: controller.unlockWallet,
           onUnlockWithBiometrics: controller.canUnlockWithBiometrics
               ? controller.unlockWithBiometrics
-              : null,
-          onReconnectExternalDevice: controller.isDemoExternalBackendSelected
-              ? controller.reconnectExternalDevice
-              : null,
-          onSimulateExternalOffline: controller.isDemoExternalBackendSelected
-              ? controller.simulateExternalDeviceOffline
               : null,
         );
       case WalletFlowStage.unlocked:

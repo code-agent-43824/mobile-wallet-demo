@@ -37,7 +37,6 @@ class WalletFlowController extends ChangeNotifier {
       store: store,
       biometricAuth: biometricAuthGateway,
     );
-    _externalDeviceBackend = ExternalDeviceDemoBackend(store: store);
     _rutokenProvisioning = rutokenNativeAdapter == null
         ? null
         : RutokenProvisioningService(
@@ -71,18 +70,6 @@ class WalletFlowController extends ChangeNotifier {
                 'Seed хранится локально в защищённом phone vault под PIN и опциональной биометрией.',
           ),
           backend: _vault,
-        ),
-        WalletBackendCatalogEntry(
-          descriptor: const WalletBackendDescriptor(
-            id: 'external_nfc_demo_device',
-            kind: WalletBackendKind.externalDevice,
-            label: 'External NFC demo device',
-            description:
-                'Симулированный внешний NFC-подписант для Phase 7: отдельная UX-ветка и отдельный signing/auth runtime без реального SDK.',
-            availabilityNote:
-                'Demo-only путь: настоящий NFC SDK пока не подключён.',
-          ),
-          backend: _externalDeviceBackend,
         ),
         if (_rutokenBackend case final backend?)
           WalletBackendCatalogEntry(
@@ -133,7 +120,6 @@ class WalletFlowController extends ChangeNotifier {
   }
 
   late final PhoneSecureVault _vault;
-  late final ExternalDeviceDemoBackend _externalDeviceBackend;
   late final WalletBackendRegistry _backendRegistry;
   final SecureKeyValueStore _store;
   final WalletConnectService _walletConnectService;
@@ -181,7 +167,6 @@ class WalletFlowController extends ChangeNotifier {
   String? _airGapResponsePayload;
   List<WalletConnectSession> _walletConnectSessions =
       const <WalletConnectSession>[];
-  ExternalDeviceDemoRuntimeState? _externalRuntimeState;
   WalletAuthMethod _lastUnlockAuthMethod = WalletAuthMethod.pin;
   bool _biometricsEnabled = false;
   bool _biometricsAvailable = false;
@@ -213,8 +198,6 @@ class WalletFlowController extends ChangeNotifier {
   bool get isAwaitingCard => _awaitingCard;
   bool get isBusyCancellationRequested => _busyCancellationRequested;
   String? get selectedBackendId => _selectedBackendId;
-  ExternalDeviceDemoRuntimeState? get externalRuntimeState =>
-      _externalRuntimeState;
   WalletAuthMethod get lastUnlockAuthMethod => _lastUnlockAuthMethod;
   bool get biometricsEnabled => _biometricsEnabled;
   bool get biometricsAvailable => _biometricsAvailable;
@@ -286,14 +269,9 @@ class WalletFlowController extends ChangeNotifier {
     return _vault;
   }
 
-  bool get isExternalBackendSelected =>
-      activeBackend is ExternalDeviceKeyStorageBackend ||
-      activeBackend is WalletCustodyBackend;
+  bool get isExternalBackendSelected => activeBackend is WalletCustodyBackend;
 
   bool get isRutokenSelected => activeBackend is RutokenCustodyBackend;
-
-  bool get isDemoExternalBackendSelected =>
-      activeBackend is ExternalDeviceDemoBackend;
 
   /// Display label for the active/selected backend (locked & unlocked stages).
   String get backendLabel {
@@ -356,15 +334,11 @@ class WalletFlowController extends ChangeNotifier {
       }
       final biometricsEnabled = await backend.isBiometricUnlockEnabled();
       final biometricsAvailable = await backend.isBiometricUnlockAvailable();
-      final externalRuntimeState = backend is ExternalDeviceDemoBackend
-          ? await backend.loadRuntimeState()
-          : null;
       if (_disposed) {
         return;
       }
       _selectedBackendId = selectedBackendId;
       _summary = summary;
-      _externalRuntimeState = externalRuntimeState;
       _biometricsEnabled = biometricsEnabled;
       _biometricsAvailable = biometricsAvailable;
       // An existing wallet opens STRAIGHT to the read-only dashboard
@@ -471,9 +445,6 @@ class WalletFlowController extends ChangeNotifier {
       _material = null;
       _biometricsEnabled = await backend.isBiometricUnlockEnabled();
       _biometricsAvailable = await backend.isBiometricUnlockAvailable();
-      _externalRuntimeState = backend is ExternalDeviceDemoBackend
-          ? await backend.loadRuntimeState()
-          : null;
       // A backend with no wallet yet starts its own onboarding rather than
       // showing an empty dashboard.
       _stage = summary == null
@@ -487,11 +458,6 @@ class WalletFlowController extends ChangeNotifier {
     await _runGuarded(() async {
       await _backendRegistry.selectBackend(backendId);
       _selectedBackendId = backendId;
-      if (backendId == _externalDeviceBackend.backendId) {
-        _externalRuntimeState = await _externalDeviceBackend.loadRuntimeState();
-      } else {
-        _externalRuntimeState = null;
-      }
       _errorMessage = null;
     });
   }
@@ -589,7 +555,6 @@ class WalletFlowController extends ChangeNotifier {
           createdAtUtc: DateTime.now().toUtc(),
         );
         _material = null;
-        _externalRuntimeState = null;
         _lastUnlockAuthMethod = WalletAuthMethod.externalDevice;
         _stage = WalletFlowStage.unlocked;
         _rutokenProvisioningResult =
@@ -637,7 +602,6 @@ class WalletFlowController extends ChangeNotifier {
         _material = null;
         _biometricsEnabled = false;
         _biometricsAvailable = await backend.isBiometricUnlockAvailable();
-        _externalRuntimeState = null;
         _lastUnlockAuthMethod = WalletAuthMethod.externalDevice;
         _rutokenGeneratedBackup = null;
         _stage = WalletFlowStage.unlocked;
@@ -712,7 +676,6 @@ class WalletFlowController extends ChangeNotifier {
         _biometricsAvailable = false;
         _material = null;
         backend.lock();
-        _externalRuntimeState = await _externalDeviceBackend.loadRuntimeState();
         // Land on the read-only dashboard; the device "tap + PIN" path runs
         // per private-key operation.
         _stage = WalletFlowStage.unlocked;
@@ -754,7 +717,6 @@ class WalletFlowController extends ChangeNotifier {
         _biometricsAvailable = false;
         _material = null;
         backend.lock();
-        _externalRuntimeState = await _externalDeviceBackend.loadRuntimeState();
         // Land on the read-only dashboard; the device "tap + PIN" path runs
         // per private-key operation.
         _stage = WalletFlowStage.unlocked;
@@ -777,12 +739,7 @@ class WalletFlowController extends ChangeNotifier {
         );
       }
       _material = await backend.unlock(pin: pin);
-      _lastUnlockAuthMethod = backend is ExternalDeviceKeyStorageBackend
-          ? WalletAuthMethod.externalDevice
-          : WalletAuthMethod.pin;
-      if (backend is ExternalDeviceDemoBackend) {
-        _externalRuntimeState = await _externalDeviceBackend.loadRuntimeState();
-      }
+      _lastUnlockAuthMethod = WalletAuthMethod.pin;
       _stage = WalletFlowStage.unlocked;
     });
   }
@@ -818,9 +775,6 @@ class WalletFlowController extends ChangeNotifier {
       // private-key operation. We still lock the backend + drop _material.
       _stage = WalletFlowStage.unlocked;
       activeBackend.lock();
-      if (activeBackend is ExternalDeviceDemoBackend) {
-        _externalRuntimeState = await _externalDeviceBackend.loadRuntimeState();
-      }
     });
   }
 
@@ -835,72 +789,6 @@ class WalletFlowController extends ChangeNotifier {
       _material = await backend.unlockWithBiometrics();
       _lastUnlockAuthMethod = WalletAuthMethod.biometric;
       _stage = WalletFlowStage.unlocked;
-    });
-  }
-
-  Future<void> refreshExternalRuntimeState() async {
-    if (activeBackend is! ExternalDeviceDemoBackend) {
-      return;
-    }
-    final runtimeState = await (activeBackend as ExternalDeviceDemoBackend)
-        .loadRuntimeState();
-    if (_disposed) {
-      return;
-    }
-    _externalRuntimeState = runtimeState;
-    _notify();
-  }
-
-  Future<void> simulateExternalDeviceOffline() async {
-    await _runGuarded(() async {
-      await _externalDeviceBackend.simulateDeviceUnavailable();
-      // Stay on the read-only dashboard: viewing never needed the key, and the
-      // device's offline state is reflected in the runtime tiles. The "tap +
-      // PIN" reconnect happens lazily on the next private-key op.
-      _material = null;
-      await refreshExternalRuntimeState();
-    });
-  }
-
-  Future<void> reconnectExternalDevice() async {
-    await _runGuarded(() async {
-      await _externalDeviceBackend.reconnectDevice();
-      await refreshExternalRuntimeState();
-    });
-  }
-
-  Future<void> disconnectExternalSession() async {
-    await _runGuarded(() async {
-      await _externalDeviceBackend.disconnectSession();
-      // Stay on the read-only dashboard; the session is re-established on the
-      // next private-key op via the device "tap + PIN" path.
-      _material = null;
-      await refreshExternalRuntimeState();
-    });
-  }
-
-  Future<void> pingExternalDevice() {
-    return _performExternalPkcs11Operation(
-      const ExternalDevicePkcs11Operation(
-        kind: ExternalDevicePkcs11OperationKind.probeSession,
-      ),
-    );
-  }
-
-  Future<void> readExternalAddress() {
-    return _performExternalPkcs11Operation(
-      const ExternalDevicePkcs11Operation(
-        kind: ExternalDevicePkcs11OperationKind.readPublicAddress,
-      ),
-    );
-  }
-
-  Future<void> _performExternalPkcs11Operation(
-    ExternalDevicePkcs11Operation operation,
-  ) async {
-    await _runGuarded(() async {
-      await _externalDeviceBackend.performPkcs11Operation(operation);
-      await refreshExternalRuntimeState();
     });
   }
 
@@ -1163,9 +1051,7 @@ class WalletFlowController extends ChangeNotifier {
             _lastUnlockAuthMethod = WalletAuthMethod.biometric;
           } else {
             _material = await backend.unlock(pin: pin!);
-            _lastUnlockAuthMethod = backend is ExternalDeviceKeyStorageBackend
-                ? WalletAuthMethod.externalDevice
-                : WalletAuthMethod.pin;
+            _lastUnlockAuthMethod = WalletAuthMethod.pin;
           }
           final operation = walletOperationAuthorizer
               .authorizeUnlockedLocalSigning(
@@ -1187,10 +1073,6 @@ class WalletFlowController extends ChangeNotifier {
           } finally {
             activeBackend.lock();
             _material = null;
-            if (activeBackend is ExternalDeviceDemoBackend) {
-              _externalRuntimeState = await _externalDeviceBackend
-                  .loadRuntimeState();
-            }
           }
         }
       },
@@ -1441,15 +1323,6 @@ class WalletFlowController extends ChangeNotifier {
   /// screen.
   void lockWallet() {
     activeBackend.lock();
-    if (activeBackend is ExternalDeviceDemoBackend) {
-      _externalDeviceBackend.loadRuntimeState().then((runtimeState) {
-        if (_disposed) {
-          return;
-        }
-        _externalRuntimeState = runtimeState;
-        _notify();
-      });
-    }
     _material = null;
     _pendingBiometricPin = null;
     _stage = WalletFlowStage.locked;

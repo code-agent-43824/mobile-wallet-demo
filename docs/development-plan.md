@@ -29,7 +29,7 @@ Current factual status of the project:
 milestone is an optional Rutoken custody backend for Android/iOS whose signing keys stay non-exporting after
 recoverable provisioning and which supports the same own-send, WalletConnect, and EIP-4527 AirGap flows.
 
-- **NOW — v1.52.0+63:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
+- **NOW — v1.53.0+64:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
   MetaMask-compatible EIP-4527 AirGap, per-operation authentication, hardened QR scanning, and the
   Rutoken custody/signature foundation, physically validated Android read/sign/provisioning, and the registered
   production backend are built. A compatible pre-provisioned card can be adopted read-only without rewriting its
@@ -605,7 +605,7 @@ icons; no pure black or white; elevation is a hairline edge plus ambient darknes
    PIN lockout after five wrong attempts.
 
 ### Chunks
-- **13.1 — DONE (v1.52.0+63)** — foundation: `design/nocturne.dart` tokens, `design/app_theme.dart` (dark
+- **13.1 — DONE (v1.53.0+64)** — foundation: `design/nocturne.dart` tokens, `design/app_theme.dart` (dark
   `ThemeData`), `design/platform_style.dart` (the iOS/Android/desktop pattern seam), bundled Inter (400/500/600,
   OFL, Cyrillic verified), `flutter_localizations` + `lib/l10n/*.arb` + the resolution callback, and the build
   strip. The existing screens inherit the dark theme unchanged — they carry **no hard-coded colours**, which is
@@ -644,6 +644,46 @@ icons; no pure black or white; elevation is a hairline edge plus ambient darknes
 - Arbitrary message signing shown in the UI (EIP-712 is modelled only as transactions in the prototype).
 - Push notification on transfer confirmation instead of in-app polling.
 - Matching the neutral «карта»/«устройство» wording to the real SKU and legal copy before release.
+
+## Phase 14 — Multiple cards
+Goal: let the wallet hold **several registered cards**, each with its own address, and switch between them the
+way it switches storage backends today. Requested by the owner 2026-08-18 while dogfooding the redesign.
+
+Status: 📋 Planned. Not attempted yet — see the architectural note below for why this is a phase and not a
+patch.
+
+### Why it is not a quick change
+Today "which wallet" and "which backend" are the same question: the switcher selects a **backend id**, and the
+Rutoken backend stores exactly one registered profile. Several cards would be several wallets *inside one
+backend*, which the model has no room for:
+- the profile store holds a single `WalletAccountDescriptor`, and `hasWallet()` means "is one registered";
+- provisioning refuses a second card outright («На телефоне уже зарегистрирован другой Рутокен»);
+- every operation asserts the presented card matches *the* registered address — the binding that was
+  physically validated in Phase 10 and must not be loosened by accident;
+- `switchActiveWallet` resolves a backend, not a profile.
+
+### What is already available
+The Android layer **already returns the card's serial** — `RutokenRuntime` puts `tokenSerial` (plus label and
+model) in the open-session result — but Dart never reads it. So identifying cards in the picker needs no native
+work, only plumbing.
+
+### Chunks
+- **14.1** — model: a keyed set of card profiles (address, derivation path, serial, label) plus a "selected
+  card" pointer, replacing the single-profile store. Migration for the one profile existing installs already
+  hold.
+- **14.2** — surface the serial: read `tokenSerial` through the adapter into the public profile, so a card can
+  be told apart from another by more than its address.
+- **14.3** — provisioning: allow adopting/creating an *additional* card instead of rejecting it, keeping the
+  per-card address binding intact (the check becomes "matches the selected profile", never "matches any").
+- **14.4** — switcher: list wallets rather than backends — the phone vault plus each registered card, showing
+  address and serial — and make `switchActiveWallet` select a profile.
+- **14.5** — physical dogfood on two cards: switch, sign with each, and confirm a card still cannot sign for
+  the other's address.
+
+### Constraint
+The registered-address binding is a security property with physical evidence behind it (Phase 10, v1.51). Any
+change here re-opens that row of `docs/device-test-matrix.md` and needs a fresh two-card dogfood — which is now
+possible, since the owner has a second card.
 
 ## Suggested release sequence
 - `v0.3` — architecture skeleton + secure vault foundation

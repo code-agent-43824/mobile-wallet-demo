@@ -113,13 +113,6 @@ class LocalKeyMaterialTransactionSigner
 /// demo it still signs from locally held key material; the device session is
 /// exercised separately through the PKCS#11 sign operation before signing, and
 /// a real SDK would move signing onto the device entirely.
-class ExternalDeviceTransactionSigner extends WalletMaterialTransactionSigner {
-  const ExternalDeviceTransactionSigner({
-    required super.backendId,
-    required super.walletMaterial,
-  });
-}
-
 class WalletOperationAuthorizer {
   const WalletOperationAuthorizer();
 
@@ -135,23 +128,6 @@ class WalletOperationAuthorizer {
       address: walletMaterial!.address,
       authMethod: authMethod,
       signer: LocalKeyMaterialTransactionSigner(
-        backendId: backend.backendId,
-        walletMaterial: walletMaterial,
-      ),
-    );
-  }
-
-  AuthorizedWalletOperation authorizeUnlockedExternalDeviceSigning({
-    required ExternalDeviceKeyStorageBackend backend,
-    required WalletMaterial? walletMaterial,
-  }) {
-    _assertUnlocked(backend: backend, walletMaterial: walletMaterial);
-
-    return AuthorizedWalletOperation(
-      backendId: backend.backendId,
-      address: walletMaterial!.address,
-      authMethod: WalletAuthMethod.externalDevice,
-      signer: ExternalDeviceTransactionSigner(
         backendId: backend.backendId,
         walletMaterial: walletMaterial,
       ),

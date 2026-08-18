@@ -105,8 +105,3 @@ abstract interface class KeyStorageBackend implements WalletBackend {
   Future<WalletMaterial> unlockWithBiometrics();
   Future<void> clear();
 }
-
-abstract interface class ExternalDeviceKeyStorageBackend
-    implements KeyStorageBackend {
-  Future<bool> isDeviceAvailable();
-}

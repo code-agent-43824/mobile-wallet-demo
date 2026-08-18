@@ -18,6 +18,29 @@ Entry template:
 
 ---
 
+## 2026-08-18 — Remove the simulated external-device backend — branch claude/wonderful-rubin-eBDKZ — done (v1.53.0+64)
+- Owner call after dogfooding: the real Rutoken works well enough that the Phase 7 simulation is dead weight —
+  "можно удалять мертвый код который никому больше не нужен".
+- Done: deleted `ExternalDeviceDemoBackend` (473 lines), the mock `external_device_pkcs11.dart` (95) and their
+  test (65), plus every reference: the catalogue entry, the controller's runtime-state field and its six demo
+  operations (reconnect / disconnect / simulate-offline / ping / read-address / refresh), the Настройки device
+  controls, the PKCS#11 rows in «Подробности», the locked screen's device chips, and two widget tests that
+  exercised the simulation.
+- Also removed what the deletion left dead: `ExternalDeviceKeyStorageBackend` had no implementer left (the demo
+  was the only one), which in turn made `authorizeUnlockedExternalDeviceSigning` and
+  `ExternalDeviceTransactionSigner` unreachable, and turned two `is ExternalDeviceKeyStorageBackend` branches
+  into always-false. `WalletAuthMethod.externalDevice` **stays** — the real Rutoken path uses it.
+- Net: ~630 lines of simulation gone plus its wiring, and one custody interface that existed only to describe a
+  fake.
+- Owner also asked for **several cards, switchable, told apart by serial and address**. That is not a patch:
+  today "which wallet" and "which backend" are the same question, one Rutoken profile is stored, provisioning
+  refuses a second card, and each operation binds to *the* registered address — the property physically
+  validated in Phase 10. Written up as **Phase 14** with a chunk plan instead of rushed. One useful finding for
+  it: Android already returns `tokenSerial` from the open-session call and Dart simply never reads it, so
+  identifying cards needs no native work.
+- Next / open: Phase 14 when the owner wants it; **13.6** (RU/EN switch) continues the redesign.
+- Refs: this commit; `docs/development-plan.md` Phase 14.
+
 ## 2026-08-18 — Phase 13 chunk 13.5: Связи in plain language — branch claude/wonderful-rubin-eBDKZ — done (CI green)
 - **13.5a — WalletConnect requests.** The card read like a protocol dump: `Метод: eth_sendTransaction`,
   `Сеть: 11155111`, `Сумма (wei): 100000000000000000`. That is the screen where a person decides whether to

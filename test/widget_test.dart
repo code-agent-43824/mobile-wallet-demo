@@ -245,9 +245,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Wallet Demo'), findsOneWidget);
-    expect(find.text('v1.52.0+63'), findsOneWidget);
+    expect(find.text('v1.53.0+64'), findsOneWidget);
     expect(find.text('Phone Secure Vault'), findsOneWidget);
-    expect(find.text('External NFC demo device'), findsOneWidget);
+    // The simulated NFC backend is gone; the real card is the only hardware
+    // custody option now.
+    expect(find.text('External NFC demo device'), findsNothing);
     expect(find.text('Создать новый кошелёк'), findsOneWidget);
     expect(find.text('Импортировать seed-фразу'), findsOneWidget);
   });
@@ -291,143 +293,6 @@ void main() {
     await tester.tap(find.text('Я отдельно сохранил passphrase'));
     await tester.pumpAndSettle();
     expect(provisionButton().onPressed, isNotNull);
-  });
-
-  testWidgets('switches to external backend UX branch', (
-    WidgetTester tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(1200, 1400));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    await tester.pumpWidget(
-      MobileWalletDemoApp(
-        store: InMemorySecureKeyValueStore(),
-        blockchainProvider: _FakeBlockchainProvider(),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Выбрать'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Подключить demo NFC-устройство'), findsOneWidget);
-    expect(find.text('Импортировать seed в demo device'), findsOneWidget);
-
-    await tester.tap(find.text('Подключить demo NFC-устройство').first);
-    await tester.pumpAndSettle();
-
-    final setupFields = find.byType(TextField);
-    await tester.enterText(setupFields.at(0), '5678');
-    await tester.enterText(setupFields.at(1), '5678');
-    await tester.tap(find.text('Подключить устройство'));
-    await tester.pumpAndSettle();
-
-    // Connecting the device now lands straight on the read-only dashboard, not a
-    // locked screen — the device "tap + PIN" path runs per private-key op.
-    await _openSendSheet(tester);
-    expect(find.text('Подготовка и отправка перевода'), findsOneWidget);
-    await _closeSheet(tester);
-
-    // The read-only statement and the technical backend label moved off the
-    // wallet screen: the first to «Настройки», the second into its
-    // «Подробности» sheet, per the redesign's split of user-facing copy from
-    // developer detail.
-    await tester.tap(find.text('Настройки'));
-    await tester.pumpAndSettle();
-    expect(find.text('Только просмотр'), findsOneWidget);
-
-    await tester.tap(find.text('Подробности'));
-    await tester.pumpAndSettle();
-    expect(find.text('External NFC demo device'), findsAtLeastNWidgets(1));
-  });
-
-  testWidgets('supports external device offline and reconnect states', (
-    WidgetTester tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(1200, 1600));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    await tester.pumpWidget(
-      MobileWalletDemoApp(
-        store: InMemorySecureKeyValueStore(),
-        blockchainProvider: _FakeBlockchainProvider(),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Выбрать'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Подключить demo NFC-устройство').first);
-    await tester.pumpAndSettle();
-
-    final setupFields = find.byType(TextField);
-    await tester.enterText(setupFields.at(0), '5678');
-    await tester.enterText(setupFields.at(1), '5678');
-    await tester.tap(find.text('Подключить устройство'));
-    await tester.pumpAndSettle();
-
-    // Connecting lands on the read-only wallet tab. The redesign moves the
-    // demo-device controls out of the wallet screen into «Настройки», so switch
-    // there first. Offline/reconnect still just refresh the runtime state —
-    // there is no locked screen / re-enter-PIN step.
-    await tester.tap(find.text('Настройки'));
-    await tester.pumpAndSettle();
-
-    final offlineButton = find.text('Симулировать offline');
-    await tester.ensureVisible(offlineButton);
-    await tester.tap(offlineButton);
-    await tester.pumpAndSettle();
-    // The offline state shows on the dashboard: the runtime availability chip
-    // flips to "Device offline" and the device's offline note is surfaced.
-    expect(find.text('Device offline'), findsOneWidget);
-    expect(
-      find.text('Demo device is offline. Reconnect it before signing.'),
-      findsOneWidget,
-    );
-
-    final reconnectButton = find.text('Переподключить demo device');
-    await tester.ensureVisible(reconnectButton);
-    await tester.tap(reconnectButton);
-    await tester.pumpAndSettle();
-
-    // Reconnect flips availability back online and the session control is
-    // offered again.
-    expect(find.text('Device online'), findsOneWidget);
-    expect(find.text('Разорвать device session'), findsOneWidget);
-
-    // The send form now lives on the Кошелёк tab; confirm it is still there,
-    // then come back to finish exercising the device controls.
-    await tester.tap(find.text('Кошелёк'));
-    await tester.pumpAndSettle();
-    await _openSendSheet(tester);
-    expect(find.text('Подготовка и отправка перевода'), findsOneWidget);
-    await _closeSheet(tester);
-    await tester.tap(find.text('Настройки'));
-    await tester.pumpAndSettle();
-
-    // Post-refactor the device is locked at rest (no PKCS#11 session until the
-    // next private-key op opens one via tap + PIN). Ping / read-address run the
-    // PKCS#11 op directly (not through the per-op auth sheet), so with no active
-    // session they surface the "no session" error instead of an operation tile.
-    final pingButton = find.text('Проверить PKCS#11 session');
-    await tester.ensureVisible(pingButton);
-    await tester.tap(pingButton);
-    await tester.pumpAndSettle();
-    expect(
-      find.text('No active device session. Connect the demo device first.'),
-      findsOneWidget,
-    );
-    expect(find.text('PKCS#11 operations'), findsNothing);
-
-    final readAddressButton = find.text('Прочитать адрес через PKCS#11');
-    await tester.ensureVisible(readAddressButton);
-    await tester.tap(readAddressButton);
-    await tester.pumpAndSettle();
-    expect(
-      find.text('No active device session. Connect the demo device first.'),
-      findsOneWidget,
-    );
-    expect(find.text('Last PKCS#11 operation'), findsNothing);
   });
 
   testWidgets('shows seed backup step after create wallet flow', (
