@@ -785,7 +785,6 @@ class _RequestCard extends StatelessWidget {
     final tx = request.params.isNotEmpty && request.params.first is Map
         ? (request.params.first! as Map).cast<String, Object?>()
         : const <String, Object?>{};
-    final from = tx['from']?.toString();
     final to = tx['to']?.toString();
     final value = tx['value']?.toString();
     final message = _messageText();
