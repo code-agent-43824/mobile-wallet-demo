@@ -360,7 +360,7 @@ class _WalletTabState extends State<_WalletTab> {
               child: OutlinedButton.icon(
                 onPressed: chainData.refresh,
                 icon: const Icon(Icons.refresh, size: 18),
-                child: const Text('Повторить'),
+                label: const Text('Повторить'),
               ),
             ),
             const SizedBox(height: NocturneSpacing.x6),
@@ -829,7 +829,7 @@ class _NoDataYet extends StatelessWidget {
           child: OutlinedButton.icon(
             onPressed: onRetry,
             icon: const Icon(Icons.refresh, size: 18),
-            child: const Text('Повторить'),
+            label: const Text('Повторить'),
           ),
         ),
       ],
