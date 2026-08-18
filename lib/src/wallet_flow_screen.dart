@@ -15,6 +15,8 @@ import 'auth/external_digest_signer.dart';
 import 'auth/wallet_operation_auth.dart';
 import 'blockchain/blockchain_provider.dart';
 import 'blockchain/network_config.dart';
+import 'design/nocturne.dart';
+import 'design/platform_style.dart';
 import 'key_storage/backend_registry.dart';
 import 'key_storage/custody_backend.dart';
 import 'key_storage/external_device_demo_backend.dart';

@@ -2,9 +2,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import 'app_version.dart';
 import 'auth/biometric_auth.dart';
 import 'blockchain/blockchain_provider.dart';
+import 'design/app_theme.dart';
 import 'key_storage/secure_key_value_store.dart';
 import 'key_storage/custody_backend.dart';
 import 'key_storage/rutoken_method_channel_adapter.dart';
@@ -60,7 +62,9 @@ class MobileWalletDemoApp extends StatelessWidget {
     WalletConnectTransactionPreflight? walletConnectPreflight,
     QrScanner? qrScanner,
     RutokenNativeAdapter? rutokenNativeAdapter,
+    Locale? locale,
   }) : _store = store,
+       _locale = locale,
        _blockchainProvider = blockchainProvider,
        _transactionService = transactionService,
        _transactionBroadcaster = transactionBroadcaster,
@@ -84,32 +88,51 @@ class MobileWalletDemoApp extends StatelessWidget {
   final QrScanner? _qrScanner;
   final RutokenNativeAdapter? _rutokenNativeAdapter;
 
+  /// Overrides the UI language. `null` follows the system locale, falling back
+  /// to Russian. Widget tests pin this so copy assertions stay deterministic.
+  final Locale? _locale;
+
   @override
   Widget build(BuildContext context) {
     final effectiveStore = _store ?? FlutterSecureKeyValueStore();
     final effectiveRpcTransport = _trackingTransport ?? HttpJsonRpcTransport();
-    final theme = ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2D6CDF)),
-      scaffoldBackgroundColor: const Color(0xFFF5F7FB),
-      useMaterial3: true,
-    );
+    final theme = buildNocturneTheme();
 
     return MaterialApp(
       title: 'Wallet Demo',
       debugShowCheckedModeBanner: false,
       navigatorKey: _appNavigatorKey,
+      // Nocturne is a dark-only system, so both slots carry the same theme and
+      // the mode is pinned — the OS light/dark setting must not change the app.
       theme: theme,
+      darkTheme: theme,
+      themeMode: ThemeMode.dark,
+      locale: _locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      // Russian is the product's primary language: an unsupported system locale
+      // falls back to it rather than to the ARB template (English).
+      localeResolutionCallback: (locale, supported) {
+        if (locale != null) {
+          for (final candidate in supported) {
+            if (candidate.languageCode == locale.languageCode) {
+              return candidate;
+            }
+          }
+        }
+        return const Locale('ru');
+      },
       builder: (context, child) {
-        return Stack(
+        // The build strip takes real layout space above the app instead of
+        // floating over it, and absorbs the status-bar inset for the content.
+        return Column(
           children: [
-            if (child case final Widget currentChild) currentChild,
-            const SafeArea(
-              child: Align(
-                alignment: Alignment.topRight,
-                child: Padding(
-                  padding: EdgeInsets.only(top: 12, right: 12),
-                  child: VersionBanner(label: appVersionLabel),
-                ),
+            const VersionBanner(label: appVersionLabel),
+            Expanded(
+              child: MediaQuery.removePadding(
+                context: context,
+                removeTop: true,
+                child: child ?? const SizedBox.shrink(),
               ),
             ),
           ],

@@ -1,0 +1,31 @@
+{
+  "@@locale": "ru",
+
+  "appTitle": "Wallet Demo",
+
+  "tabWallet": "Кошелёк",
+  "tabActivity": "Активность",
+  "tabConnections": "Связи",
+  "tabSettings": "Настройки",
+
+  "actionBack": "Назад",
+  "actionCancel": "Отмена",
+  "actionContinue": "Продолжить",
+  "actionNext": "Дальше",
+  "actionDone": "Готово",
+  "actionRetry": "Повторить",
+  "actionClose": "Закрыть",
+  "actionSkip": "Пропустить",
+
+  "networkMainnet": "Ethereum Mainnet",
+  "networkSepolia": "Тестовая сеть Sepolia",
+
+  "custodyCard": "Карта",
+  "custodyPhone": "В этом телефоне",
+
+  "tapCardTitle": "Приложите карту",
+  "tapCardBody": "Держите карту у задней стороны телефона. Мы прочитаем публичный адрес — ключ с карты не считывается.",
+  "tapCardCancel": "Отменить ожидание",
+
+  "versionLabel": "v{version}"
+}

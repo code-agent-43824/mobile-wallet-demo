@@ -29,7 +29,7 @@ Current factual status of the project:
 milestone is an optional Rutoken custody backend for Android/iOS whose signing keys stay non-exporting after
 recoverable provisioning and which supports the same own-send, WalletConnect, and EIP-4527 AirGap flows.
 
-- **NOW — v1.51.0+62:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
+- **NOW — v1.52.0+63:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
   MetaMask-compatible EIP-4527 AirGap, per-operation authentication, hardened QR scanning, and the
   Rutoken custody/signature foundation, physically validated Android read/sign/provisioning, and the registered
   production backend are built. A compatible pre-provisioned card can be adopted read-only without rewriting its
@@ -562,6 +562,73 @@ Two interactions (app = signer):
 ### Validation
 - Codec + sign path: Keystone/EIP-4527 test vectors in CI (no device).
 - End-to-end: owner dogfoods with **MetaMask** (add the app as a QR-based hardware wallet → sign a Mainnet/Sepolia ETH transaction → broadcast).
+
+## Phase 13 — Nocturne UI redesign + RU/EN localization
+Goal: turn the functional prototype UI into a designed product UI, as the intermediate step toward a separate
+production wallet (`docs/future-production-wallet-technical-brief.md`). Network scope stays Mainnet + Sepolia.
+
+Source of truth: the owner's Claude Design handoff package (kept out of the repo; its substance is captured
+here). It contains the **Nocturne** design system (`styles.css` tokens + written guidance), a reusable
+`Экран кошелька` artboard that is the single source for markup/states, a full prototype with the platform and
+data-state switchers, and a before/after snapshot of the current Flutter UI.
+
+**Nocturne in one line:** a quiet, compact, dark-only interface — ground `#161826`, surface `#232532`, text
+`#e9e9ed`, one blurple accent `#9184d9` used as a line and a glow rather than a flood; Inter at weight 500;
+radii 4/8/14; a deliberately dense 0.7× spacing scale; **outlined** primary actions, never filled; Phosphor
+icons; no pure black or white; elevation is a hairline edge plus ambient darkness.
+
+### Owner decisions (2026-08-18)
+- **Onboarding = variant B** ("Кошелёк за минуту"): create the phone wallet immediately; offer to connect a
+  card and strengthen protection later. (Variants A — custody choice first — and C — a three-slide primer —
+  were not chosen.)
+- **Full iOS/Android separation**, as the design specifies: Apple HIG patterns on iOS (44pt bar, large titles,
+  blurred tab bar, 14px sheets, circular keypad keys, a text back label) and Material 3 on Android (56dp app
+  bar, navigation bar with a pill indicator, 28px sheets, 16dp keys, icon-only back).
+- **Windows x64** is not covered by the design package: it reuses the same theme and the mobile layout,
+  centred and width-limited (460px) rather than getting a bespoke desktop design.
+- **Dark only** — the package defines no light palette, and deriving one would drift from the brand.
+- **RU + EN localization**, Russian primary.
+
+### Structural changes the redesign makes
+1. The single scrolling screen becomes **four tabs**: Кошелёк / Активность / Связи / Настройки.
+2. The hardware key is the hero of the flows; externally it is called **«карта» / «устройство»** — the vendor
+   name stays in the source and never appears in the UI.
+3. One confirmation pattern for every signature: **PIN → pulsing NFC tap overlay → result (pending →
+   confirmed)**.
+4. WalletConnect and AirGap are stated in plain language; AirGap becomes a **three-step wizard with a progress
+   bar** instead of EIP-4527/BC-UR jargon.
+5. Technical data (RPC endpoint, nonce, gas limit, PKCS#11 session) moves out of the main UI into a separate
+   **«Подробности»** developer sheet.
+6. The build marker becomes a **thin strip that occupies layout space** under the status bar, so it can never
+   cover an interactive element.
+7. Modelled states: skeleton loading, offline-cache banner, empty wallet, pending→confirmed, and a five-minute
+   PIN lockout after five wrong attempts.
+
+### Chunks
+- **13.1 — DONE (v1.52.0+63)** — foundation: `design/nocturne.dart` tokens, `design/app_theme.dart` (dark
+  `ThemeData`), `design/platform_style.dart` (the iOS/Android/desktop pattern seam), bundled Inter (400/500/600,
+  OFL, Cyrillic verified), `flutter_localizations` + `lib/l10n/*.arb` + the resolution callback, and the build
+  strip. The existing screens inherit the dark theme unchanged — they carry **no hard-coded colours**, which is
+  what makes a theme-first rollout safe.
+- **13.2** — app shell: the four-tab navigation per platform, the shared header, and the sheet presentation.
+- **13.3** — Кошелёк + Активность: balance, assets, history, and the skeleton/empty/offline states.
+- **13.4** — operations: send/receive plus the unified PIN → tap → result confirmation and the PIN lockout.
+- **13.5** — Связи: the plain-language WalletConnect request and the three-step AirGap wizard.
+- **13.6** — Настройки + the «Подробности» developer sheet + the RU/EN language switch.
+- **13.7** — onboarding variant B, seed backup, and biometric opt-in.
+
+### Constraints
+- **Do not change the Rutoken step structure.** The card flows (create/import/backup, PIN entry, the NFC wait
+  with its cancel action) passed the physical Phase 10 matrix on v1.51.0+62; restyling them is fine, but
+  reordering or re-scoping the steps invalidates that evidence and forces a re-dogfood.
+- UI copy moves into ARB files as each chunk lands. Widget tests assert user-visible copy, so they are updated
+  in the same change; the test harness pins the locale so assertions stay deterministic.
+
+### Deferred (recorded by the design package, not built here)
+- A 24-word recovery screen (only the happy create/import path exists today).
+- Arbitrary message signing shown in the UI (EIP-712 is modelled only as transactions in the prototype).
+- Push notification on transfer confirmation instead of in-app polling.
+- Matching the neutral «карта»/«устройство» wording to the real SKU and legal copy before release.
 
 ## Suggested release sequence
 - `v0.3` — architecture skeleton + secure vault foundation

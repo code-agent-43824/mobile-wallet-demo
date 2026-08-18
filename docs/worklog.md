@@ -18,6 +18,37 @@ Entry template:
 
 ---
 
+## 2026-08-18 — Phase 13 chunk 13.1: Nocturne foundation + RU/EN scaffolding — branch claude/wonderful-rubin-eBDKZ — done (v1.52.0+63)
+- Plan: start the UI redesign from the owner's Claude Design handoff. Do the **foundation first** — tokens,
+  theme, the platform seam, the typeface and the localization scaffolding — and let the existing screens inherit
+  it, before restructuring the information architecture in later chunks. Rationale: the current UI carries **no
+  hard-coded colours** (verified: zero `Color(0x…)` literals, seven `Colors.*` uses), so a theme swap transforms
+  the whole app at once with almost no risk, and the IA rewrite can then land screen by screen.
+- Owner decisions captured in `development-plan.md` Phase 13: onboarding **variant B**, **full iOS/Android
+  pattern separation**, Windows reuses the theme with a centred width-limited mobile layout, **dark only**, and
+  **RU + EN** with Russian primary.
+- Done: `lib/src/design/nocturne.dart` ports the Nocturne `:root` tokens (ground/surface/text/accent, the three
+  OKLCH ramps, the alpha text tints the artboards use, the 0.7× spacing scale, radii, edge/ambient elevation);
+  `design/app_theme.dart` builds the dark `ThemeData` from them — note the primary action is an **outlined**
+  button, not filled, because the system forbids accent floods; `design/platform_style.dart` carries every
+  per-platform value the prototype exposed (`headerHeight` 44/56, `sheetRadius` 14/28, keypad key radius
+  999/16 and its fill, the back label, the active-tab colour and Android's pill, the bottom inset) plus the
+  desktop 460px content cap. Inter 400/500/600 is bundled under `assets/fonts` with its OFL licence; static
+  instances rather than the variable file so `fontWeight` maps reliably, and Cyrillic coverage was verified
+  programmatically since the UI is Russian. `flutter_localizations` + `intl` added, `l10n.yaml` + `app_en.arb`
+  (template) + `app_ru.arb` seeded, with a resolution callback that falls back to Russian; the generated
+  `AppLocalizations` is gitignored. `MobileWalletDemoApp` gained an injectable `locale` (the repo's DI
+  convention) so tests can pin the language. The version marker became a thin full-width strip that **occupies
+  layout space** under the status bar and absorbs the status-bar inset, per the design's rule that it must never
+  cover an interactive element. The one non-token colour left in the UI (an orange "replaced transaction"
+  banner) now uses the warning token; the remaining `Colors.white`/`Colors.black` are QR modules, which are
+  functional, not decorative, and stay.
+- Next / open: **13.2** — the four-tab shell per platform. Then 13.3 wallet/activity, 13.4 operations, 13.5
+  connections, 13.6 settings + dev sheet + language switch, 13.7 onboarding B. Copy migrates into the ARB files
+  chunk by chunk, with the widget tests updated in the same change. **Constraint carried forward:** the Rutoken
+  step structure must not be reordered — it holds the physical Phase 10 evidence from v1.51.0+62.
+- Refs: owner handoff package (not committed); this commit.
+
 ## 2026-08-17 — Phase 10 physical signing matrix executed on v1.51 — branch claude/wonderful-rubin-eBDKZ — done (docs only)
 - Plan: run the deferred Phase 10 physical matrix end to end with the owner and record the evidence. Scope: the
   Rutoken-backed WalletConnect and EIP-4527 AirGap flows, the negative NFC paths, the different-card rejection

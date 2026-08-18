@@ -649,13 +649,13 @@ class _TransferPreparationSectionState
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.1),
+              color: NocturneColors.warning.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.orange),
+              border: Border.all(color: NocturneColors.warning),
             ),
             child: Row(
               children: [
-                Icon(Icons.warning, color: Colors.orange),
+                Icon(Icons.warning, color: NocturneColors.warning),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Column(
@@ -665,8 +665,8 @@ class _TransferPreparationSectionState
                         'Заменённая транзакция',
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
-                              color: Colors.orange,
-                              fontWeight: FontWeight.bold,
+                              color: NocturneColors.warning,
+                              fontWeight: NocturneType.semibold,
                             ),
                       ),
                       const SizedBox(height: 4),

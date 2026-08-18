@@ -1,0 +1,11 @@
+# Configuration for `flutter gen-l10n`, run automatically by `flutter pub get`
+# because pubspec.yaml sets `flutter: generate: true`.
+#
+# Russian is the product's primary language; English is the second locale.
+# The template is the English file so the generated getters read naturally in
+# code, while `app_ru.arb` carries the copy the UI was designed with.
+arb-dir: lib/l10n
+template-arb-file: app_en.arb
+output-localization-file: app_localizations.dart
+output-class: AppLocalizations
+nullable-getter: false
