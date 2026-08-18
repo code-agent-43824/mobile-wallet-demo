@@ -1,13 +1,10 @@
 {
   "@@locale": "ru",
-
   "appTitle": "Wallet Demo",
-
   "tabWallet": "Кошелёк",
   "tabActivity": "Активность",
   "tabConnections": "Связи",
   "tabSettings": "Настройки",
-
   "actionBack": "Назад",
   "actionCancel": "Отмена",
   "actionContinue": "Продолжить",
@@ -16,16 +13,45 @@
   "actionRetry": "Повторить",
   "actionClose": "Закрыть",
   "actionSkip": "Пропустить",
-
   "networkMainnet": "Ethereum Mainnet",
   "networkSepolia": "Тестовая сеть Sepolia",
-
   "custodyCard": "Карта",
   "custodyPhone": "В этом телефоне",
-
   "tapCardTitle": "Приложите карту",
   "tapCardBody": "Держите карту у задней стороны телефона. Мы прочитаем публичный адрес — ключ с карты не считывается.",
   "tapCardCancel": "Отменить ожидание",
-
-  "versionLabel": "v{version}"
+  "versionLabel": "v{version}",
+  "walletBalance": "Баланс",
+  "walletAssets": "АКТИВЫ",
+  "walletNativeCoin": "Нативная монета",
+  "walletEmptyTitle": "Пока пусто",
+  "walletEmptyBody": "Пополните кошелёк — покажите адрес или QR тому, кто отправляет перевод.",
+  "walletNoDataTitle": "Нет данных о сети",
+  "walletNoDataBody": "Не удалось получить баланс. Проверьте связь и повторите.",
+  "walletOfflineCache": "Данные из локального кэша — сеть недоступна",
+  "actionSend": "Отправить",
+  "actionReceive": "Получить",
+  "actionScan": "Сканировать",
+  "receiveTitle": "Ваш адрес",
+  "activityEmpty": "Операций пока нет",
+  "activityUnknownTime": "Время неизвестно",
+  "settingsActiveAddress": "Активный адрес",
+  "settingsKeyStorage": "Хранилище ключа",
+  "settingsKeyAccess": "Доступ к ключу",
+  "settingsKeyAccessViewOnly": "Только просмотр",
+  "settingsBiometrics": "Биометрия",
+  "settingsOn": "Включена",
+  "settingsOff": "Выключена",
+  "settingsSwitchWallet": "Переключить кошелёк",
+  "settingsDetails": "Подробности",
+  "settingsRefreshChain": "Обновить с блокчейна",
+  "settingsLockAgain": "Заблокировать снова",
+  "walletsTitle": "Кошельки",
+  "walletsCreated": "Кошелёк создан",
+  "walletsEmptySlot": "Пока пусто — откроется создание",
+  "detailsNetwork": "Сеть",
+  "detailsUpdated": "Обновлено",
+  "detailsSource": "Источник данных",
+  "detailsSourceCache": "Локальный кэш",
+  "detailsSourceLive": "Живой запрос к сети"
 }

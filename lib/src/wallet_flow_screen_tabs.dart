@@ -11,6 +11,7 @@ class _ActivityTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final snapshot = chainData.snapshot;
 
@@ -34,7 +35,7 @@ class _ActivityTab extends StatelessWidget {
         padding: const EdgeInsets.only(top: NocturneSpacing.x8),
         child: Center(
           child: Text(
-            'Операций пока нет',
+            l10n.activityEmpty,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: NocturneColors.textMuted,
             ),
@@ -57,7 +58,7 @@ class _ActivityTab extends StatelessWidget {
               label: '${tx.directionLabel} · ${tx.statusLabel}',
               value:
                   '${tx.valueFormatted}\n${tx.counterparty}\n'
-                  '${tx.timestampUtc?.toIso8601String() ?? 'Время неизвестно'}',
+                  '${tx.timestampUtc?.toIso8601String() ?? l10n.activityUnknownTime}',
             ),
           ),
       ],
@@ -98,32 +99,36 @@ class _SettingsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _SummaryTile(label: 'Активный адрес', value: address),
+        _SummaryTile(label: l10n.settingsActiveAddress, value: address),
         const SizedBox(height: NocturneSpacing.x3),
         _SummaryTile(
-          label: 'Хранилище ключа',
-          value: isHardwareCustody ? 'Карта' : 'В этом телефоне',
+          label: l10n.settingsKeyStorage,
+          value: isHardwareCustody ? l10n.custodyCard : l10n.custodyPhone,
         ),
         const SizedBox(height: NocturneSpacing.x3),
-        _SummaryTile(label: 'Доступ к ключу', value: 'Только просмотр'),
+        _SummaryTile(
+          label: l10n.settingsKeyAccess,
+          value: l10n.settingsKeyAccessViewOnly,
+        ),
         const SizedBox(height: NocturneSpacing.x3),
         _SummaryTile(
-          label: 'Биометрия',
-          value: biometricsEnabled ? 'Включена' : 'Выключена',
+          label: l10n.settingsBiometrics,
+          value: biometricsEnabled ? l10n.settingsOn : l10n.settingsOff,
         ),
         const SizedBox(height: NocturneSpacing.x6),
         OutlinedButton.icon(
           onPressed: () => _showWalletSwitcher(context),
           icon: const Icon(Icons.swap_horiz),
-          label: const Text('Переключить кошелёк'),
+          label: Text(l10n.settingsSwitchWallet),
         ),
         const SizedBox(height: NocturneSpacing.x3),
         OutlinedButton(
           onPressed: () => _showDetailsSheet(context),
-          child: const Text('Подробности'),
+          child: Text(l10n.settingsDetails),
         ),
         const SizedBox(height: NocturneSpacing.x6),
         Wrap(
@@ -133,13 +138,13 @@ class _SettingsTab extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: onRefresh,
               icon: const Icon(Icons.refresh),
-              label: const Text('Обновить с блокчейна'),
+              label: Text(l10n.settingsRefreshChain),
             ),
             if (!isHardwareCustody)
               OutlinedButton.icon(
                 onPressed: onLock,
                 icon: const Icon(Icons.lock_outline),
-                label: const Text('Заблокировать снова'),
+                label: Text(l10n.settingsLockAgain),
               ),
           ],
         ),
@@ -151,6 +156,7 @@ class _SettingsTab extends StatelessWidget {
   /// vault and a registered card. Deliberately plain for now:
   /// it exists so a tester can move between wallets without reinstalling.
   void _showWalletSwitcher(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final style = PlatformStyle.of(context);
     showModalBottomSheet<void>(
       context: context,
@@ -173,7 +179,10 @@ class _SettingsTab extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text('Кошельки', style: theme.textTheme.titleLarge),
+                        Text(
+                          l10n.walletsTitle,
+                          style: theme.textTheme.titleLarge,
+                        ),
                         const SizedBox(height: NocturneSpacing.x4),
                         if (wallets == null)
                           const Padding(
@@ -187,8 +196,8 @@ class _SettingsTab extends StatelessWidget {
                               title: Text(wallet.label),
                               subtitle: Text(
                                 wallet.hasWallet
-                                    ? 'Кошелёк создан'
-                                    : 'Пока пусто — откроется создание',
+                                    ? l10n.walletsCreated
+                                    : l10n.walletsEmptySlot,
                                 style: theme.textTheme.bodySmall,
                               ),
                               trailing: wallet.id == currentBackendId
@@ -205,7 +214,7 @@ class _SettingsTab extends StatelessWidget {
                         const SizedBox(height: NocturneSpacing.x4),
                         OutlinedButton(
                           onPressed: () => Navigator.of(sheetContext).pop(),
-                          child: const Text('Закрыть'),
+                          child: Text(l10n.actionClose),
                         ),
                       ],
                     );
@@ -220,6 +229,7 @@ class _SettingsTab extends StatelessWidget {
   /// The developer sheet. Everything here used to sit on the main screen; the
   /// redesign moves it out of the way of ordinary use without losing it.
   void _showDetailsSheet(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final style = PlatformStyle.of(context);
     final snapshot = chainData.snapshot;
 
@@ -238,12 +248,12 @@ class _SettingsTab extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Подробности', style: theme.textTheme.titleLarge),
+                  Text(l10n.settingsDetails, style: theme.textTheme.titleLarge),
                   const SizedBox(height: NocturneSpacing.x6),
                   _SummaryTile(label: 'Backend', value: backendLabel),
                   const SizedBox(height: NocturneSpacing.x3),
                   _SummaryTile(
-                    label: 'Сеть',
+                    label: l10n.detailsNetwork,
                     value: chainData.networkConfig.name,
                   ),
                   if (snapshot != null) ...[
@@ -254,21 +264,21 @@ class _SettingsTab extends StatelessWidget {
                     ),
                     const SizedBox(height: NocturneSpacing.x3),
                     _SummaryTile(
-                      label: 'Обновлено',
+                      label: l10n.detailsUpdated,
                       value: snapshot.fetchedAtUtc.toIso8601String(),
                     ),
                     const SizedBox(height: NocturneSpacing.x3),
                     _SummaryTile(
-                      label: 'Источник данных',
+                      label: l10n.detailsSource,
                       value: snapshot.loadedFromCache
-                          ? 'Локальный кэш'
-                          : 'Живой запрос к сети',
+                          ? l10n.detailsSourceCache
+                          : l10n.detailsSourceLive,
                     ),
                   ],
                   const SizedBox(height: NocturneSpacing.x6),
                   OutlinedButton(
                     onPressed: () => Navigator.of(sheetContext).pop(),
-                    child: const Text('Закрыть'),
+                    child: Text(l10n.actionClose),
                   ),
                 ],
               ),
@@ -287,6 +297,7 @@ class _OfflineCacheBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Container(
       padding: const EdgeInsets.all(NocturneSpacing.x4),
       decoration: BoxDecoration(
@@ -300,7 +311,7 @@ class _OfflineCacheBanner extends StatelessWidget {
           const SizedBox(width: NocturneSpacing.x3),
           Expanded(
             child: Text(
-              'Данные из локального кэша — сеть недоступна',
+              l10n.walletOfflineCache,
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
@@ -341,6 +352,7 @@ class _WalletTab extends StatefulWidget {
 class _WalletTabState extends State<_WalletTab> {
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final chainData = widget.chainData;
     final snapshot = chainData.snapshot;
     final config = chainData.networkConfig;
@@ -369,7 +381,7 @@ class _WalletTabState extends State<_WalletTab> {
               child: OutlinedButton.icon(
                 onPressed: chainData.refresh,
                 icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Повторить'),
+                label: Text(l10n.actionRetry),
               ),
             ),
             const SizedBox(height: NocturneSpacing.x6),
@@ -436,7 +448,7 @@ class _WalletTabState extends State<_WalletTab> {
                   child: IconButton(
                     onPressed: () => Navigator.of(sheetContext).pop(),
                     icon: const Icon(Icons.close),
-                    tooltip: 'Закрыть',
+                    tooltip: l10n.actionClose,
                   ),
                 ),
                 _TransferPreparationSection(
@@ -486,6 +498,7 @@ class _WalletTabState extends State<_WalletTab> {
   }
 
   void _showReceiveSheet(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final style = PlatformStyle.of(context);
     showModalBottomSheet<void>(
       context: context,
@@ -500,7 +513,7 @@ class _WalletTabState extends State<_WalletTab> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Ваш адрес', style: theme.textTheme.titleLarge),
+                Text(l10n.receiveTitle, style: theme.textTheme.titleLarge),
                 const SizedBox(height: NocturneSpacing.x6),
                 SelectableText(
                   widget.address,
@@ -509,7 +522,7 @@ class _WalletTabState extends State<_WalletTab> {
                 const SizedBox(height: NocturneSpacing.x8),
                 OutlinedButton(
                   onPressed: () => Navigator.of(sheetContext).pop(),
-                  child: const Text('Закрыть'),
+                  child: Text(l10n.actionClose),
                 ),
               ],
             ),
@@ -577,11 +590,12 @@ class _BalanceHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Баланс',
+          l10n.walletBalance,
           style: Theme.of(
             context,
           ).textTheme.bodySmall?.copyWith(color: NocturneColors.textSubtle),
@@ -660,26 +674,27 @@ class _QuickActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Row(
       children: [
         Expanded(
           child: _QuickAction(
             icon: Icons.north_east,
-            label: 'Отправить',
+            label: l10n.actionSend,
             onTap: onSend,
           ),
         ),
         Expanded(
           child: _QuickAction(
             icon: Icons.south_west,
-            label: 'Получить',
+            label: l10n.actionReceive,
             onTap: onReceive,
           ),
         ),
         Expanded(
           child: _QuickAction(
             icon: Icons.qr_code_scanner,
-            label: 'Сканировать',
+            label: l10n.actionScan,
             onTap: onScan,
           ),
         ),
@@ -740,6 +755,7 @@ class _AssetList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     if (snapshot.nativeBalanceWei == BigInt.zero &&
         snapshot.tokenBalances.isEmpty) {
@@ -751,12 +767,12 @@ class _AssetList extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(vertical: NocturneSpacing.x3),
-          child: Text('АКТИВЫ', style: theme.textTheme.labelSmall),
+          child: Text(l10n.walletAssets, style: theme.textTheme.labelSmall),
         ),
         _AssetRow(
           short: nativeSymbol,
           name: nativeSymbol,
-          sub: 'Нативная монета',
+          sub: l10n.walletNativeCoin,
           amount: snapshot.nativeBalanceFormatted,
         ),
         for (final token in snapshot.tokenBalances)
@@ -837,15 +853,15 @@ class _EmptyWallet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Пока пусто', style: theme.textTheme.titleLarge),
+        Text(l10n.walletEmptyTitle, style: theme.textTheme.titleLarge),
         const SizedBox(height: NocturneSpacing.x2),
         Text(
-          'Пополните кошелёк — покажите адрес или QR тому, кто отправляет '
-          'перевод.',
+          l10n.walletEmptyBody,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: NocturneColors.textMuted,
           ),
@@ -864,14 +880,15 @@ class _NoDataYet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Нет данных о сети', style: theme.textTheme.titleLarge),
+        Text(l10n.walletNoDataTitle, style: theme.textTheme.titleLarge),
         const SizedBox(height: NocturneSpacing.x2),
         Text(
-          'Не удалось получить баланс. Проверьте связь и повторите.',
+          l10n.walletNoDataBody,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: NocturneColors.textMuted,
           ),
@@ -882,7 +899,7 @@ class _NoDataYet extends StatelessWidget {
           child: OutlinedButton.icon(
             onPressed: onRetry,
             icon: const Icon(Icons.refresh, size: 18),
-            label: const Text('Повторить'),
+            label: Text(l10n.actionRetry),
           ),
         ),
       ],

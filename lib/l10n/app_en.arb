@@ -1,11 +1,9 @@
 {
   "@@locale": "en",
-
   "appTitle": "Wallet Demo",
   "@appTitle": {
     "description": "Application name shown in the OS task switcher."
   },
-
   "tabWallet": "Wallet",
   "@tabWallet": {
     "description": "Bottom navigation: the balance and assets tab."
@@ -22,7 +20,6 @@
   "@tabSettings": {
     "description": "Bottom navigation: settings tab."
   },
-
   "actionBack": "Back",
   "actionCancel": "Cancel",
   "actionContinue": "Continue",
@@ -31,10 +28,8 @@
   "actionRetry": "Try again",
   "actionClose": "Close",
   "actionSkip": "Skip",
-
   "networkMainnet": "Ethereum Mainnet",
   "networkSepolia": "Sepolia test network",
-
   "custodyCard": "Card",
   "@custodyCard": {
     "description": "User-facing name of the external hardware key. Deliberately neutral: the vendor name is kept out of the UI and lives only in the source."
@@ -43,14 +38,12 @@
   "@custodyPhone": {
     "description": "User-facing name of the on-device software vault."
   },
-
   "tapCardTitle": "Hold your card to the phone",
   "@tapCardTitle": {
     "description": "Title of the NFC waiting overlay."
   },
   "tapCardBody": "Hold the card against the back of your phone. We read the public address only — the key never leaves the card.",
   "tapCardCancel": "Cancel waiting",
-
   "versionLabel": "v{version}",
   "@versionLabel": {
     "description": "Build strip under the status bar.",
@@ -60,5 +53,38 @@
         "example": "1.51.0+62"
       }
     }
-  }
+  },
+  "walletBalance": "Balance",
+  "walletAssets": "ASSETS",
+  "walletNativeCoin": "Native coin",
+  "walletEmptyTitle": "Nothing here yet",
+  "walletEmptyBody": "Top up your wallet — show your address or QR code to whoever is sending.",
+  "walletNoDataTitle": "No network data",
+  "walletNoDataBody": "Could not fetch the balance. Check your connection and try again.",
+  "walletOfflineCache": "Showing cached data — the network is unreachable",
+  "actionSend": "Send",
+  "actionReceive": "Receive",
+  "actionScan": "Scan",
+  "receiveTitle": "Your address",
+  "activityEmpty": "No transactions yet",
+  "activityUnknownTime": "Time unknown",
+  "settingsActiveAddress": "Active address",
+  "settingsKeyStorage": "Key storage",
+  "settingsKeyAccess": "Key access",
+  "settingsKeyAccessViewOnly": "View only",
+  "settingsBiometrics": "Biometrics",
+  "settingsOn": "On",
+  "settingsOff": "Off",
+  "settingsSwitchWallet": "Switch wallet",
+  "settingsDetails": "Details",
+  "settingsRefreshChain": "Refresh from chain",
+  "settingsLockAgain": "Lock again",
+  "walletsTitle": "Wallets",
+  "walletsCreated": "Wallet created",
+  "walletsEmptySlot": "Empty — will start setup",
+  "detailsNetwork": "Network",
+  "detailsUpdated": "Updated",
+  "detailsSource": "Data source",
+  "detailsSourceCache": "Local cache",
+  "detailsSourceLive": "Live network request"
 }
