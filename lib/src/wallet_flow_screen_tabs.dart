@@ -421,6 +421,7 @@ class _WalletTabState extends State<_WalletTab> {
     WalletChainSnapshot snapshot,
     EvmNetworkConfig config,
   ) {
+    final l10n = AppLocalizations.of(context);
     final style = PlatformStyle.of(context);
     showModalBottomSheet<void>(
       context: context,
