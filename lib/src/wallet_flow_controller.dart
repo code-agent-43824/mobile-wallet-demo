@@ -545,7 +545,8 @@ class WalletFlowController extends ChangeNotifier {
   /// drops any held material so nothing survives the switch.
   Future<void> switchActiveWallet(SwitchableWallet wallet) async {
     final currentCardProfileId = await selectedCardProfileId();
-    if (wallet.backendId == effectiveBackendId &&
+    if (!wallet.isEmptySlot &&
+        wallet.backendId == effectiveBackendId &&
         wallet.cardProfileId == currentCardProfileId) {
       return;
     }
@@ -565,8 +566,11 @@ class WalletFlowController extends ChangeNotifier {
       _biometricsEnabled = await backend.isBiometricUnlockEnabled();
       _biometricsAvailable = await backend.isBiometricUnlockAvailable();
       // A backend with no wallet yet starts its own onboarding rather than
-      // showing an empty dashboard.
-      _stage = summary == null
+      // showing an empty dashboard. The card backend's empty row does too even
+      // when a card is registered — it is the "set up another card" entry, and
+      // resolving it to the already-selected card's summary would make it a
+      // no-op.
+      _stage = wallet.isEmptySlot || summary == null
           ? WalletFlowStage.welcome
           : WalletFlowStage.unlocked;
       _errorMessage = null;

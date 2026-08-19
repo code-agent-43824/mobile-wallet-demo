@@ -395,6 +395,34 @@ void main() {
     controller.dispose();
   });
 
+  test('the new-card row opens setup even when a card is active', () async {
+    final adapter = _ProvisioningAdapter();
+    final controller = WalletFlowController(
+      store: InMemorySecureKeyValueStore(),
+      biometricAuthGateway: const SimulatedBiometricAuthGateway(),
+      rutokenNativeAdapter: adapter,
+    );
+    await controller.loadInitialState();
+    await controller.provisionImportedRutoken(
+      mnemonic: _mnemonic,
+      passphrase: '',
+      pin: '1234',
+    );
+    expect(controller.stage, WalletFlowStage.unlocked);
+
+    final newCardRow = (await controller.listSwitchableWallets()).firstWhere(
+      (wallet) => wallet.isCardStorage && wallet.isEmptySlot,
+    );
+    await controller.switchActiveWallet(newCardRow);
+
+    expect(
+      controller.stage,
+      WalletFlowStage.welcome,
+      reason: 'the row exists to set up another card, not to re-pick this one',
+    );
+    controller.dispose();
+  });
+
   test('selecting an unregistered card is refused', () async {
     final service = RutokenProvisioningService(
       adapter: _ProvisioningAdapter(),
