@@ -137,8 +137,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
   Future<void> _prepareAirGapAccountExport() async {
     final credential = await _promptForAuth(
       context,
-      reason:
-          'Для публичного QR аккаунта нужно кратко открыть seed и вывести только xpub.',
+      reason: AppLocalizations.of(context).wcExportPinReason,
       biometricsOffered: _biometricsOffered,
     );
     if (credential == null) {
@@ -153,7 +152,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
   Future<void> _signAirGap() async {
     final credential = await _promptForAuth(
       context,
-      reason: 'Подпись запроса MetaMask требует доступа к приватному ключу.',
+      reason: AppLocalizations.of(context).wcSignPinReason,
       biometricsOffered: _biometricsOffered,
     );
     if (credential == null) {
@@ -190,7 +189,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle('Подключения WalletConnect'),
+        _SectionTitle(l10n.wcSectionTitle),
         const SizedBox(height: 12),
         Wrap(
           spacing: 8,
@@ -201,7 +200,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
                   ? l10n.wcAvailable
                   : l10n.wcNotConfigured,
             ),
-            _StatusChip(label: 'Активных сессий: ${sessions.length}'),
+            _StatusChip(label: l10n.wcActiveSessionsCount(sessions.length)),
           ],
         ),
         const SizedBox(height: 24),
@@ -224,7 +223,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
             FilledButton.icon(
               onPressed: widget.isAvailable ? _pair : null,
               icon: const Icon(Icons.link),
-              label: const Text('Подключить'),
+              label: Text(l10n.wcPair),
             ),
             if (widget.isQrFileLoadAvailable)
               OutlinedButton.icon(
@@ -240,7 +239,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
                   () => widget.onScanQrCamera(title: 'wc: URI'),
                 ),
                 icon: const Icon(Icons.qr_code_scanner),
-                label: const Text('Сканировать wc: камерой'),
+                label: Text(l10n.wcScanCamera),
               ),
           ],
         ),
@@ -293,10 +292,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
         _AirGapStepCard(
           title: l10n.airgapStep1Title,
           stepNumber: 1,
-          description:
-              'В MetaMask выберите «Аппаратный кошелёк по QR» и наведите камеру '
-              'на этот код. Мы передаём только публичные данные — ключ остаётся '
-              'здесь.',
+          description: l10n.airgapStep1Body,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -305,8 +301,8 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
                 icon: const Icon(Icons.qr_code_2),
                 label: Text(
                   accountExport == null
-                      ? 'Показать QR аккаунта'
-                      : 'Обновить QR аккаунта',
+                      ? l10n.airgapShowAccountQr
+                      : l10n.airgapRefreshAccountQr,
                 ),
               ),
               if (accountExport != null) ...[
@@ -323,9 +319,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
         _AirGapStepCard(
           title: l10n.airgapStep2Title,
           stepNumber: 2,
-          description:
-              'MetaMask собрал перевод и показал QR. Наведите на него камеру — '
-              'мы разберём код и покажем, что именно подпишем.',
+          description: l10n.airgapStep2Body,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -337,7 +331,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
                     FilledButton.icon(
                       onPressed: widget.onScanAirGapRequest,
                       icon: const Icon(Icons.qr_code_scanner),
-                      label: const Text('Сканировать запрос'),
+                      label: Text(l10n.airgapScanRequest),
                     ),
                   if (widget.isQrFileLoadAvailable)
                     OutlinedButton.icon(
@@ -357,7 +351,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
                 FilledButton.icon(
                   onPressed: _signAirGap,
                   icon: const Icon(Icons.draw),
-                  label: const Text('Подписать транзакцию'),
+                  label: Text(l10n.airgapSignTransaction),
                 ),
               ],
             ],
@@ -368,9 +362,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
           _AirGapStepCard(
             title: l10n.airgapStep3Title,
             stepNumber: 3,
-            description:
-                'Покажите этот код камере MetaMask. Он отправит перевод в сеть — '
-                'со стороны кошелька ничего больше не нужно.',
+            description: l10n.airgapStep3Body,
             child: _UrQrDisplay(
               payload: airGapResponse,
               semanticsLabel: l10n.airgapSignatureQr,
@@ -380,7 +372,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
           OutlinedButton.icon(
             onPressed: widget.onClearAirGapRequest,
             icon: const Icon(Icons.clear),
-            label: const Text('Новая транзакция'),
+            label: Text(l10n.airgapNewTransaction),
           ),
         ],
         const SizedBox(height: 24),
@@ -476,21 +468,30 @@ class _AirGapTransactionPreviewCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle('Проверьте транзакцию'),
+        _SectionTitle(l10n.previewTitle),
         const SizedBox(height: 8),
-        _SummaryTile(label: 'Сеть', value: preview.networkLabel),
-        _SummaryTile(label: 'Тип', value: preview.transactionTypeLabel),
+        _SummaryTile(label: l10n.detailsNetwork, value: preview.networkLabel),
         _SummaryTile(
-          label: 'Откуда',
+          label: l10n.previewType,
+          value: preview.transactionTypeLabel,
+        ),
+        _SummaryTile(
+          label: l10n.previewFrom,
           value: request.addressHex ?? request.derivationPath.toPathString(),
         ),
         _SummaryTile(
-          label: 'Куда',
-          value: preview.toAddress ?? 'Создание контракта',
+          label: l10n.previewTo,
+          value: preview.toAddress ?? l10n.previewContractCreation,
         ),
-        _SummaryTile(label: 'Сумма', value: '${preview.valueEth} ETH'),
-        _SummaryTile(label: 'Nonce', value: preview.nonce.toString()),
-        _SummaryTile(label: 'Gas limit', value: preview.gasLimit.toString()),
+        _SummaryTile(
+          label: l10n.previewAmount,
+          value: '${preview.valueEth} ETH',
+        ),
+        _SummaryTile(label: l10n.previewNonce, value: preview.nonce.toString()),
+        _SummaryTile(
+          label: l10n.previewGasLimit,
+          value: preview.gasLimit.toString(),
+        ),
         _SummaryTile(
           label: l10n.wcMaxFee,
           value: '${preview.maximumFeeEth} ETH',
@@ -498,11 +499,14 @@ class _AirGapTransactionPreviewCard extends StatelessWidget {
         _SummaryTile(
           label: l10n.wcContractData,
           value: preview.dataLength == 0
-              ? 'нет'
-              : '${preview.dataLength} байт, selector ${preview.selector ?? 'нет'}',
+              ? l10n.previewNone
+              : l10n.previewContractDataValue(
+                  preview.dataLength,
+                  preview.selector ?? l10n.previewNone,
+                ),
         ),
         if (request.origin != null)
-          _SummaryTile(label: 'Источник', value: request.origin!),
+          _SummaryTile(label: l10n.previewSource, value: request.origin!),
       ],
     );
   }
@@ -561,6 +565,7 @@ class _UrQrDisplayState extends State<_UrQrDisplay> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Semantics(
       label: widget.semanticsLabel,
       image: true,
@@ -581,8 +586,8 @@ class _UrQrDisplayState extends State<_UrQrDisplay> {
           const SizedBox(height: 8),
           Text(
             _frames.length == 1
-                ? 'Статический BC-UR QR'
-                : 'Анимированный BC-UR: ${_index + 1}/${_frames.length}',
+                ? l10n.qrSingleFrame
+                : l10n.qrFrameProgress(_index + 1, _frames.length),
             textAlign: TextAlign.center,
           ),
         ],
@@ -675,18 +680,15 @@ class _ProposalCard extends StatelessWidget {
               ),
             ),
           const SizedBox(height: 8),
-          Text('Сети: ${proposal.requiredChains.join(', ')}'),
-          Text('Методы: ${proposal.requiredMethods.join(', ')}'),
+          Text(l10n.wcChains(proposal.requiredChains.join(', '))),
+          Text(l10n.wcMethods(proposal.requiredMethods.join(', '))),
           const SizedBox(height: 12),
           Wrap(
             spacing: 12,
             runSpacing: 8,
             children: [
-              FilledButton(onPressed: onApprove, child: const Text('Одобрить')),
-              OutlinedButton(
-                onPressed: onReject,
-                child: const Text('Отклонить'),
-              ),
+              FilledButton(onPressed: onApprove, child: Text(l10n.wcApprove)),
+              OutlinedButton(onPressed: onReject, child: Text(l10n.wcReject)),
             ],
           ),
         ],
@@ -744,7 +746,7 @@ class _RequestCard extends StatelessWidget {
     }
   }
 
-  String? _chainSwitchTarget() {
+  String? _chainSwitchTarget(AppLocalizations l10n) {
     const codec = WalletConnectV2RequestCodec();
     if (!codec.isChainSwitchMethod(request.method)) {
       return null;
@@ -757,7 +759,7 @@ class _RequestCard extends StatelessWidget {
           ? 'Ethereum Mainnet (eip155:1)'
           : 'eip155:$chainId';
     } catch (_) {
-      return 'некорректный chainId';
+      return l10n.wcInvalidChain;
     }
   }
 
@@ -805,18 +807,18 @@ class _RequestCard extends StatelessWidget {
   }
 
   /// One line saying what the dApp is asking for, in the user's terms.
-  String _requestSummary() {
+  String _requestSummary(AppLocalizations l10n) {
     const codec = WalletConnectV2RequestCodec();
     if (codec.isTransactionMethod(request.method)) {
-      return 'Приложение просит подписать перевод.';
+      return l10n.wcAskSignTransfer;
     }
     if (codec.isMessageSignMethod(request.method)) {
-      return 'Приложение просит подписать сообщение.';
+      return l10n.wcAskSignMessage;
     }
     if (codec.isTypedDataMethod(request.method)) {
-      return 'Приложение просит подписать структурированные данные.';
+      return l10n.wcAskSignTypedData;
     }
-    return 'Приложение просит подтвердить действие.';
+    return l10n.wcAskConfirm;
   }
 
   String _formatUnits(BigInt value, int decimals) {
@@ -841,7 +843,7 @@ class _RequestCard extends StatelessWidget {
     final value = tx['value']?.toString();
     final message = _messageText();
     final typedData = _typedDataSummary();
-    final chainSwitchTarget = _chainSwitchTarget();
+    final chainSwitchTarget = _chainSwitchTarget(l10n);
     const codec = WalletConnectV2RequestCodec();
     final isTransaction = codec.isTransactionMethod(request.method);
     final canApproveTransaction =
@@ -870,13 +872,13 @@ class _RequestCard extends StatelessWidget {
           // Plain language: what is being asked, in units a person reads. The
           // raw method name, the numeric chain id and the wei value are
           // developer detail and stay out of the request card.
-          Text(_requestSummary(), style: theme.textTheme.bodyMedium),
+          Text(_requestSummary(l10n), style: theme.textTheme.bodyMedium),
           Text(
-            'Сеть: ${_networkName(request.chainId)}',
+            l10n.wcNetworkLine(_networkName(request.chainId)),
             style: theme.textTheme.bodySmall,
           ),
           if (chainSwitchTarget != null)
-            Text('Переключить на: ${_networkName(chainSwitchTarget)}'),
+            Text(l10n.wcSwitchTo(_networkName(chainSwitchTarget))),
           if (to != null) ...[
             const SizedBox(height: 4),
             Text('${l10n.wcRecipient}: ${_shortAddress(to)}'),
@@ -884,33 +886,35 @@ class _RequestCard extends StatelessWidget {
           if (value != null && isTransaction) ...[
             const SizedBox(height: 4),
             Text(
-              'Сумма: ${_formatUnits(_parseWei(value), 18)} '
-              '${_nativeSymbol(request.chainId)}',
+              l10n.wcAmountLine(
+                _formatUnits(_parseWei(value), 18),
+                _nativeSymbol(request.chainId),
+              ),
               style: theme.textTheme.titleMedium,
             ),
           ],
           if (message != null) ...[
             const SizedBox(height: 4),
-            Text('Сообщение: $message'),
+            Text(l10n.wcMessageLine(message)),
           ],
           if (typedData != null) Text('EIP-712: $typedData'),
           if (isPreviewLoading) ...[
             const SizedBox(height: 8),
-            const Row(
+            Row(
               children: [
-                SizedBox.square(
+                const SizedBox.square(
                   dimension: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-                SizedBox(width: 8),
-                Expanded(child: Text('Симулируем транзакцию через RPC…')),
+                const SizedBox(width: 8),
+                Expanded(child: Text(l10n.wcSimulating)),
               ],
             ),
           ],
           if (previewError != null) ...[
             const SizedBox(height: 8),
             Text(
-              'Подписание заблокировано: $previewError',
+              l10n.wcSigningBlocked(previewError!),
               style: TextStyle(color: theme.colorScheme.error),
             ),
           ],
@@ -920,37 +924,45 @@ class _RequestCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               safe.isContractCall
-                  ? 'Тип: вызов смарт-контракта'
-                  : 'Тип: перевод без calldata',
+                  ? l10n.wcTypeContractCall
+                  : l10n.wcTypePlainTransfer,
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
-            Text('Адрес назначения: ${safe.toAddress}'),
+            Text(l10n.wcDestination(safe.toAddress)),
             Text(
-              'Сумма: ${_formatUnits(safe.valueWei, 18)} '
-              '${evmNetworkConfigs[safe.network]!.nativeSymbol}',
+              l10n.wcAmountLine(
+                _formatUnits(safe.valueWei, 18),
+                evmNetworkConfigs[safe.network]!.nativeSymbol,
+              ),
             ),
             if (safe.isContractCall)
               Text(
-                'Calldata: ${safe.data.length} байт; '
-                'selector ${safe.calldataSelector ?? 'отсутствует'}',
+                l10n.wcCalldataLine(
+                  safe.data.length,
+                  safe.calldataSelector ?? l10n.wcSelectorNone,
+                ),
               ),
             Text(
-              'Gas limit: ${safe.gasLimit}'
-              '${safe.gasWasEstimated ? ' (оценён RPC + 20%)' : ' (задан dApp)'}',
+              safe.gasWasEstimated
+                  ? l10n.wcGasLimitEstimated('${safe.gasLimit}')
+                  : l10n.wcGasLimitFromDapp('${safe.gasLimit}'),
             ),
             Text(
-              'Max fee: ${_formatUnits(safe.maxFeePerGasWei, 9)} gwei; '
-              'priority: ${_formatUnits(safe.maxPriorityFeePerGasWei, 9)} gwei',
+              l10n.wcGasPriceLine(
+                _formatUnits(safe.maxFeePerGasWei, 9),
+                _formatUnits(safe.maxPriorityFeePerGasWei, 9),
+              ),
             ),
             Text(
-              'Максимальная комиссия: '
-              '${_formatUnits(safe.maximumNetworkFeeWei, 18)} '
-              '${evmNetworkConfigs[safe.network]!.nativeSymbol}',
+              l10n.wcMaxFeeLine(
+                _formatUnits(safe.maximumNetworkFeeWei, 18),
+                evmNetworkConfigs[safe.network]!.nativeSymbol,
+              ),
             ),
             Text(
               safe.wasSimulated
-                  ? 'Симуляция: успешна (${safe.providerLabel})'
-                  : 'Симуляция: тестовый/offline preflight',
+                  ? l10n.wcPreflightOk(safe.providerLabel)
+                  : l10n.wcPreflightOffline,
             ),
           ],
           const SizedBox(height: 12),
@@ -964,13 +976,13 @@ class _RequestCard extends StatelessWidget {
                   const WalletConnectV2RequestCodec().isChainSwitchMethod(
                         request.method,
                       )
-                      ? 'Переключить сеть'
-                      : 'Одобрить и подписать',
+                      ? l10n.wcSwitchNetwork
+                      : l10n.wcApproveAndSign,
                 ),
               ),
               OutlinedButton(
                 onPressed: onReject,
-                child: const Text('Отклонить запрос'),
+                child: Text(l10n.wcRejectRequest),
               ),
             ],
           ),
@@ -988,6 +1000,7 @@ class _SessionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
 
     return Container(
@@ -1014,11 +1027,11 @@ class _SessionCard extends StatelessWidget {
               ),
             ),
           const SizedBox(height: 6),
-          Text('Сети: ${session.chains.join(', ')}'),
-          Text('Аккаунты: ${session.accounts.join(', ')}'),
+          Text(l10n.wcChains(session.chains.join(', '))),
+          Text(l10n.wcAccounts(session.accounts.join(', '))),
           const SizedBox(height: 4),
           Text(
-            'Подключено: ${session.connectedAtUtc.toIso8601String()}',
+            l10n.wcConnectedAt(session.connectedAtUtc.toIso8601String()),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -1027,7 +1040,7 @@ class _SessionCard extends StatelessWidget {
           OutlinedButton.icon(
             onPressed: onDisconnect,
             icon: const Icon(Icons.link_off),
-            label: const Text('Отключить'),
+            label: Text(l10n.wcDisconnect),
           ),
         ],
       ),

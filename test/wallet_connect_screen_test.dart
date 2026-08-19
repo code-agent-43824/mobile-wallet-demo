@@ -132,6 +132,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
         walletConnectService: FakeWalletConnectService(),
@@ -182,6 +186,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
         walletConnectService: FakeWalletConnectService(),
@@ -211,6 +219,10 @@ void main() {
     final service = FakeWalletConnectService();
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
         walletConnectService: service,
@@ -263,6 +275,10 @@ void main() {
     final service = FakeWalletConnectService();
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
         walletConnectService: service,
@@ -301,6 +317,10 @@ void main() {
     final service = FakeWalletConnectService();
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
         walletConnectService: service,
@@ -342,6 +362,10 @@ void main() {
 
       await tester.pumpWidget(
         MobileWalletDemoApp(
+          // Copy assertions are language-specific: pin the locale so a change
+          // of system language (or of the default) cannot silently break them.
+          locale: const Locale('ru'),
+
           store: InMemorySecureKeyValueStore(),
           blockchainProvider: _FakeBlockchainProvider(),
           walletConnectService: FakeWalletConnectService(),
@@ -373,6 +397,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
         walletConnectService: FakeWalletConnectService(),
@@ -417,6 +445,10 @@ void main() {
 
       await tester.pumpWidget(
         MobileWalletDemoApp(
+          // Copy assertions are language-specific: pin the locale so a change
+          // of system language (or of the default) cannot silently break them.
+          locale: const Locale('ru'),
+
           store: InMemorySecureKeyValueStore(),
           blockchainProvider: _FakeBlockchainProvider(),
           walletConnectService: FakeWalletConnectService(),

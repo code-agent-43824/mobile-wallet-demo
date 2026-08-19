@@ -341,5 +341,215 @@
         "type": "String"
       }
     }
-  }
+  },
+  "wcSectionTitle": "WalletConnect connections",
+  "wcActiveSessionsCount": "Active sessions: {count}",
+  "@wcActiveSessionsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wcPair": "Connect",
+  "wcScanCamera": "Scan the pairing QR",
+  "wcExportPinReason": "Building the account QR needs access to the key. Only public data leaves the app.",
+  "wcSignPinReason": "Signing the MetaMask request needs access to the key.",
+  "airgapStep1Body": "In MetaMask pick \"Hardware wallet via QR\" and point its camera at this code. Only public data is shared — the key stays here.",
+  "airgapShowAccountQr": "Show the account QR",
+  "airgapRefreshAccountQr": "Refresh the account QR",
+  "airgapStep2Body": "MetaMask has built the transfer and shows a QR. Point the camera at it — the app decodes it and shows exactly what it will sign.",
+  "airgapScanRequest": "Scan the request",
+  "airgapSignTransaction": "Sign the transaction",
+  "airgapStep3Body": "Show this code to the MetaMask camera. MetaMask sends the transfer to the network — nothing more is needed from the wallet.",
+  "airgapNewTransaction": "New transaction",
+  "qrSingleFrame": "A single QR code",
+  "qrFrameProgress": "Frame {index} of {total}",
+  "@qrFrameProgress": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "previewTitle": "Check the transaction",
+  "previewType": "Type",
+  "previewFrom": "From",
+  "previewTo": "To",
+  "previewContractCreation": "Contract creation",
+  "previewAmount": "Amount",
+  "previewNonce": "Nonce",
+  "previewGasLimit": "Gas limit",
+  "previewNone": "none",
+  "previewContractDataValue": "{bytes} bytes, function {selector}",
+  "@previewContractDataValue": {
+    "placeholders": {
+      "bytes": {
+        "type": "int"
+      },
+      "selector": {
+        "type": "String"
+      }
+    }
+  },
+  "previewSource": "Source",
+  "wcChains": "Networks: {chains}",
+  "@wcChains": {
+    "placeholders": {
+      "chains": {
+        "type": "String"
+      }
+    }
+  },
+  "wcMethods": "Methods: {methods}",
+  "@wcMethods": {
+    "placeholders": {
+      "methods": {
+        "type": "String"
+      }
+    }
+  },
+  "wcApprove": "Approve",
+  "wcReject": "Reject",
+  "wcInvalidChain": "unknown network",
+  "wcAskSignTransfer": "The app is asking you to sign a transfer.",
+  "wcAskSignMessage": "The app is asking you to sign a message.",
+  "wcAskSignTypedData": "The app is asking you to sign structured data.",
+  "wcAskConfirm": "The app is asking you to confirm an action.",
+  "wcNetworkLine": "Network: {network}",
+  "@wcNetworkLine": {
+    "placeholders": {
+      "network": {
+        "type": "String"
+      }
+    }
+  },
+  "wcSwitchTo": "Switch to: {network}",
+  "@wcSwitchTo": {
+    "placeholders": {
+      "network": {
+        "type": "String"
+      }
+    }
+  },
+  "wcAmountLine": "Amount: {amount} {symbol}",
+  "@wcAmountLine": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "symbol": {
+        "type": "String"
+      }
+    }
+  },
+  "wcMessageLine": "Message: {message}",
+  "@wcMessageLine": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "wcSimulating": "Checking the transaction against the network…",
+  "wcSigningBlocked": "Signing is unavailable: {error}",
+  "@wcSigningBlocked": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "wcTypeContractCall": "Smart-contract call",
+  "wcTypePlainTransfer": "Plain transfer",
+  "wcDestination": "Destination address: {address}",
+  "@wcDestination": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "wcCalldataLine": "Contract data: {bytes} bytes, function {selector}",
+  "@wcCalldataLine": {
+    "placeholders": {
+      "bytes": {
+        "type": "int"
+      },
+      "selector": {
+        "type": "String"
+      }
+    }
+  },
+  "wcSelectorNone": "absent",
+  "wcGasLimitEstimated": "Gas limit: {limit} (network estimate + 20%)",
+  "@wcGasLimitEstimated": {
+    "placeholders": {
+      "limit": {
+        "type": "String"
+      }
+    }
+  },
+  "wcGasLimitFromDapp": "Gas limit: {limit} (set by the app)",
+  "@wcGasLimitFromDapp": {
+    "placeholders": {
+      "limit": {
+        "type": "String"
+      }
+    }
+  },
+  "wcGasPriceLine": "Gas price: {max} gwei, priority {priority} gwei",
+  "@wcGasPriceLine": {
+    "placeholders": {
+      "max": {
+        "type": "String"
+      },
+      "priority": {
+        "type": "String"
+      }
+    }
+  },
+  "wcMaxFeeLine": "Maximum fee: {amount} {symbol}",
+  "@wcMaxFeeLine": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "symbol": {
+        "type": "String"
+      }
+    }
+  },
+  "wcPreflightOk": "Network check: passed ({provider})",
+  "@wcPreflightOk": {
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      }
+    }
+  },
+  "wcPreflightOffline": "Network check: offline mode",
+  "wcSwitchNetwork": "Switch network",
+  "wcApproveAndSign": "Approve and sign",
+  "wcRejectRequest": "Reject the request",
+  "wcAccounts": "Accounts: {accounts}",
+  "@wcAccounts": {
+    "placeholders": {
+      "accounts": {
+        "type": "String"
+      }
+    }
+  },
+  "wcConnectedAt": "Connected: {timestamp}",
+  "@wcConnectedAt": {
+    "placeholders": {
+      "timestamp": {
+        "type": "String"
+      }
+    }
+  },
+  "wcDisconnect": "Disconnect"
 }

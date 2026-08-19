@@ -237,6 +237,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
       ),
@@ -266,6 +270,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
         rutokenNativeAdapter: _UnusedRutokenAdapter(),
@@ -311,6 +319,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
       ),
@@ -340,6 +352,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
       ),
@@ -391,6 +407,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _NetworkBalanceBlockchainProvider(),
       ),
@@ -448,6 +468,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: provider,
       ),
@@ -503,6 +527,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
         nonceProvider: _FakeNonceProvider(),
@@ -563,6 +591,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
         nonceProvider: _FakeNonceProvider(),
@@ -623,6 +655,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
         nonceProvider: _FakeNonceProvider(),
@@ -696,6 +732,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
         nonceProvider: _FakeNonceProvider(),
