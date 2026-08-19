@@ -244,23 +244,19 @@ class RutokenProvisioningService {
       }
     }
 
-    final existing = await loadAccountDescriptor();
-    if (existing != null &&
-        existing.address.toLowerCase() != account.address.toLowerCase()) {
-      throw const RutokenNativeException(
-        'На телефоне уже зарегистрирован другой Рутокен.',
-      );
-    }
-    if (existing != null) {
-      // Re-adopting the same card must not downgrade AirGap, so the retained
-      // account-xpub fields stay. Recording the serial only adds public
-      // descriptive data, so a profile registered before serials were read
-      // gains one here.
-      await _recordTokenIdentity(
-        RutokenCardProfile.idForAddress(account.address),
-        serial: serial,
-        label: tokenLabel,
-      );
+    // A card the phone already knows keeps everything it has — in particular
+    // the account xpub retained when its key was created here, which adoption
+    // alone cannot reconstruct. A card it does not know becomes an additional
+    // profile rather than being refused: several registered cards is the point
+    // of Phase 14. Either way the adopted card becomes the selected one, since
+    // connecting it is a deliberate act.
+    final profileId = RutokenCardProfile.idForAddress(account.address);
+    final known = (await loadProfiles()).any(
+      (profile) => profile.id == profileId,
+    );
+    if (known) {
+      await _recordTokenIdentity(profileId, serial: serial, label: tokenLabel);
+      await selectProfile(profileId);
       return account;
     }
     await _writeAccount(account, serial: serial, label: tokenLabel);
@@ -502,8 +498,8 @@ class RutokenProvisioningService {
       'backendId': account.backendId,
       'address': account.address,
       'derivationPath': account.derivationPath,
-      if (serial != null) 'serial': serial,
-      if (label != null) 'label': label,
+      'serial': ?serial,
+      'label': ?label,
     }, state: 'active');
   }
 
@@ -524,8 +520,8 @@ class RutokenProvisioningService {
       'chainCode': base64Encode(publicAccount.chainCode),
       'sourceFingerprint': publicAccount.sourceFingerprint,
       'parentFingerprint': publicAccount.parentFingerprint,
-      if (serial != null) 'serial': serial,
-      if (label != null) 'label': label,
+      'serial': ?serial,
+      'label': ?label,
     }, state: state);
   }
 

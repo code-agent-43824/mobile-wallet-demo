@@ -8,6 +8,7 @@ import 'package:mobile_wallet_demo/src/auth/wallet_operation_auth.dart';
 import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
 import 'package:mobile_wallet_demo/src/key_storage/custody_backend.dart';
+import 'package:mobile_wallet_demo/src/key_storage/key_storage_backend.dart';
 import 'package:mobile_wallet_demo/src/key_storage/rutoken_method_channel_adapter.dart';
 import 'package:mobile_wallet_demo/src/key_storage/rutoken_provisioning.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
@@ -259,6 +260,77 @@ void main() {
       profile?.publicAccount,
       isNotNull,
       reason: 'recording the serial must not drop the retained xpub',
+    );
+  });
+
+  test('adopts a second card instead of refusing it', () async {
+    final store = InMemorySecureKeyValueStore();
+    final adapter = _ProvisioningAdapter(serial: 'RT-A');
+    final service = RutokenProvisioningService(adapter: adapter, store: store);
+    await service.provision(mnemonic: _mnemonic, passphrase: '', pin: '1234');
+    final first = (await service.loadSelectedProfile())!;
+
+    // A second physical card carrying a different key.
+    final second = _ProvisioningAdapter(serial: 'RT-B')
+      ..account = const WalletAccountDescriptor(
+        backendId: 'rutoken_nfc',
+        address: _legacyAddress,
+        derivationPath: "m/44'/60'/0'/0/0",
+      );
+    final withSecondCard = RutokenProvisioningService(
+      adapter: second,
+      store: store,
+    );
+    await withSecondCard.adoptExisting(pin: '1234');
+
+    final profiles = await withSecondCard.loadProfiles();
+    expect(profiles.map((profile) => profile.id), <String>[
+      first.id,
+      _legacyAddress.toLowerCase(),
+    ]);
+    expect(
+      (await withSecondCard.loadSelectedProfile())?.id,
+      _legacyAddress.toLowerCase(),
+      reason: 'connecting a card is deliberate, so it becomes the active one',
+    );
+    expect(
+      profiles.first.publicAccount,
+      isNotNull,
+      reason: 'registering another card must not disturb the first',
+    );
+    expect(profiles.last.serial, 'RT-B');
+  });
+
+  test('the selected profile still binds each operation to one card', () async {
+    final store = InMemorySecureKeyValueStore();
+    final adapter = _ProvisioningAdapter();
+    final service = RutokenProvisioningService(adapter: adapter, store: store);
+    await service.provision(mnemonic: _mnemonic, passphrase: '', pin: '1234');
+    final provisioned = (await service.loadSelectedProfile())!;
+
+    final other = _ProvisioningAdapter()
+      ..account = const WalletAccountDescriptor(
+        backendId: 'rutoken_nfc',
+        address: _legacyAddress,
+        derivationPath: "m/44'/60'/0'/0/0",
+      );
+    await RutokenProvisioningService(
+      adapter: other,
+      store: store,
+    ).adoptExisting(pin: '1234');
+    // Back to the first card; the second one is registered but not selected.
+    await service.selectProfile(provisioned.id);
+
+    final backend = RutokenCustodyBackend(
+      adapter: other,
+      accountLoader: service.loadAccountDescriptor,
+      publicAccountLoader: service.loadPublicAccount,
+    );
+
+    await expectLater(
+      backend.openSigningSession(pin: '1234'),
+      throwsA(isA<VaultFailure>()),
+      reason: 'a registered but unselected card must not sign for the other',
     );
   });
 
