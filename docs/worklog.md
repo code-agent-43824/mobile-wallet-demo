@@ -18,6 +18,32 @@ Entry template:
 
 ---
 
+## 2026-08-19 — Phase 10 open defect: NFC-loss classification — branch claude/wonderful-rubin-eBDKZ — code done, hardware rerun pending
+- Plan: close the one functional defect left from the v1.51.0+62 physical matrix — a card pulled *during* an
+  operation reported «Ошибка нативного модуля Рутокена.» instead of the specified «Связь с Рутокеном
+  потеряна…». Teardown was already correct; only the classification was wrong.
+- **Diagnosis.** `requireSession` catches a card removed *between* operations and throws
+  `RutokenNfcLostException`. Mid-operation the vendor library raises its own PKCS#11 failure instead, and
+  `RutokenMethodChannel.nativeErrorCode` tried to recognise it by looking for `CKR_DEVICE_REMOVED` /
+  `CKR_TOKEN_NOT_PRESENT` / `SCARD_W_REMOVED_CARD` in `"${javaClass.name} ${message}"`. The device proved that
+  text does not match — so the bug is the approach, not a missing string.
+- Done: read, sign and import now run through `onCard`, which on failure asks the slot-event listener whether
+  the card is still present. Presence is the fact the user needs, whatever the library called the failure, and
+  it does not depend on vendor message formats or versions. Two guards keep it from over-claiming: a failure
+  the card itself answered (`CKR_PIN…`) keeps its own classification, and the check waits up to 400 ms instead
+  of sampling once, because the listener runs on its own thread and can lose the race against the failure the
+  removal caused. The wait only ever runs on an already-failing operation.
+- **Not verified.** There is no card in this environment, so this is a reasoned fix, not a confirmed one. The
+  matrix row stays PARTIAL and is now marked RETEST; `docs/development-plan.md` says the same in NEXT. If the
+  rerun still shows the generic error, the next step is capturing what the library actually throws — which the
+  fail-closed boundary deliberately keeps out of Dart, so it needs the adb log review that is already pending.
+- Next / open: the negative-path rerun (cancel / wrong PIN / timeout / **NFC loss**) on hardware, plus the
+  physical crash/log-output review. Those two are all that remain of Phase 10 on Android.
+- Refs: `e68c715`; `android/.../rutoken/RutokenRuntime.kt`, `docs/device-test-matrix.md`,
+  `docs/development-plan.md`
+
+---
+
 ## 2026-08-19 — Phase 14 chunks 14.1–14.4: several cards — branch claude/wonderful-rubin-eBDKZ — done (14.5 open)
 - Plan: build the multi-card support the owner asked for while dogfooding — data layer first (profile set +
   serial), then provisioning, then the switcher — keeping the registered-address binding and its Phase 10

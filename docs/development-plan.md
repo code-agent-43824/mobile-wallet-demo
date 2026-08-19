@@ -41,9 +41,11 @@ recoverable provisioning and which supports the same own-send, WalletConnect, an
   Rutoken-backed WalletConnect `personal_sign`/EIP-712/transaction, EIP-4527 AirGap export + live-camera scan +
   signature return, different-card rejection (a second card is now available), and invalid-PIN handling all pass,
   with both Sepolia broadcasts verified on-chain (`0xe22d7a84…47e5`, `0x9ff1e06b…5a6e`). Two items remain:
-  (1) an **open defect** — removing the card mid-operation reports the generic native error instead of the
-  specified NFC-loss message (teardown itself is correct); (2) the physical crash/log-output review, which needs
-  adb capture. iOS follows proven Android behavior once the exact vendor framework is available.
+  (1) the NFC-loss classification defect — removing the card mid-operation reported the generic native error
+  instead of the specified message. **A fix shipped in v1.55.0+66 and needs the negative-path rerun**: the
+  native layer no longer pattern-matches the vendor diagnostic but asks the slot-event listener whether the
+  card is still present, which is the fact the user needs whatever the library called it; (2) the physical
+  crash/log-output review, which needs adb capture. iOS follows proven Android behavior once the exact vendor framework is available.
 - **LATER:** optional lock-on-open privacy, broader device/platform integration tests, localizing the
   domain-layer error strings (`qr/`, `key_storage/`, `walletconnect/`, `airgap/`) by giving them error codes
   rather than translating literals, and only then additional chains/accounts if product scope changes. They are
