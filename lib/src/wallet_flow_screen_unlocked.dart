@@ -332,7 +332,7 @@ class _TransferPreparationSectionState
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
           initialValue: _selectedAsset?.id,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: l10n.transferAsset,
             border: OutlineInputBorder(),
           ),
@@ -361,7 +361,7 @@ class _TransferPreparationSectionState
         const SizedBox(height: 12),
         TextField(
           controller: _addressController,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: l10n.transferRecipientLabel,
             hintText: '0x…',
             border: OutlineInputBorder(),
@@ -446,7 +446,7 @@ class _TransferPreparationSectionState
         ],
         if (_isSubmitting) ...[
           const SizedBox(height: 16),
-          const _SummaryTile(
+          _SummaryTile(
             label: l10n.transferSendState,
             value: l10n.transferInProgress,
           ),
