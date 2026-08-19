@@ -587,6 +587,10 @@ class WalletFlowController extends ChangeNotifier {
     if (provisioning == null) return;
     await _runBusy(_messages.busyForgettingCard, () async {
       await provisioning.forgetProfile(cardProfileId);
+      // The card's biometric PIN is scoped to its address, so it has to go with
+      // the profile — otherwise a card the phone no longer knows leaves its PIN
+      // behind in the secret store.
+      await _rutokenBiometricPinStore?.forget(cardProfileId);
       final backend = _rutokenBackend;
       if (backend == null || effectiveBackendId != backend.backendId) {
         return;

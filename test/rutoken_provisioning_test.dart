@@ -9,6 +9,7 @@ import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
 import 'package:mobile_wallet_demo/src/key_storage/custody_backend.dart';
 import 'package:mobile_wallet_demo/src/key_storage/key_storage_backend.dart';
+import 'package:mobile_wallet_demo/src/key_storage/rutoken_biometric_pin_store.dart';
 import 'package:mobile_wallet_demo/src/key_storage/rutoken_method_channel_adapter.dart';
 import 'package:mobile_wallet_demo/src/key_storage/rutoken_provisioning.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
@@ -421,6 +422,39 @@ void main() {
       reason: 'the row exists to set up another card, not to re-pick this one',
     );
     controller.dispose();
+  });
+
+  test('forgetting a card takes its biometric PIN with it', () async {
+    final store = InMemorySecureKeyValueStore();
+    final adapter = _ProvisioningAdapter();
+    final controller = WalletFlowController(
+      store: store,
+      biometricAuthGateway: const SimulatedBiometricAuthGateway(),
+      rutokenNativeAdapter: adapter,
+    );
+    await controller.loadInitialState();
+    await controller.provisionImportedRutoken(
+      mnemonic: _mnemonic,
+      passphrase: '',
+      pin: '1234',
+    );
+    await controller.completeRutokenBiometricOffer(true);
+    expect(controller.biometricsEnabled, isTrue);
+    final card = (await controller.listSwitchableWallets()).firstWhere(
+      (wallet) => wallet.isCard,
+    );
+
+    await controller.forgetCard(card.cardProfileId!);
+    controller.dispose();
+
+    // Re-adopting the same card must find no leftover PIN and no remembered
+    // answer to the biometric offer.
+    final pinStore = RutokenBiometricPinStore(
+      store: store,
+      biometricAuth: const SimulatedBiometricAuthGateway(),
+    );
+    expect(await pinStore.isEnabled(card.address!), isFalse);
+    expect(await pinStore.shouldOffer(card.address!), isTrue);
   });
 
   test('selecting an unregistered card is refused', () async {

@@ -66,6 +66,16 @@ class RutokenBiometricPinStore {
     await _store.write(_decisionKey(address), 'declined');
   }
 
+  /// Drops everything held for [address] when the phone forgets that card.
+  ///
+  /// Unlike [decline], the *decision* goes too: the user declined nothing here,
+  /// so connecting the same card again should offer biometrics afresh rather
+  /// than silently inherit an answer from a registration that no longer exists.
+  Future<void> forget(String address) async {
+    await _secretStore.delete(_secretId(address));
+    await _store.delete(_decisionKey(address));
+  }
+
   Future<String> retrieve(String address) async {
     if (!await isEnabled(address)) {
       throw const BiometricNotEnabledFailure();
