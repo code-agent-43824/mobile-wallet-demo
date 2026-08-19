@@ -77,3 +77,21 @@ Add exact token model, firmware, SDK version, device/OS, and issue/evidence link
 
 Phase 10 is complete only when the corresponding Definition of Done in `docs/development-plan.md` and every
 required row above pass on physical Android; iOS support is complete only after its equivalent column passes.
+
+## Phase 14 two-card gate (14.5)
+
+Needs both cards. Everything below is reachable from Настройки → «Переключить кошелёк»; nothing here requires
+re-provisioning, so the existing keys stay as they are.
+
+| Check | Android | Acceptance |
+| --- | --- | --- |
+| Existing profile survives the upgrade | NOT RUN | After installing over v1.53/v1.54, the already-registered card is still there and still selected; no re-adoption, no NFC tap on startup. |
+| Register the second card | NOT RUN | «Подключить ещё карту» → that card's PIN → tap. It is added *alongside* the first (no «уже зарегистрирован» error) and becomes active. |
+| Both cards listed with serial and address | NOT RUN | The switcher shows two card rows with different addresses and different serial numbers, exactly one ticked. |
+| Switch and sign with each | NOT RUN | Switch to card A, sign one operation with A; switch to card B, sign one with B. The dashboard address follows the switch. |
+| **Unselected card cannot sign** | NOT RUN | With card A selected, present card B (using B's own PIN — PIN login precedes the address check). Must be rejected with «Поднесён другой Рутокен…». This is the security property; a PASS here is what re-closes the "different-card rejection" row above. |
+| Forget a card | NOT RUN | «Забыть карту» on the inactive card removes only that row; the active card keeps working. Forgetting the active card falls back to the other one. |
+| Re-connect a forgotten card | NOT RUN | The forgotten card can be added again with «Подключить ещё карту» and returns with the same address. |
+
+A FAIL on the unselected-card row invalidates the Phase 10 «different-card rejection» evidence recorded for
+v1.51.0+62, because that row tested one registered card and this changes what "registered" means.
