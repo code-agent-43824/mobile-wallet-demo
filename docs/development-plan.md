@@ -29,7 +29,7 @@ Current factual status of the project:
 milestone is an optional Rutoken custody backend for Android/iOS whose signing keys stay non-exporting after
 recoverable provisioning and which supports the same own-send, WalletConnect, and EIP-4527 AirGap flows.
 
-- **NOW — v1.53.0+64:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
+- **NOW — v1.54.0+65:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
   MetaMask-compatible EIP-4527 AirGap, per-operation authentication, hardened QR scanning, and the
   Rutoken custody/signature foundation, physically validated Android read/sign/provisioning, and the registered
   production backend are built. A compatible pre-provisioned card can be adopted read-only without rewriting its
@@ -44,8 +44,10 @@ recoverable provisioning and which supports the same own-send, WalletConnect, an
   (1) an **open defect** — removing the card mid-operation reports the generic native error instead of the
   specified NFC-loss message (teardown itself is correct); (2) the physical crash/log-output review, which needs
   adb capture. iOS follows proven Android behavior once the exact vendor framework is available.
-- **LATER:** optional lock-on-open privacy, broader device/platform integration tests, and only then additional
-  chains/accounts if product scope changes. They are not Phase 10 prerequisites.
+- **LATER:** optional lock-on-open privacy, broader device/platform integration tests, localizing the
+  domain-layer error strings (`qr/`, `key_storage/`, `walletconnect/`, `airgap/`) by giving them error codes
+  rather than translating literals, and only then additional chains/accounts if product scope changes. They are
+  not Phase 10 prerequisites.
 
 History is preserved in the phase sections and `docs/worklog.md`; the operational source of truth is the
 NOW / NEXT / LATER summary above plus the Phase 10 exit criteria below.
@@ -629,7 +631,22 @@ icons; no pure black or white; elevation is a hairline edge plus ambient darknes
   wizard with progress and the design's copy, dropping the protocol vocabulary. Known deviation: form → PIN →
   tap → result are still stacked sheets rather than sequential — functionally fine (the tap overlay is above
   every route) but not yet the design's shape.
-- **13.6** — Настройки + the «Подробности» developer sheet + the RU/EN language switch.
+- **13.6 — DONE (CI green)** — full RU/EN localization and the language switch. Every user-visible string in
+  `wallet_flow_screen*.dart` now comes from `lib/l10n/app_ru.arb` / `app_en.arb` (~270 keys). The two
+  `ChangeNotifier`s hold no `BuildContext`, so the bundle is **injected** like every other collaborator —
+  optional constructor argument, defaulting to Russian, re-pointed by the screen in `didChangeDependencies`
+  (the owner chose this over a parallel message table). The Russian pin is gone: the app honours a stored
+  choice, then the system locale, then Russian, and Настройки carries the picker (Как в системе / Русский /
+  English), persisted in the app's key/value store. Translating each screen kept surfacing developer register
+  in the product — "CKM_ECDSA вернул сырую подпись", "Rutoken backend недоступен в этой сборке", "Симулируем
+  транзакцию через RPC…", "Анимированный BC-UR: 3/7", `Backend` / `Locked` / `Biometrics enabled` on the lock
+  screen — all rewritten for the person holding the phone. The vendor name left the UI entirely: the backend
+  catalogue's label is now an internal identifier and the UI derives what it shows from the backend *kind*.
+  `MobileWalletDemoApp` became stateful to hold the choice, which also stopped it re-creating the store, the
+  RPC transport and the blockchain provider on every rebuild.
+  **Not done:** the domain/infrastructure error strings under `qr/`, `key_storage/`, `walletconnect/` and
+  `airgap/` are still inline Russian. They reach the user through the controller's catch-all, and doing them
+  properly means giving them error codes rather than swapping literals — see NOW / NEXT / LATER.
 - **13.7 — DONE (CI green)** — onboarding variant B: «Кошелёк за минуту» replaces the storage-backend question,
   three actions choose the backend implicitly, and the card's actions are disclosed only after the user says
   they have one. Backend ids resolve from the catalogue by kind. Copy stranded by the simulation's removal

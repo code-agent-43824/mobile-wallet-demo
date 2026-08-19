@@ -73,13 +73,15 @@ Live/native release evidence is tracked separately in
   Mainnet/Sepolia preview и `eth-signature` QR после PIN
 - Android vault persistence: crash-safe migration/current secure-storage implementation, synchronous durable writes,
   recovery from a stale backend-selection record и отключённый Auto Backup для keystore-зашифрованных данных
+- Русская и английская локализация интерфейса: язык берётся из настроек приложения, затем из системного,
+  иначе русский; переключатель — в разделе «Настройки»
 - Unit- и widget-тесты для ключевых flow
 - GitHub Actions для сборки и публикации артефактов
 - Артефакты iOS / Windows без двойной упаковки
 
 ## Версионирование
 
-- Текущая версия: `v1.53.0+64`
+- Текущая версия: `v1.54.0+65`
 - По договорённости в этом проекте дальше повышаем minor-версию с каждым функциональным шагом
 
 ## Что покрывает текущий этап

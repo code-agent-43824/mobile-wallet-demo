@@ -18,6 +18,50 @@ Entry template:
 
 ---
 
+## 2026-08-19 — Phase 13 chunk 13.6 (done): localization finished + RU/EN switch — branch claude/wonderful-rubin-eBDKZ — done
+- Plan: finish the ARB migration (onboarding/card screens, then the controllers), then unpin Russian and add the
+  language switch. Controller approach was the owner's call — **variant A**: inject a message source, matching
+  the repo's DI convention.
+- Done: **13.6d** onboarding, card create/import/backup, PIN setup, seed backup, biometrics, the locked screen
+  and the per-operation auth sheet. **13.6e** both `ChangeNotifier`s plus the switch. **13.6f** Связи —
+  the pairing panel, request card, session cards, transaction preview, AirGap step cards, QR frame counter.
+  No Russian string literal remains anywhere in `wallet_flow_screen*.dart`.
+- **Variant A, concretely:** the message source is `AppLocalizations` itself, not a parallel table. Injecting the
+  generated bundle (optional ctor arg → default `lookupAppLocalizations(Locale('ru'))` → re-pointed by the screen
+  in `didChangeDependencies`) keeps one source of truth for every string. A hand-written `WalletFlowMessages`
+  interface would have duplicated ~50 strings and let the two drift.
+- **Deliberate limitation, written down rather than hidden:** strings the controller already produced and stored
+  (`errorMessage`, a diagnostic result) keep the wording they were created with. Retranslating them would mean
+  re-running the operation. The next action speaks the new language.
+- **Found while translating — the third time this pattern has paid off.** Awkward-to-translate copy is almost
+  always copy that was awkward to *read*: "CKM_ECDSA вернул сырую подпись длиной N байта", "Rutoken backend
+  недоступен в этой сборке", "Текущий transaction service не поддерживает Phase 6 hardened flow", "Multipart UR
+  нужно полностью отсканировать камерой", "Симулируем транзакцию через RPC…", "Анимированный BC-UR: 3/7",
+  "Calldata: 68 байт; selector 0x1234", "Gas limit: 21000 (оценён RPC + 20%)", and `Backend` / `Locked` /
+  `Biometrics enabled` sitting in English on a Russian lock screen. All rewritten.
+- **Reversal, stated:** 13.6b decided protocol diagnostics stay untranslated. Translating the rest showed that
+  was the wrong line — a person verifying a transfer against MetaMask reads the calldata and gas rows too. They
+  are now localized, keeping the values and the standard terms (nonce, gwei, selector) and dropping the jargon
+  around them.
+- **Vendor name out of the UI** (handoff decision #2): the backend catalogue's `label`/`description` are now
+  plainly internal identifiers, and the UI derives what it shows from `WalletBackendDescriptor.kind`. That
+  single change covers the wallet switcher, the locked screen and the details sheet at once.
+- **Incidental fix:** `MobileWalletDemoApp` had to become stateful to hold the language choice, which revealed it
+  was constructing the secure store, RPC transport, blockchain provider, broadcaster and WalletConnect service
+  *inside* `build()`. Now built once in `initState`.
+- **Test churn, and why it is right:** with Russian no longer pinned, `flutter test` runs under the system locale
+  (en) and 18 copy assertions failed. Fixed by pinning `locale: Locale('ru')` at each `MobileWalletDemoApp`
+  construction rather than by re-pinning the app — copy assertions are language-specific and should say so.
+- Next / open: the domain/infrastructure error strings under `qr/`, `key_storage/`, `walletconnect/` and
+  `airgap/` are still inline Russian. They reach the user through the controller's catch-all. Doing them right
+  means an error-code taxonomy, not literal swapping — filed under LATER in the plan, not half-done here.
+  Phase 13 remains open only on the known 13.5 deviation (stacked rather than sequential sheets).
+- Refs: `06bcd3d`, `40482a5`, `6b13c47`; `lib/l10n/*.arb` (~270 keys), `lib/src/app_locale.dart` (new),
+  `lib/src/app.dart`, `lib/src/wallet_flow_controller.dart`, `lib/src/chain_data_controller.dart`,
+  `lib/src/wallet_flow_screen*.dart`, `test/widget_test.dart`, `test/wallet_connect_screen_test.dart`
+
+---
+
 ## 2026-08-18 — Phase 13 chunk 13.6 (in progress): copy into ARB — branch claude/wonderful-rubin-eBDKZ — partial (CI green)
 - Plan: migrate UI copy into ARB so the RU/EN switch can be enabled. The locale stays **pinned to Russian**
   throughout the migration and the ARB values are the existing Russian strings, so no step is user-visible and
