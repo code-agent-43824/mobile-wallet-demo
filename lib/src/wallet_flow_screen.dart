@@ -397,8 +397,30 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           onRefresh: _chainData.refresh,
           onListWallets: _controller.listSwitchableWallets,
           onSwitchWallet: _controller.switchActiveWallet,
+          onSelectedCardProfileId: _controller.selectedCardProfileId,
+          onForgetCard: _controller.forgetCard,
+          // Goes straight to adoption rather than back to the welcome screen:
+          // that screen's «Создать кошелёк» writes a fresh seed into the phone
+          // vault, and routing here would put that one tap away from a wallet
+          // the user already has.
+          onConnectAnotherCard: widget.rutokenNativeAdapter == null
+              ? null
+              : () => _connectAnotherCard(context),
         );
     }
+  }
+
+  /// Registers an additional card from Настройки. Same prompt and same NFC wait
+  /// as connecting the first one; the adopted card becomes the active wallet.
+  Future<void> _connectAnotherCard(BuildContext context) async {
+    final auth = await _promptForAuth(
+      context,
+      reason: AppLocalizations.of(context).cardAdoptPinReason,
+      biometricsOffered: false,
+    );
+    final pin = auth?.pin;
+    if (pin == null) return;
+    await _controller.adoptExistingRutoken(pin: pin);
   }
 
   Widget _buildOnboarding(BuildContext context) {

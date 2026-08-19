@@ -14,6 +14,32 @@ void main() {
       vault = PhoneSecureVault(store: store, pbkdf2Iterations: 1000);
     });
 
+    test('refuses to create or import over an existing wallet', () async {
+      final first = await vault.createWallet(pin: '123456');
+
+      await expectLater(
+        vault.createWallet(pin: '654321'),
+        throwsA(isA<VaultFailure>()),
+      );
+      await expectLater(
+        vault.importWallet(
+          mnemonic:
+              'abandon abandon abandon abandon abandon abandon abandon '
+              'abandon abandon abandon abandon about',
+          pin: '654321',
+        ),
+        throwsA(isA<VaultFailure>()),
+      );
+
+      vault.lock();
+      final reopened = await vault.unlock(pin: '123456');
+      expect(
+        reopened.mnemonic,
+        first.mnemonic,
+        reason: 'the seed is the only copy of the key and must survive',
+      );
+    });
+
     test(
       'creates wallet, stores encrypted payload and unlocks with PIN',
       () async {

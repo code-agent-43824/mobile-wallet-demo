@@ -105,6 +105,7 @@ class PhoneSecureVault implements KeyStorageBackend {
 
   @override
   Future<WalletMaterial> createWallet({required String pin}) async {
+    await _refuseIfWalletExists();
     final mnemonic = bip39.generateMnemonic();
     return _persistMnemonic(mnemonic: mnemonic, pin: pin);
   }
@@ -114,12 +115,26 @@ class PhoneSecureVault implements KeyStorageBackend {
     required String mnemonic,
     required String pin,
   }) async {
+    await _refuseIfWalletExists();
     final normalizedMnemonic = _normalizeMnemonic(mnemonic);
     if (!bip39.validateMnemonic(normalizedMnemonic)) {
       throw const InvalidMnemonicFailure();
     }
 
     return _persistMnemonic(mnemonic: normalizedMnemonic, pin: pin);
+  }
+
+  /// Creating or importing over an existing wallet would replace its seed, and
+  /// the seed is the only copy of the key this backend holds. Onboarding only
+  /// reaches these calls when no wallet exists, so anything else is a bug or a
+  /// misroute — fail loudly instead of silently discarding the wallet.
+  Future<void> _refuseIfWalletExists() async {
+    if (await hasWallet()) {
+      throw const VaultFailure(
+        'На этом телефоне уже есть кошелёк. Сначала удалите его или '
+        'используйте другое хранилище.',
+      );
+    }
   }
 
   @override

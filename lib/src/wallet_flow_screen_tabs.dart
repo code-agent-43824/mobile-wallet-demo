@@ -9,6 +9,28 @@ String _networkLabel(AppLocalizations l10n, EvmNetwork network) =>
       EvmNetwork.ethereumSepolia => l10n.networkSepolia,
     };
 
+/// What the wallet switcher renders: the wallets plus which card is active.
+///
+/// Both are loaded together so the sheet resolves them in one `FutureBuilder`
+/// and never draws a list with no row ticked.
+class _WalletSwitcherData {
+  const _WalletSwitcherData({
+    required this.wallets,
+    required this.selectedCardProfileId,
+  });
+
+  final List<SwitchableWallet> wallets;
+  final String? selectedCardProfileId;
+
+  /// The active wallet is the active *backend*, and for a card also the
+  /// selected profile — otherwise every registered card would tick at once.
+  bool isActive(SwitchableWallet wallet, String currentBackendId) {
+    if (wallet.backendId != currentBackendId) return false;
+    if (!wallet.isCard) return !wallet.isEmptySlot;
+    return wallet.cardProfileId == selectedCardProfileId;
+  }
+}
+
 /// A language's name in that language — deliberately not translated, so the
 /// list reads the same whichever language the app is currently showing.
 String _languageName(Locale locale) => switch (locale.languageCode) {
@@ -99,6 +121,9 @@ class _SettingsTab extends StatelessWidget {
     required this.onRefresh,
     required this.onListWallets,
     required this.onSwitchWallet,
+    required this.onSelectedCardProfileId,
+    required this.onForgetCard,
+    required this.onConnectAnotherCard,
   });
 
   final ChainDataController chainData;
@@ -109,9 +134,18 @@ class _SettingsTab extends StatelessWidget {
   final bool isHardwareCustody;
   final VoidCallback onLock;
   final Future<void> Function() onRefresh;
-  final Future<List<({String id, String label, String? address})>> Function()
-  onListWallets;
-  final Future<void> Function(String backendId) onSwitchWallet;
+  final Future<List<SwitchableWallet>> Function() onListWallets;
+  final Future<void> Function(SwitchableWallet wallet) onSwitchWallet;
+
+  /// Which card profile is active, so the list can tick the right row when two
+  /// cards share the same storage name.
+  final Future<String?> Function() onSelectedCardProfileId;
+
+  final Future<void> Function(String cardProfileId) onForgetCard;
+
+  /// Null when this build has no card transport (desktop, or a test without an
+  /// adapter) — the switcher then offers no way to add one.
+  final Future<void> Function()? onConnectAnotherCard;
 
   @override
   Widget build(BuildContext context) {
@@ -217,9 +251,9 @@ class _SettingsTab extends StatelessWidget {
     );
   }
 
-  /// Switches between the storage backends that can hold a wallet — the phone
-  /// vault and a registered card. Deliberately plain for now:
-  /// it exists so a tester can move between wallets without reinstalling.
+  /// Lists the wallets this phone holds — the phone vault and every registered
+  /// card — and switches between them. Cards share a storage name, so each row
+  /// carries its address and, when the card reported one, its serial.
   void _showWalletSwitcher(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final style = PlatformStyle.of(context);
@@ -233,62 +267,128 @@ class _SettingsTab extends StatelessWidget {
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(NocturneSpacing.gutter),
-            child:
-                FutureBuilder<
-                  List<({String id, String label, String? address})>
-                >(
-                  future: onListWallets(),
-                  builder: (builderContext, snapshot) {
-                    final wallets = snapshot.data;
-                    return Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          l10n.walletsTitle,
-                          style: theme.textTheme.titleLarge,
+            child: FutureBuilder<_WalletSwitcherData>(
+              future: _loadSwitcherData(),
+              builder: (builderContext, snapshot) {
+                final data = snapshot.data;
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(l10n.walletsTitle, style: theme.textTheme.titleLarge),
+                    const SizedBox(height: NocturneSpacing.x4),
+                    if (data == null)
+                      const Padding(
+                        padding: EdgeInsets.all(NocturneSpacing.x8),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else
+                      for (final wallet in data.wallets)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(wallet.label),
+                          subtitle: Text(
+                            _walletSubtitle(l10n, wallet),
+                            style: theme.textTheme.bodySmall,
+                          ),
+                          leading: data.isActive(wallet, currentBackendId)
+                              ? const Icon(
+                                  Icons.check,
+                                  color: NocturneColors.accent,
+                                )
+                              : const Icon(
+                                  Icons.circle_outlined,
+                                  color: NocturneColors.textFaint,
+                                ),
+                          // Forgetting is per card and only offered for a card
+                          // the phone actually remembers.
+                          trailing: wallet.cardProfileId == null
+                              ? null
+                              : IconButton(
+                                  icon: const Icon(Icons.delete_outline),
+                                  tooltip: l10n.walletsForgetCard,
+                                  onPressed: () =>
+                                      _confirmForgetCard(sheetContext, wallet),
+                                ),
+                          onTap: () {
+                            Navigator.of(sheetContext).pop();
+                            onSwitchWallet(wallet);
+                          },
                         ),
-                        const SizedBox(height: NocturneSpacing.x4),
-                        if (wallets == null)
-                          const Padding(
-                            padding: EdgeInsets.all(NocturneSpacing.x8),
-                            child: Center(child: CircularProgressIndicator()),
-                          )
-                        else
-                          for (final wallet in wallets)
-                            ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(wallet.label),
-                              // The address is what tells two wallets apart
-                              // once the storage names stop being unique.
-                              subtitle: Text(
-                                wallet.address ?? l10n.walletsEmptySlot,
-                                style: theme.textTheme.bodySmall,
-                              ),
-                              trailing: wallet.id == currentBackendId
-                                  ? const Icon(
-                                      Icons.check,
-                                      color: NocturneColors.accent,
-                                    )
-                                  : null,
-                              onTap: () {
-                                Navigator.of(sheetContext).pop();
-                                onSwitchWallet(wallet.id);
-                              },
-                            ),
-                        const SizedBox(height: NocturneSpacing.x4),
-                        OutlinedButton(
-                          onPressed: () => Navigator.of(sheetContext).pop(),
-                          child: Text(l10n.actionClose),
-                        ),
-                      ],
-                    );
-                  },
-                ),
+                    if (onConnectAnotherCard != null) ...[
+                      const SizedBox(height: NocturneSpacing.x4),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(sheetContext).pop();
+                          onConnectAnotherCard!();
+                        },
+                        icon: const Icon(Icons.add_card),
+                        label: Text(l10n.walletsConnectAnotherCard),
+                      ),
+                    ],
+                    const SizedBox(height: NocturneSpacing.x4),
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(sheetContext).pop(),
+                      child: Text(l10n.actionClose),
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         );
       },
     );
+  }
+
+  Future<_WalletSwitcherData> _loadSwitcherData() async {
+    // Both reads come from software-retained data, so the list costs no tap.
+    final wallets = await onListWallets();
+    return _WalletSwitcherData(
+      wallets: wallets,
+      selectedCardProfileId: await onSelectedCardProfileId(),
+    );
+  }
+
+  String _walletSubtitle(AppLocalizations l10n, SwitchableWallet wallet) {
+    final address = wallet.address;
+    if (address == null) {
+      return l10n.walletsEmptySlot;
+    }
+    final serial = wallet.serial;
+    return serial == null ? address : '$address\n${l10n.walletsSerial(serial)}';
+  }
+
+  /// Forgetting a card drops the phone's record of it. The card keeps its key,
+  /// so this is reversible by connecting it again — the confirmation says so
+  /// rather than warning about loss that does not happen.
+  Future<void> _confirmForgetCard(
+    BuildContext sheetContext,
+    SwitchableWallet wallet,
+  ) async {
+    final l10n = AppLocalizations.of(sheetContext);
+    final profileId = wallet.cardProfileId;
+    if (profileId == null) return;
+    final confirmed = await showDialog<bool>(
+      context: sheetContext,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.walletsForgetCardTitle),
+        content: Text(l10n.walletsForgetCardBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.actionCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.walletsForgetCard),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !sheetContext.mounted) return;
+    Navigator.of(sheetContext).pop();
+    await onForgetCard(profileId);
   }
 
   /// The developer sheet. Everything here used to sit on the main screen; the

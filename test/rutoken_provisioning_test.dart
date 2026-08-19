@@ -334,6 +334,67 @@ void main() {
     );
   });
 
+  test('switches between two registered cards and forgets one', () async {
+    final store = InMemorySecureKeyValueStore();
+    final cardA = _ProvisioningAdapter(serial: 'RT-A');
+    final controller = WalletFlowController(
+      store: store,
+      biometricAuthGateway: const SimulatedBiometricAuthGateway(),
+      rutokenNativeAdapter: cardA,
+    );
+    await controller.loadInitialState();
+    await controller.provisionImportedRutoken(
+      mnemonic: _mnemonic,
+      passphrase: '',
+      pin: '1234',
+    );
+    final addressA = controller.summary!.address;
+
+    // A second card, registered from Настройки while the first is active.
+    cardA.account = const WalletAccountDescriptor(
+      backendId: 'rutoken_nfc',
+      address: _legacyAddress,
+      derivationPath: "m/44'/60'/0'/0/0",
+    );
+    await controller.adoptExistingRutoken(pin: '1234');
+
+    expect(controller.errorMessage, isNull);
+    expect(controller.summary?.address, _legacyAddress);
+
+    final wallets = await controller.listSwitchableWallets();
+    final cards = wallets.where((wallet) => wallet.isCard).toList();
+    expect(cards, hasLength(2));
+    expect(
+      cards.map((card) => card.address),
+      containsAll(<String>[addressA, _legacyAddress]),
+    );
+    expect(
+      await controller.selectedCardProfileId(),
+      _legacyAddress.toLowerCase(),
+    );
+
+    // Back to the first card: the dashboard must follow, not keep the other
+    // card's address on screen.
+    final first = cards.firstWhere((card) => card.address == addressA);
+    await controller.switchActiveWallet(first);
+
+    expect(controller.summary?.address, addressA);
+    expect(await controller.selectedCardProfileId(), first.cardProfileId);
+
+    // Forgetting the active card falls back to the other registered one.
+    await controller.forgetCard(first.cardProfileId!);
+
+    expect(controller.errorMessage, isNull);
+    expect(controller.summary?.address, _legacyAddress);
+    expect(
+      (await controller.listSwitchableWallets())
+          .where((wallet) => wallet.isCard)
+          .length,
+      1,
+    );
+    controller.dispose();
+  });
+
   test('selecting an unregistered card is refused', () async {
     final service = RutokenProvisioningService(
       adapter: _ProvisioningAdapter(),

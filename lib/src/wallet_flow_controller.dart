@@ -1,5 +1,39 @@
 part of 'wallet_flow_screen.dart';
 
+/// One row of the wallet switcher.
+///
+/// A wallet is no longer the same thing as a storage backend: the card backend
+/// can hold several registered cards, each its own wallet, so a row names the
+/// backend *and* — for a card — which registered profile it means.
+class SwitchableWallet {
+  const SwitchableWallet({
+    required this.backendId,
+    required this.label,
+    required this.address,
+    this.cardProfileId,
+    this.serial,
+  });
+
+  final String backendId;
+
+  /// Translated name of the storage, not of this particular wallet.
+  final String label;
+
+  /// The wallet's address, or null for a slot that holds no wallet yet —
+  /// selecting such a row starts the flow that creates or connects one.
+  final String? address;
+
+  /// Which registered card this row means. Null for the phone vault and for
+  /// the card backend's empty slot.
+  final String? cardProfileId;
+
+  /// The card's own serial, when it was reported when the card was registered.
+  final String? serial;
+
+  bool get isCard => cardProfileId != null;
+  bool get isEmptySlot => address == null;
+}
+
 /// Owns the wallet onboarding/unlock state machine and every domain action,
 /// independent of any widget. [WalletFlowScreen] is now a thin listener that
 /// renders [stage] and forwards user intents to the methods here, so this logic
@@ -438,47 +472,86 @@ class WalletFlowController extends ChangeNotifier {
     );
   }
 
-  /// The wallets the user can switch between: each available storage backend,
-  /// whether it already holds a wallet, and that wallet's address.
+  /// The wallets the user can switch between: the phone vault, plus one entry
+  /// per registered card rather than a single "card" row.
   ///
-  /// The address comes from the software-retained summary, so listing costs no
-  /// NFC tap. With one profile per backend the address identifies the wallet;
-  /// Phase 14 (several cards behind one backend) is what needs the card serial
-  /// as well, and that does require reading the card.
-  Future<List<({String id, String label, String? address})>>
-  listSwitchableWallets() async {
-    final result = <({String id, String label, String? address})>[];
+  /// Everything here is read from software-retained data, so listing costs no
+  /// NFC tap — including the serials, which were recorded when each card was
+  /// registered.
+  Future<List<SwitchableWallet>> listSwitchableWallets() async {
+    final result = <SwitchableWallet>[];
     for (final entry in _backendRegistry.availableEntries) {
       final backend = entry.backend;
       if (backend == null) {
         continue;
       }
+      if (entry.descriptor.kind == WalletBackendKind.externalDevice) {
+        final profiles =
+            await _rutokenProvisioning?.loadProfiles() ??
+            const <RutokenCardProfile>[];
+        for (final profile in profiles) {
+          result.add(
+            SwitchableWallet(
+              backendId: entry.descriptor.id,
+              label: _labelForBackendKind(entry.descriptor.kind),
+              address: profile.account.address,
+              cardProfileId: profile.id,
+              serial: profile.serial,
+            ),
+          );
+        }
+        // Always offer the empty slot: it is how another card gets connected
+        // once the phone already holds a wallet.
+        result.add(
+          SwitchableWallet(
+            backendId: entry.descriptor.id,
+            label: _labelForBackendKind(entry.descriptor.kind),
+            address: null,
+          ),
+        );
+        continue;
+      }
       final summary = await backend.getWalletSummary();
-      result.add((
-        id: entry.descriptor.id,
-        label: _labelForBackendKind(entry.descriptor.kind),
-        address: summary?.address,
-      ));
+      result.add(
+        SwitchableWallet(
+          backendId: entry.descriptor.id,
+          label: _labelForBackendKind(entry.descriptor.kind),
+          address: summary?.address,
+        ),
+      );
     }
     return result;
   }
 
-  /// Switches the active wallet to [backendId] and reloads everything that
+  /// The card profile operations are currently bound to, or null when the
+  /// active wallet is not a card.
+  Future<String?> selectedCardProfileId() async =>
+      (await _rutokenProvisioning?.loadSelectedProfile())?.id;
+
+  /// Switches the active wallet to [wallet] and reloads everything that
   /// describes it.
   ///
   /// [selectBackend] alone only records the choice — it does not reload the
   /// summary, so using it to switch would leave the previous wallet's address
   /// on screen. This mirrors the resolution [loadInitialState] performs, and
   /// drops any held material so nothing survives the switch.
-  Future<void> switchActiveWallet(String backendId) async {
-    if (backendId == effectiveBackendId) {
+  Future<void> switchActiveWallet(SwitchableWallet wallet) async {
+    final currentCardProfileId = await selectedCardProfileId();
+    if (wallet.backendId == effectiveBackendId &&
+        wallet.cardProfileId == currentCardProfileId) {
       return;
     }
     await _runBusy(_messages.busySwitchingWallet, () async {
-      await _backendRegistry.selectBackend(backendId);
-      final backend = _backendRegistry.backendById(backendId) ?? _vault;
+      // Point the card backend at this profile *before* resolving the summary,
+      // so the address, the biometric PIN slot and every later operation all
+      // read the same card.
+      if (wallet.cardProfileId case final String profileId) {
+        await _rutokenProvisioning?.selectProfile(profileId);
+      }
+      await _backendRegistry.selectBackend(wallet.backendId);
+      final backend = _backendRegistry.backendById(wallet.backendId) ?? _vault;
       final summary = await backend.getWalletSummary();
-      _selectedBackendId = backendId;
+      _selectedBackendId = wallet.backendId;
       _summary = summary;
       _material = null;
       _biometricsEnabled = await backend.isBiometricUnlockEnabled();
@@ -486,6 +559,44 @@ class WalletFlowController extends ChangeNotifier {
       // A backend with no wallet yet starts its own onboarding rather than
       // showing an empty dashboard.
       _stage = summary == null
+          ? WalletFlowStage.welcome
+          : WalletFlowStage.unlocked;
+      _errorMessage = null;
+    });
+  }
+
+  /// Drops what the phone remembers about one card. The card and its key are
+  /// untouched; it can be connected again later.
+  ///
+  /// Forgetting the active card leaves the app on whatever wallet the store
+  /// falls back to, so the reload runs through the same path as a switch.
+  Future<void> forgetCard(String cardProfileId) async {
+    final provisioning = _rutokenProvisioning;
+    if (provisioning == null) return;
+    await _runBusy(_messages.busyForgettingCard, () async {
+      await provisioning.forgetProfile(cardProfileId);
+      final backend = _rutokenBackend;
+      if (backend == null || effectiveBackendId != backend.backendId) {
+        return;
+      }
+      final summary = await backend.getWalletSummary();
+      if (summary != null) {
+        _summary = summary;
+        _biometricsEnabled = await backend.isBiometricUnlockEnabled();
+        _biometricsAvailable = await backend.isBiometricUnlockAvailable();
+        _errorMessage = null;
+        return;
+      }
+      // That was the last card: fall back to the phone vault, or to onboarding
+      // when it holds nothing either.
+      final vaultSummary = await _vault.getWalletSummary();
+      await _backendRegistry.selectBackend(_vault.backendId);
+      _selectedBackendId = _vault.backendId;
+      _summary = vaultSummary;
+      _material = null;
+      _biometricsEnabled = await _vault.isBiometricUnlockEnabled();
+      _biometricsAvailable = await _vault.isBiometricUnlockAvailable();
+      _stage = vaultSummary == null
           ? WalletFlowStage.welcome
           : WalletFlowStage.unlocked;
       _errorMessage = null;

@@ -264,5 +264,11 @@
   "wcRejectRequest": "Отклонить запрос",
   "wcAccounts": "Аккаунты: {accounts}",
   "wcConnectedAt": "Подключено: {timestamp}",
-  "wcDisconnect": "Отключить"
+  "wcDisconnect": "Отключить",
+  "walletsSerial": "Серийный номер: {serial}",
+  "walletsForgetCard": "Забыть карту",
+  "walletsForgetCardTitle": "Забыть эту карту?",
+  "walletsForgetCardBody": "Приложение перестанет помнить эту карту. Сама карта и ключ на ней не изменятся — её можно подключить снова в любой момент.",
+  "walletsConnectAnotherCard": "Подключить ещё карту",
+  "busyForgettingCard": "Забываем карту…"
 }

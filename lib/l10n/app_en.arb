@@ -550,5 +550,18 @@
       }
     }
   },
-  "wcDisconnect": "Disconnect"
+  "wcDisconnect": "Disconnect",
+  "walletsSerial": "Serial number: {serial}",
+  "@walletsSerial": {
+    "placeholders": {
+      "serial": {
+        "type": "String"
+      }
+    }
+  },
+  "walletsForgetCard": "Forget the card",
+  "walletsForgetCardTitle": "Forget this card?",
+  "walletsForgetCardBody": "The app will stop remembering this card. The card and its key are unchanged — you can connect it again at any time.",
+  "walletsConnectAnotherCard": "Connect another card",
+  "busyForgettingCard": "Forgetting the card…"
 }

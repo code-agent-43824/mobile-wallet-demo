@@ -313,6 +313,25 @@ class RutokenProvisioningService {
     await _writeDocument(document);
   }
 
+  /// Forgets [profileId] on this phone. The card itself is untouched — its key
+  /// stays where it is and the card can be adopted again later; only what the
+  /// phone remembers is dropped.
+  ///
+  /// When the forgotten card was the selected one, the selection moves to
+  /// another registered card, or becomes none if that was the last.
+  Future<void> forgetProfile(String profileId) async {
+    final document = await _loadDocument();
+    final profiles = _entries(
+      document,
+    ).where((entry) => entry['id'] != profileId).toList();
+    document['profiles'] = profiles;
+    if (document['selectedId'] == profileId) {
+      final remaining = profiles.where((entry) => entry['state'] == 'active');
+      document['selectedId'] = remaining.isEmpty ? null : remaining.first['id'];
+    }
+    await _writeDocument(document);
+  }
+
   Future<WalletAccountDescriptor?> loadAccountDescriptor() async {
     final entry = _selectedEntry(await _loadDocument());
     if (entry == null) return null;
