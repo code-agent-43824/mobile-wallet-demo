@@ -353,7 +353,12 @@ class _SettingsTab extends StatelessWidget {
   String _walletSubtitle(AppLocalizations l10n, SwitchableWallet wallet) {
     final address = wallet.address;
     if (address == null) {
-      return l10n.walletsEmptySlot;
+      // The card backend's empty row is always present, so it sits next to
+      // registered cards under the same storage name — it has to say what
+      // choosing it does, not just that it is empty.
+      return wallet.isCardStorage
+          ? l10n.walletsNewCardSlot
+          : l10n.walletsEmptySlot;
     }
     final serial = wallet.serial;
     return serial == null ? address : '$address\n${l10n.walletsSerial(serial)}';

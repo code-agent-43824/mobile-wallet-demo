@@ -563,5 +563,6 @@
   "walletsForgetCardTitle": "Forget this card?",
   "walletsForgetCardBody": "The app will stop remembering this card. The card and its key are unchanged — you can connect it again at any time.",
   "walletsConnectAnotherCard": "Connect another card",
-  "busyForgettingCard": "Forgetting the card…"
+  "busyForgettingCard": "Forgetting the card…",
+  "walletsNewCardSlot": "New card — create or import a key"
 }

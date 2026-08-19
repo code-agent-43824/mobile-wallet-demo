@@ -270,5 +270,6 @@
   "walletsForgetCardTitle": "Забыть эту карту?",
   "walletsForgetCardBody": "Приложение перестанет помнить эту карту. Сама карта и ключ на ней не изменятся — её можно подключить снова в любой момент.",
   "walletsConnectAnotherCard": "Подключить ещё карту",
-  "busyForgettingCard": "Забываем карту…"
+  "busyForgettingCard": "Забываем карту…",
+  "walletsNewCardSlot": "Новая карта — создать или импортировать ключ"
 }

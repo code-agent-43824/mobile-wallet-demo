@@ -10,11 +10,16 @@ class SwitchableWallet {
     required this.backendId,
     required this.label,
     required this.address,
+    required this.isCardStorage,
     this.cardProfileId,
     this.serial,
   });
 
   final String backendId;
+
+  /// True for both a registered card and the card backend's empty row, so the
+  /// UI can word that row as "add a card" rather than as a generic empty slot.
+  final bool isCardStorage;
 
   /// Translated name of the storage, not of this particular wallet.
   final String label;
@@ -495,6 +500,7 @@ class WalletFlowController extends ChangeNotifier {
               backendId: entry.descriptor.id,
               label: _labelForBackendKind(entry.descriptor.kind),
               address: profile.account.address,
+              isCardStorage: true,
               cardProfileId: profile.id,
               serial: profile.serial,
             ),
@@ -507,6 +513,7 @@ class WalletFlowController extends ChangeNotifier {
             backendId: entry.descriptor.id,
             label: _labelForBackendKind(entry.descriptor.kind),
             address: null,
+            isCardStorage: true,
           ),
         );
         continue;
@@ -517,6 +524,7 @@ class WalletFlowController extends ChangeNotifier {
           backendId: entry.descriptor.id,
           label: _labelForBackendKind(entry.descriptor.kind),
           address: summary?.address,
+          isCardStorage: false,
         ),
       );
     }
