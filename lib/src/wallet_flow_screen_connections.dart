@@ -502,7 +502,7 @@ class _AirGapTransactionPreviewCard extends StatelessWidget {
               ? l10n.previewNone
               : l10n.previewContractDataValue(
                   preview.dataLength,
-                  preview.selector ?? l10n.previewNone,
+                  preview.selector ?? l10n.wcSelectorNone,
                 ),
         ),
         if (request.origin != null)

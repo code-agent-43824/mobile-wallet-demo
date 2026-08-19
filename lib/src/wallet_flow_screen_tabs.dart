@@ -109,7 +109,7 @@ class _SettingsTab extends StatelessWidget {
   final bool isHardwareCustody;
   final VoidCallback onLock;
   final Future<void> Function() onRefresh;
-  final Future<List<({String id, String label, bool hasWallet})>> Function()
+  final Future<List<({String id, String label, String? address})>> Function()
   onListWallets;
   final Future<void> Function(String backendId) onSwitchWallet;
 
@@ -235,7 +235,7 @@ class _SettingsTab extends StatelessWidget {
             padding: const EdgeInsets.all(NocturneSpacing.gutter),
             child:
                 FutureBuilder<
-                  List<({String id, String label, bool hasWallet})>
+                  List<({String id, String label, String? address})>
                 >(
                   future: onListWallets(),
                   builder: (builderContext, snapshot) {
@@ -259,10 +259,10 @@ class _SettingsTab extends StatelessWidget {
                             ListTile(
                               contentPadding: EdgeInsets.zero,
                               title: Text(wallet.label),
+                              // The address is what tells two wallets apart
+                              // once the storage names stop being unique.
                               subtitle: Text(
-                                wallet.hasWallet
-                                    ? l10n.walletsCreated
-                                    : l10n.walletsEmptySlot,
+                                wallet.address ?? l10n.walletsEmptySlot,
                                 style: theme.textTheme.bodySmall,
                               ),
                               trailing: wallet.id == currentBackendId

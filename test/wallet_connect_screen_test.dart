@@ -252,10 +252,10 @@ void main() {
     // The card states the request in plain language now; the raw method name is
     // developer detail and no longer shown.
     expect(find.text('Приложение просит подписать перевод.'), findsOneWidget);
-    expect(find.text('Тип: вызов смарт-контракта'), findsOneWidget);
-    expect(find.textContaining('selector 0x12345678'), findsOneWidget);
-    expect(find.textContaining('Gas limit: 120000'), findsOneWidget);
-    expect(find.text('Симуляция: успешна (fake-rpc)'), findsOneWidget);
+    expect(find.text('Вызов смарт-контракта'), findsOneWidget);
+    expect(find.textContaining('функция 0x12345678'), findsOneWidget);
+    expect(find.textContaining('Лимит газа: 120000'), findsOneWidget);
+    expect(find.text('Проверка в сети: пройдена (fake-rpc)'), findsOneWidget);
 
     final reject = find.text('Отклонить запрос');
     await tester.ensureVisible(reject);
@@ -345,7 +345,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Подписание заблокировано:'), findsOneWidget);
+    expect(find.textContaining('Подписание недоступно:'), findsOneWidget);
     expect(find.textContaining('execution reverted: expired'), findsOneWidget);
     final approve = tester.widget<FilledButton>(
       find.widgetWithText(FilledButton, 'Одобрить и подписать'),
@@ -434,7 +434,15 @@ void main() {
 
     // The step number moved into a badge, so the title is the title alone.
     expect(find.text('Верните подпись в MetaMask'), findsOneWidget);
-    expect(find.textContaining('BC-UR'), findsWidgets);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Text &&
+            (widget.data == 'Один QR-код' ||
+                (widget.data?.startsWith('Кадр ') ?? false)),
+      ),
+      findsWidgets,
+    );
   });
 
   testWidgets(

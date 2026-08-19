@@ -435,7 +435,7 @@ void main() {
     expect(find.text('ETH'), findsWidgets);
     await tester.tap(find.text('Ethereum Mainnet'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Ethereum Sepolia').last);
+    await tester.tap(find.text('Тестовая сеть Sepolia').last);
     await tester.pumpAndSettle();
 
     expect(find.text('SepoliaETH'), findsWidgets);
@@ -496,7 +496,7 @@ void main() {
     // Completer.
     await tester.tap(find.text('Ethereum Mainnet'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Ethereum Sepolia').last);
+    await tester.tap(find.text('Тестовая сеть Sepolia').last);
     await tester.pumpAndSettle();
     expect(find.text('SepoliaETH'), findsWidgets);
 

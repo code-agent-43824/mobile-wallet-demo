@@ -438,21 +438,26 @@ class WalletFlowController extends ChangeNotifier {
     );
   }
 
-  /// The wallets the user can switch between: each available storage backend
-  /// with whether it already holds a wallet. Exposed for the Настройки
-  /// switcher; the label is the catalogue's own, so this stays a thin view.
-  Future<List<({String id, String label, bool hasWallet})>>
+  /// The wallets the user can switch between: each available storage backend,
+  /// whether it already holds a wallet, and that wallet's address.
+  ///
+  /// The address comes from the software-retained summary, so listing costs no
+  /// NFC tap. With one profile per backend the address identifies the wallet;
+  /// Phase 14 (several cards behind one backend) is what needs the card serial
+  /// as well, and that does require reading the card.
+  Future<List<({String id, String label, String? address})>>
   listSwitchableWallets() async {
-    final result = <({String id, String label, bool hasWallet})>[];
+    final result = <({String id, String label, String? address})>[];
     for (final entry in _backendRegistry.availableEntries) {
       final backend = entry.backend;
       if (backend == null) {
         continue;
       }
+      final summary = await backend.getWalletSummary();
       result.add((
         id: entry.descriptor.id,
         label: _labelForBackendKind(entry.descriptor.kind),
-        hasWallet: await backend.hasWallet(),
+        address: summary?.address,
       ));
     }
     return result;
