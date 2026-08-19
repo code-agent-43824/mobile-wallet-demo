@@ -30,6 +30,41 @@ class RutokenProvisioningResult {
   final WalletAccountPublicKey publicAccount;
 }
 
+/// One registered card, as the phone remembers it between taps.
+///
+/// Everything here is public: an address, a derivation path, the token's own
+/// serial and label. Nothing that could reconstruct a key is stored — that is
+/// the whole point of the custody backend.
+class RutokenCardProfile {
+  const RutokenCardProfile({
+    required this.id,
+    required this.account,
+    this.publicAccount,
+    this.serial,
+    this.label,
+  });
+
+  /// Stable identity of the profile: the lowercased address. Two cards holding
+  /// the same key *are* the same wallet, so the address is the right key —
+  /// and unlike the serial it exists for profiles registered before the
+  /// serial was read (v1.53 and earlier).
+  final String id;
+
+  final WalletAccountDescriptor account;
+
+  /// Account-level BIP-32 metadata for EIP-4527 export. Null for a card adopted
+  /// read-only, which cannot synthesize it.
+  final WalletAccountPublicKey? publicAccount;
+
+  /// The token's own serial, when the transport reported it.
+  final String? serial;
+
+  /// The token's own label, when the transport reported it.
+  final String? label;
+
+  static String idForAddress(String address) => address.toLowerCase();
+}
+
 /// Recoverable Rutoken provisioning built around the one primitive demonstrated
 /// by the supplied Android reference: import a raw BIP-32 master private key
 /// plus chain code with `C_CreateObject`.
@@ -116,6 +151,10 @@ class RutokenProvisioningService {
       await _writeMetadata(publicAccount, state: 'pending');
 
       final session = await _adapter.openSession(pin: pin);
+      // The token's own identity, reported when the session opened. Recorded so
+      // the picker can tell two cards apart by more than their address.
+      final serial = session.serial;
+      final tokenLabel = session.label;
       WalletAccountDescriptor? imported;
       Object? closeError;
       StackTrace? closeStackTrace;
@@ -149,7 +188,12 @@ class RutokenProvisioningService {
         sourceFingerprint: publicAccount.sourceFingerprint,
         parentFingerprint: publicAccount.parentFingerprint,
       );
-      await _writeMetadata(verifiedPublicAccount, state: 'active');
+      await _writeMetadata(
+        verifiedPublicAccount,
+        state: 'active',
+        serial: serial,
+        label: tokenLabel,
+      );
       if (closeError != null) {
         Error.throwWithStackTrace(closeError, closeStackTrace!);
       }
@@ -171,6 +215,8 @@ class RutokenProvisioningService {
       throw const RutokenNativeException('PIN Рутокена не должен быть пустым.');
     }
     final session = await _adapter.openSession(pin: pin);
+    final serial = session.serial;
+    final tokenLabel = session.label;
     WalletAccountDescriptor? account;
     Object? primaryFailure;
     try {
@@ -206,23 +252,76 @@ class RutokenProvisioningService {
       );
     }
     if (existing != null) {
-      // Preserve any account-xpub fields retained during Wallet Demo
-      // provisioning; adopting the same card must not downgrade AirGap.
+      // Re-adopting the same card must not downgrade AirGap, so the retained
+      // account-xpub fields stay. Recording the serial only adds public
+      // descriptive data, so a profile registered before serials were read
+      // gains one here.
+      await _recordTokenIdentity(
+        RutokenCardProfile.idForAddress(account.address),
+        serial: serial,
+        label: tokenLabel,
+      );
       return account;
     }
-    await _writeAccount(account);
+    await _writeAccount(account, serial: serial, label: tokenLabel);
     return account;
   }
 
+  /// Adds the token's own serial/label to an already-registered profile,
+  /// leaving every other field — including the account xpub — untouched.
+  Future<void> _recordTokenIdentity(
+    String profileId, {
+    String? serial,
+    String? label,
+  }) async {
+    if (serial == null && label == null) return;
+    final document = await _loadDocument();
+    final profiles = _entries(document);
+    final index = profiles.indexWhere((entry) => entry['id'] == profileId);
+    if (index == -1) return;
+    final updated = Map<String, dynamic>.from(profiles[index]);
+    if (serial != null) updated['serial'] = serial;
+    if (label != null) updated['label'] = label;
+    profiles[index] = updated;
+    document['profiles'] = profiles;
+    await _writeDocument(document);
+  }
+
+  /// Every registered card, in registration order. Half-written entries left by
+  /// a process death mid-provisioning are excluded — they are recovery evidence,
+  /// not usable wallets.
+  Future<List<RutokenCardProfile>> loadProfiles() async {
+    final document = await _loadDocument();
+    return _activeEntries(document).map(_profileFromJson).toList();
+  }
+
+  /// The card operations act on, or null when none is registered.
+  Future<RutokenCardProfile?> loadSelectedProfile() async {
+    final document = await _loadDocument();
+    final entry = _selectedEntry(document);
+    return entry == null ? null : _profileFromJson(entry);
+  }
+
+  /// Points later operations at [profileId]. Unknown or half-written ids are
+  /// refused rather than silently clearing the selection — an operation must
+  /// never end up bound to "no card in particular".
+  Future<void> selectProfile(String profileId) async {
+    final document = await _loadDocument();
+    final exists = _activeEntries(
+      document,
+    ).any((entry) => entry['id'] == profileId);
+    if (!exists) {
+      throw const RutokenNativeException('Такая карта не зарегистрирована.');
+    }
+    document['selectedId'] = profileId;
+    await _writeDocument(document);
+  }
+
   Future<WalletAccountDescriptor?> loadAccountDescriptor() async {
-    final json = await _loadActiveMetadata();
-    if (json == null) return null;
+    final entry = _selectedEntry(await _loadDocument());
+    if (entry == null) return null;
     try {
-      return WalletAccountDescriptor(
-        backendId: json['backendId'] as String,
-        address: json['address'] as String,
-        derivationPath: json['derivationPath'] as String,
-      );
+      return _accountFromJson(entry);
     } catch (_) {
       throw const RutokenNativeException(
         'Сохранённый публичный профиль Рутокена повреждён.',
@@ -231,16 +330,112 @@ class RutokenProvisioningService {
   }
 
   Future<WalletAccountPublicKey?> loadPublicAccount() async {
-    final json = await _loadActiveMetadata();
-    if (json == null || json['compressedPublicKey'] == null) return null;
+    final entry = _selectedEntry(await _loadDocument());
+    if (entry == null || entry['compressedPublicKey'] == null) return null;
     try {
-      final account = WalletAccountDescriptor(
+      return _publicAccountFromJson(entry);
+    } catch (_) {
+      throw const RutokenNativeException(
+        'Сохранённые публичные данные Рутокена повреждены.',
+      );
+    }
+  }
+
+  // --- persistence -----------------------------------------------------------
+  //
+  // One JSON document under [_metadataKey]: a list of card profiles plus the
+  // id of the selected one. Schemas 1 and 2 held a single profile inline, so
+  // they are migrated on read — an install that registered a card before v1.55
+  // keeps it, still selected, without touching the token.
+
+  Future<Map<String, dynamic>> _loadDocument() async {
+    final raw = await _store.read(_metadataKey);
+    if (raw == null) return _emptyDocument();
+    Object? json;
+    try {
+      json = jsonDecode(raw);
+    } catch (_) {
+      throw const RutokenNativeException(
+        'Сохранённые публичные данные Рутокена повреждены.',
+      );
+    }
+    if (json is! Map<String, dynamic>) {
+      throw const RutokenNativeException(
+        'Сохранённые публичные данные Рутокена повреждены.',
+      );
+    }
+    final schema = json['schema'];
+    if (schema == 3) return json;
+    if (schema == 1 || schema == 2) return _migrateSingleProfile(json);
+    // A newer schema from a downgraded install: refuse rather than guess, so a
+    // future format cannot be silently truncated back to this one.
+    throw const RutokenNativeException(
+      'Сохранённые публичные данные Рутокена повреждены.',
+    );
+  }
+
+  Map<String, dynamic> _emptyDocument() => <String, dynamic>{
+    'schema': 3,
+    'selectedId': null,
+    'profiles': <Map<String, dynamic>>[],
+  };
+
+  /// Schemas 1/2 → 3. The single record becomes the one profile, selected when
+  /// it was active; a `pending` record migrates as pending and stays unusable,
+  /// preserving the crash-recovery marker rather than promoting it.
+  Map<String, dynamic> _migrateSingleProfile(Map<String, dynamic> json) {
+    final address = json['address'];
+    if (address is! String || address.isEmpty) {
+      throw const RutokenNativeException(
+        'Сохранённые публичные данные Рутокена повреждены.',
+      );
+    }
+    final id = RutokenCardProfile.idForAddress(address);
+    final entry = Map<String, dynamic>.from(json)
+      ..remove('schema')
+      ..['id'] = id;
+    return <String, dynamic>{
+      'schema': 3,
+      'selectedId': json['state'] == 'active' ? id : null,
+      'profiles': <Map<String, dynamic>>[entry],
+    };
+  }
+
+  Future<void> _writeDocument(Map<String, dynamic> document) =>
+      _store.write(_metadataKey, jsonEncode(document));
+
+  List<Map<String, dynamic>> _entries(Map<String, dynamic> document) {
+    final profiles = document['profiles'];
+    if (profiles is! List) {
+      throw const RutokenNativeException(
+        'Сохранённые публичные данные Рутокена повреждены.',
+      );
+    }
+    return profiles.whereType<Map<String, dynamic>>().toList();
+  }
+
+  List<Map<String, dynamic>> _activeEntries(Map<String, dynamic> document) =>
+      _entries(document).where((entry) => entry['state'] == 'active').toList();
+
+  Map<String, dynamic>? _selectedEntry(Map<String, dynamic> document) {
+    final selectedId = document['selectedId'];
+    if (selectedId is! String) return null;
+    for (final entry in _activeEntries(document)) {
+      if (entry['id'] == selectedId) return entry;
+    }
+    return null;
+  }
+
+  WalletAccountDescriptor _accountFromJson(Map<String, dynamic> json) =>
+      WalletAccountDescriptor(
         backendId: json['backendId'] as String,
         address: json['address'] as String,
         derivationPath: json['derivationPath'] as String,
       );
-      return WalletAccountPublicKey(
-        account: account,
+
+  WalletAccountPublicKey _publicAccountFromJson(Map<String, dynamic> json) =>
+      WalletAccountPublicKey(
+        account: _accountFromJson(json),
         accountPath: json['accountPath'] as String,
         accountDepth: json['accountDepth'] as int,
         compressedPublicKey: base64Decode(
@@ -250,64 +445,88 @@ class RutokenProvisioningService {
         sourceFingerprint: json['sourceFingerprint'] as int,
         parentFingerprint: json['parentFingerprint'] as int,
       );
-    } catch (_) {
-      throw const RutokenNativeException(
-        'Сохранённые публичные данные Рутокена повреждены.',
-      );
-    }
-  }
 
-  Future<Map<String, dynamic>?> _loadActiveMetadata() async {
-    final raw = await _store.read(_metadataKey);
-    if (raw == null) return null;
+  RutokenCardProfile _profileFromJson(Map<String, dynamic> json) {
     try {
-      final json = jsonDecode(raw);
-      if (json is! Map<String, dynamic> ||
-          (json['schema'] != 1 && json['schema'] != 2) ||
-          json['state'] != 'active') {
-        return null;
-      }
-      return json;
+      return RutokenCardProfile(
+        id: json['id'] as String,
+        account: _accountFromJson(json),
+        publicAccount: json['compressedPublicKey'] == null
+            ? null
+            : _publicAccountFromJson(json),
+        serial: json['serial'] as String?,
+        label: json['label'] as String?,
+      );
     } catch (_) {
       throw const RutokenNativeException(
-        'Сохранённые публичные данные Рутокена повреждены.',
+        'Сохранённый публичный профиль Рутокена повреждён.',
       );
     }
   }
 
-  Future<void> _writeAccount(WalletAccountDescriptor account) {
-    return _store.write(
-      _metadataKey,
-      jsonEncode(<String, Object>{
-        'schema': 2,
-        'state': 'active',
-        'backendId': account.backendId,
-        'address': account.address,
-        'derivationPath': account.derivationPath,
-      }),
-    );
+  /// Inserts or replaces one profile, keeping registration order. Selecting it
+  /// is deliberately tied to becoming `active`: a half-written entry must never
+  /// be the card an operation binds to.
+  Future<void> _upsertProfile(
+    Map<String, dynamic> entry, {
+    required String state,
+  }) async {
+    final document = await _loadDocument();
+    final id = entry['id'] as String;
+    final profiles = _entries(document);
+    final stored = Map<String, dynamic>.from(entry)..['state'] = state;
+    final index = profiles.indexWhere((existing) => existing['id'] == id);
+    if (index == -1) {
+      profiles.add(stored);
+    } else {
+      profiles[index] = stored;
+    }
+    document['profiles'] = profiles;
+    if (state == 'active') {
+      document['selectedId'] = id;
+    } else if (document['selectedId'] == id) {
+      // Re-provisioning the selected card makes it unusable until the write
+      // completes, which is what the pending marker has always meant.
+      document['selectedId'] = null;
+    }
+    await _writeDocument(document);
+  }
+
+  Future<void> _writeAccount(
+    WalletAccountDescriptor account, {
+    String? serial,
+    String? label,
+  }) {
+    return _upsertProfile(<String, dynamic>{
+      'id': RutokenCardProfile.idForAddress(account.address),
+      'backendId': account.backendId,
+      'address': account.address,
+      'derivationPath': account.derivationPath,
+      if (serial != null) 'serial': serial,
+      if (label != null) 'label': label,
+    }, state: 'active');
   }
 
   Future<void> _writeMetadata(
     WalletAccountPublicKey publicAccount, {
     required String state,
+    String? serial,
+    String? label,
   }) {
-    return _store.write(
-      _metadataKey,
-      jsonEncode(<String, Object>{
-        'schema': 2,
-        'state': state,
-        'backendId': publicAccount.account.backendId,
-        'address': publicAccount.account.address,
-        'derivationPath': publicAccount.account.derivationPath,
-        'accountPath': publicAccount.accountPath,
-        'accountDepth': publicAccount.accountDepth,
-        'compressedPublicKey': base64Encode(publicAccount.compressedPublicKey),
-        'chainCode': base64Encode(publicAccount.chainCode),
-        'sourceFingerprint': publicAccount.sourceFingerprint,
-        'parentFingerprint': publicAccount.parentFingerprint,
-      }),
-    );
+    return _upsertProfile(<String, dynamic>{
+      'id': RutokenCardProfile.idForAddress(publicAccount.account.address),
+      'backendId': publicAccount.account.backendId,
+      'address': publicAccount.account.address,
+      'derivationPath': publicAccount.account.derivationPath,
+      'accountPath': publicAccount.accountPath,
+      'accountDepth': publicAccount.accountDepth,
+      'compressedPublicKey': base64Encode(publicAccount.compressedPublicKey),
+      'chainCode': base64Encode(publicAccount.chainCode),
+      'sourceFingerprint': publicAccount.sourceFingerprint,
+      'parentFingerprint': publicAccount.parentFingerprint,
+      if (serial != null) 'serial': serial,
+      if (label != null) 'label': label,
+    }, state: state);
   }
 
   Uint8List _uncompressedXY(Uint8List compressed) =>

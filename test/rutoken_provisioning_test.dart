@@ -174,26 +174,104 @@ void main() {
       expect(await service.loadPublicAccount(), isNull);
       expect(account.address, adapter.account?.address);
       final publicProfile = await store.read('rutoken.public_account.v1');
-      expect(publicProfile, contains('"schema":2'));
+      expect(publicProfile, contains('"schema":3'));
       expect(publicProfile, isNot(contains('1234')));
     },
   );
 
-  test('loads the existing schema-1 public profile', () async {
+  test(
+    'migrates a legacy single-profile record and keeps it selected',
+    () async {
+      for (final schema in <int>[1, 2]) {
+        final store = InMemorySecureKeyValueStore();
+        await store.write(
+          'rutoken.public_account.v1',
+          jsonEncode(_legacyRecord(schema: schema)),
+        );
+        final service = RutokenProvisioningService(
+          adapter: _ProvisioningAdapter(),
+          store: store,
+        );
+
+        expect(await service.loadAccountDescriptor(), isNotNull);
+        expect(await service.loadPublicAccount(), isNotNull);
+        final profiles = await service.loadProfiles();
+        expect(profiles, hasLength(1), reason: 'schema $schema');
+        expect(profiles.single.id, _legacyAddress.toLowerCase());
+        expect(profiles.single.serial, isNull);
+        expect((await service.loadSelectedProfile())?.id, profiles.single.id);
+      }
+    },
+  );
+
+  test(
+    'a legacy half-written record migrates unusable, not selected',
+    () async {
+      final store = InMemorySecureKeyValueStore();
+      await store.write(
+        'rutoken.public_account.v1',
+        jsonEncode(_legacyRecord(schema: 2, state: 'pending')),
+      );
+      final service = RutokenProvisioningService(
+        adapter: _ProvisioningAdapter(),
+        store: store,
+      );
+
+      expect(await service.loadProfiles(), isEmpty);
+      expect(await service.loadSelectedProfile(), isNull);
+      expect(await service.loadAccountDescriptor(), isNull);
+    },
+  );
+
+  test('records the token serial reported when the session opened', () async {
     final store = InMemorySecureKeyValueStore();
     final service = RutokenProvisioningService(
-      adapter: _ProvisioningAdapter(),
+      adapter: _ProvisioningAdapter(serial: 'RT-0001', tokenLabel: 'Blue'),
       store: store,
     );
-    await service.provision(mnemonic: _mnemonic, passphrase: '', pin: '1234');
-    final json =
-        jsonDecode((await store.read('rutoken.public_account.v1'))!)
-            as Map<String, dynamic>;
-    json['schema'] = 1;
-    await store.write('rutoken.public_account.v1', jsonEncode(json));
 
-    expect(await service.loadAccountDescriptor(), isNotNull);
-    expect(await service.loadPublicAccount(), isNotNull);
+    await service.provision(mnemonic: _mnemonic, passphrase: '', pin: '1234');
+
+    final profile = await service.loadSelectedProfile();
+    expect(profile?.serial, 'RT-0001');
+    expect(profile?.label, 'Blue');
+  });
+
+  test('adopting a registered card adds a serial it did not have', () async {
+    final store = InMemorySecureKeyValueStore();
+    await store.write(
+      'rutoken.public_account.v1',
+      jsonEncode(_legacyRecord(schema: 2)),
+    );
+    final adapter = _ProvisioningAdapter(serial: 'RT-0002')
+      ..account = const WalletAccountDescriptor(
+        backendId: 'rutoken_nfc',
+        address: _legacyAddress,
+        derivationPath: "m/44'/60'/0'/0/0",
+      );
+    final service = RutokenProvisioningService(adapter: adapter, store: store);
+
+    await service.adoptExisting(pin: '1234');
+
+    final profile = await service.loadSelectedProfile();
+    expect(profile?.serial, 'RT-0002');
+    expect(
+      profile?.publicAccount,
+      isNotNull,
+      reason: 'recording the serial must not drop the retained xpub',
+    );
+  });
+
+  test('selecting an unregistered card is refused', () async {
+    final service = RutokenProvisioningService(
+      adapter: _ProvisioningAdapter(),
+      store: InMemorySecureKeyValueStore(),
+    );
+
+    await expectLater(
+      service.selectProfile('0xdead'),
+      throwsA(isA<RutokenNativeException>()),
+    );
   });
 
   test(
@@ -421,6 +499,28 @@ void main() {
   });
 }
 
+const _legacyAddress = '0x1234567890AbcdEF1234567890aBcdef12345678';
+
+/// A record exactly as v1.47–v1.53 wrote it: one profile inline, no id, no
+/// serial. Hand-built rather than round-tripped through the current writer,
+/// which no longer produces this shape.
+Map<String, dynamic> _legacyRecord({
+  required int schema,
+  String state = 'active',
+}) => <String, dynamic>{
+  'schema': schema,
+  'state': state,
+  'backendId': 'rutoken_nfc',
+  'address': _legacyAddress,
+  'derivationPath': "m/44'/60'/0'/0/0",
+  'accountPath': "m/44'/60'/0'",
+  'accountDepth': 3,
+  'compressedPublicKey': base64Encode(Uint8List(33)),
+  'chainCode': base64Encode(Uint8List(32)),
+  'sourceFingerprint': 111,
+  'parentFingerprint': 222,
+};
+
 class _StaticNonceProvider implements NonceProvider {
   @override
   Future<LoadedNonce> loadNextNonce({
@@ -472,10 +572,17 @@ class _ReceiptTransport implements JsonRpcTransport {
 }
 
 class _ProvisioningAdapter implements RutokenNativeAdapter {
-  _ProvisioningAdapter({this.failImport = false, this.failClose = false});
+  _ProvisioningAdapter({
+    this.failImport = false,
+    this.failClose = false,
+    this.serial = 'SERIAL-A',
+    this.tokenLabel = 'Card A',
+  });
 
   final bool failImport;
   final bool failClose;
+  final String? serial;
+  final String? tokenLabel;
   int openCount = 0;
   int closeCount = 0;
   Uint8List? masterCopy;
@@ -495,6 +602,8 @@ class _ProvisioningAdapter implements RutokenNativeAdapter {
     return RutokenNativeSession(
       id: 'provision-$openCount',
       openedAtUtc: DateTime.utc(2026, 7, 23),
+      serial: serial,
+      label: tokenLabel,
     );
   }
 

@@ -46,7 +46,13 @@ class MethodChannelRutokenNativeAdapter implements RutokenNativeAdapter {
           'Android Rutoken bridge returned no session identifier.',
         );
       }
-      return RutokenNativeSession(id: id, openedAtUtc: DateTime.now().toUtc());
+      return RutokenNativeSession(
+        id: id,
+        openedAtUtc: DateTime.now().toUtc(),
+        serial: _optionalString(response, 'tokenSerial'),
+        label: _optionalString(response, 'tokenLabel'),
+        model: _optionalString(response, 'tokenModel'),
+      );
     } finally {
       if (_pendingOperationId == operationId) {
         _pendingOperationId = null;
@@ -197,6 +203,16 @@ class MethodChannelRutokenNativeAdapter implements RutokenNativeAdapter {
     final value = response[key];
     if (value is Uint8List) return value;
     throw RutokenNativeException("Rutoken response has no '$key' bytes.");
+  }
+
+  /// Token identity is descriptive, not load-bearing: a bridge that omits it
+  /// must still open a session, so a missing or blank value reads as null
+  /// rather than failing the operation.
+  String? _optionalString(Map<Object?, Object?> response, String key) {
+    final value = response[key];
+    if (value is! String) return null;
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 }
 
