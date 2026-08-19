@@ -195,24 +195,23 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       final enabled = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          title: const Text('Использовать биометрию для Рутокена?'),
-          content: const Text(
-            'Можно сохранить PIN этой карты в отдельном защищённом хранилище. '
-            'В следующих операциях вместо ручного ввода PIN приложение сначала '
-            'потребует системную биометрическую проверку смартфона.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Не сохранять'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Сохранить под биометрией'),
-            ),
-          ],
-        ),
+        builder: (context) {
+          final l10n = AppLocalizations.of(context);
+          return AlertDialog(
+            title: Text(l10n.cardBiometricOfferTitle),
+            content: Text(l10n.cardBiometricOfferBody),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text(l10n.cardBiometricOfferDecline),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text(l10n.cardBiometricOfferAccept),
+              ),
+            ],
+          );
+        },
       );
       if (mounted) {
         await _controller.completeRutokenBiometricOffer(enabled ?? false);

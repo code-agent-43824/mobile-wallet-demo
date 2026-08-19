@@ -492,7 +492,7 @@ class _AirGapTransactionPreviewCard extends StatelessWidget {
         _SummaryTile(label: 'Nonce', value: preview.nonce.toString()),
         _SummaryTile(label: 'Gas limit', value: preview.gasLimit.toString()),
         _SummaryTile(
-          label: 'Максимальная комиссия',
+          label: l10n.wcMaxFee,
           value: '${preview.maximumFeeEth} ETH',
         ),
         _SummaryTile(
@@ -879,7 +879,7 @@ class _RequestCard extends StatelessWidget {
             Text('Переключить на: ${_networkName(chainSwitchTarget)}'),
           if (to != null) ...[
             const SizedBox(height: 4),
-            Text('Кому: ${_shortAddress(to)}'),
+            Text('${l10n.wcRecipient}: ${_shortAddress(to)}'),
           ],
           if (value != null && isTransaction) ...[
             const SizedBox(height: 4),

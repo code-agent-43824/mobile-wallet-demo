@@ -99,7 +99,7 @@ class MobileWalletDemoApp extends StatelessWidget {
     final theme = buildNocturneTheme();
 
     return MaterialApp(
-      title: 'Wallet Demo',
+      onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
       debugShowCheckedModeBanner: false,
       navigatorKey: _appNavigatorKey,
       // Nocturne is a dark-only system, so both slots carry the same theme and

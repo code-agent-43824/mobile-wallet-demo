@@ -277,10 +277,10 @@ void main() {
     await tester.tap(find.text('У меня есть карта'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Создать на Рутокене'), findsOneWidget);
-    expect(find.text('Импортировать в Рутокен'), findsOneWidget);
-    expect(find.text('Подключить готовый Рутокен'), findsOneWidget);
-    await tester.tap(find.text('Создать на Рутокене'));
+    expect(find.text('Создать на карте'), findsOneWidget);
+    expect(find.text('Импортировать на карту'), findsOneWidget);
+    expect(find.text('Подключить готовую карту'), findsOneWidget);
+    await tester.tap(find.text('Создать на карте'));
     await tester.pumpAndSettle();
 
     final fields = find.byType(TextField);
@@ -289,11 +289,11 @@ void main() {
     await tester.tap(find.text('Создать резервную фразу'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Сохрани backup до записи на Рутокен'), findsOneWidget);
+    expect(find.text('Сохраните резервную фразу до записи'), findsOneWidget);
     expect(find.text('Я сохранил все 24 слова офлайн'), findsOneWidget);
     expect(find.text('Я отдельно сохранил passphrase'), findsOneWidget);
     FilledButton provisionButton() => tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Записать ключ на Рутокен'),
+      find.widgetWithText(FilledButton, 'Записать ключ на карту'),
     );
     expect(provisionButton().onPressed, isNull);
 

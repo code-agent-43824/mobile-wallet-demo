@@ -1,5 +1,14 @@
 part of 'wallet_flow_screen.dart';
 
+/// The user-facing name of a network. [EvmNetworkConfig.name] is the technical
+/// identifier used in diagnostics and logs; the UI shows a translated label so
+/// «Тестовая сеть Sepolia» reads as what it is rather than as a chain id.
+String _networkLabel(AppLocalizations l10n, EvmNetwork network) =>
+    switch (network) {
+      EvmNetwork.ethereumMainnet => l10n.networkMainnet,
+      EvmNetwork.ethereumSepolia => l10n.networkSepolia,
+    };
+
 /// The **Активность** tab: the wallet's recent transactions.
 ///
 /// Reads the shared [ChainDataController] rather than loading its own snapshot,
@@ -250,11 +259,14 @@ class _SettingsTab extends StatelessWidget {
                 children: [
                   Text(l10n.settingsDetails, style: theme.textTheme.titleLarge),
                   const SizedBox(height: NocturneSpacing.x6),
-                  _SummaryTile(label: 'Backend', value: backendLabel),
+                  _SummaryTile(
+                    label: l10n.settingsKeyStorage,
+                    value: backendLabel,
+                  ),
                   const SizedBox(height: NocturneSpacing.x3),
                   _SummaryTile(
                     label: l10n.detailsNetwork,
-                    value: chainData.networkConfig.name,
+                    value: _networkLabel(l10n, chainData.selectedNetwork),
                   ),
                   if (snapshot != null) ...[
                     const SizedBox(height: NocturneSpacing.x3),
@@ -361,7 +373,7 @@ class _WalletTabState extends State<_WalletTab> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _NetworkChip(
-          label: config.name,
+          label: _networkLabel(l10n, chainData.selectedNetwork),
           onTap: () => _showNetworkSheet(context),
         ),
         const SizedBox(height: NocturneSpacing.x6),
@@ -482,7 +494,9 @@ class _WalletTabState extends State<_WalletTab> {
             const SizedBox(height: NocturneSpacing.x6),
             for (final network in EvmNetwork.values)
               ListTile(
-                title: Text(evmNetworkConfigs[network]!.name),
+                title: Text(
+                  _networkLabel(AppLocalizations.of(sheetContext), network),
+                ),
                 trailing: network == widget.chainData.selectedNetwork
                     ? const Icon(Icons.check, color: NocturneColors.accent)
                     : null,
