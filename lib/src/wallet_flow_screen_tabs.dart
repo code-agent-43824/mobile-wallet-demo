@@ -9,6 +9,13 @@ String _networkLabel(AppLocalizations l10n, EvmNetwork network) =>
       EvmNetwork.ethereumSepolia => l10n.networkSepolia,
     };
 
+/// A language's name in that language — deliberately not translated, so the
+/// list reads the same whichever language the app is currently showing.
+String _languageName(Locale locale) => switch (locale.languageCode) {
+  'en' => 'English',
+  _ => 'Русский',
+};
+
 /// The **Активность** tab: the wallet's recent transactions.
 ///
 /// Reads the shared [ChainDataController] rather than loading its own snapshot,
@@ -135,6 +142,13 @@ class _SettingsTab extends StatelessWidget {
           label: Text(l10n.settingsSwitchWallet),
         ),
         const SizedBox(height: NocturneSpacing.x3),
+        if (AppLocaleScope.maybeOf(context) != null)
+          OutlinedButton.icon(
+            onPressed: () => _showLanguageSheet(context),
+            icon: const Icon(Icons.translate),
+            label: Text(l10n.settingsLanguage),
+          ),
+        const SizedBox(height: NocturneSpacing.x3),
         OutlinedButton(
           onPressed: () => _showDetailsSheet(context),
           child: Text(l10n.settingsDetails),
@@ -158,6 +172,48 @@ class _SettingsTab extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+
+  /// Language picker. Each option is written in its own language, so it stays
+  /// readable to someone who opened the app in a language they do not read;
+  /// "system" clears the stored choice and follows the device again.
+  void _showLanguageSheet(BuildContext context) {
+    final scope = AppLocaleScope.maybeOf(context);
+    if (scope == null) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    final style = PlatformStyle.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: NocturneColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: style.sheetBorderRadius),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: NocturneSpacing.x6),
+            for (final option in <({Locale? locale, String label})>[
+              (locale: null, label: l10n.settingsLanguageSystem),
+              for (final locale in selectableLocales)
+                (locale: locale, label: _languageName(locale)),
+            ])
+              ListTile(
+                title: Text(option.label),
+                trailing:
+                    option.locale?.languageCode == scope.locale?.languageCode
+                    ? const Icon(Icons.check, color: NocturneColors.accent)
+                    : null,
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  scope.onLocaleChanged(option.locale);
+                },
+              ),
+            const SizedBox(height: NocturneSpacing.x4),
+          ],
+        ),
+      ),
     );
   }
 

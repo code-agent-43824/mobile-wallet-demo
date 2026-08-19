@@ -61,6 +61,8 @@
   "settingsOn": "On",
   "settingsOff": "Off",
   "settingsSwitchWallet": "Switch wallet",
+  "settingsLanguage": "Interface language",
+  "settingsLanguageSystem": "Match the system",
   "settingsDetails": "Details",
   "settingsRefreshChain": "Refresh from chain",
   "settingsLockAgain": "Lock again",
@@ -235,5 +237,109 @@
   "lockedUnlockCard": "Connect the card",
   "lockedUnlockPhone": "Unlock",
   "authConfirmTitle": "Confirm the operation",
-  "authConfirmAction": "Confirm"
+  "authConfirmAction": "Confirm",
+  "busyTapExistingCard": "Hold your existing card to the phone…",
+  "busyTapEmptyCard": "Hold an empty card to the phone…",
+  "busySwitchingWallet": "Switching wallet…",
+  "busySavingPinBiometrics": "Saving the PIN behind biometrics…",
+  "busySavingChoice": "Saving your choice…",
+  "busyConnectingCard": "Connecting the card…",
+  "busyCreatingWallet": "Creating the wallet…",
+  "busyImportingWallet": "Importing the wallet…",
+  "busyUnlockingWallet": "Unlocking the wallet…",
+  "busyUnlockingForSignature": "Unlocking to sign…",
+  "busyPreparingAccountQr": "Preparing the account QR…",
+  "storageUnknown": "Unknown storage",
+  "cardCheckSuccess": "The card responds. Address: {address}. A signature came back, {byteCount} bytes long.",
+  "@cardCheckSuccess": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      },
+      "byteCount": {
+        "type": "int"
+      }
+    }
+  },
+  "cardAdoptSuccess": "The existing card is connected and its keys are unchanged. Address: {address}. For such a card only the address and the path are stored, so exporting the account to MetaMask is not available.",
+  "@cardAdoptSuccess": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "cardProvisionSuccess": "The wallet is written to the card. Address: {address}. The card is now the active storage; only public data stays in the app.",
+  "@cardProvisionSuccess": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "errorCardNoWallet": "The card holds no compatible wallet.",
+  "errorCardUnsupportedBuild": "Card support is not available in this build.",
+  "errorUseCardCreateFlow": "Use the card's own creation flow.",
+  "errorUseCardImportFlow": "Use the card's own import flow.",
+  "errorCardUnlocksPerSignature": "The card only opens for the duration of a signature.",
+  "errorBiometricsNoPin": "Could not turn on biometrics: this session has no PIN available.",
+  "errorAwaitPreflight": "Wait for the transaction to be checked against the network.",
+  "errorWalletNotInitialized": "The wallet is not initialised.",
+  "errorEnterCardPin": "Enter the card PIN.",
+  "errorStorageCannotSignLocally": "The active storage cannot sign on the phone.",
+  "errorHardenedFlowUnsupported": "The current transaction service does not support hardened sending.",
+  "errorWalletKeyUnavailable": "The wallet key is unavailable.",
+  "errorMultipartUrNeedsCamera": "A multipart QR has to be scanned in full with the camera.",
+  "errorUnsupportedChain": "MetaMask sent a network this app does not support (chainId {chainId}). Ethereum Mainnet and Sepolia are available.",
+  "@errorUnsupportedChain": {
+    "placeholders": {
+      "chainId": {
+        "type": "int"
+      }
+    }
+  },
+  "errorOnlyEthTransfers": "Only ETH transfers are supported.",
+  "errorLegacyMainnetOnly": "The legacy transaction format is supported on Mainnet only; on Sepolia MetaMask must use EIP-1559.",
+  "errorRequestOtherAccount": "The request is addressed to a different account ({address}).",
+  "@errorRequestOtherAccount": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "errorRequestUnknownPath": "A request without an address uses an unknown path {path}.",
+  "@errorRequestUnknownPath": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "errorScanRequestFirst": "Scan the MetaMask request first.",
+  "wcRejectedByUser": "The request was rejected by the user.",
+  "errorCancelNfcFailed": "Could not cancel waiting for NFC: {error}",
+  "@errorCancelNfcFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "errorOperationFailed": "The operation failed: {error}",
+  "@errorOperationFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "errorChainLoadFailed": "Could not load network data: {error}",
+  "@errorChainLoadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  }
 }

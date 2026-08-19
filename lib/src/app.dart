@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
+import 'app_locale.dart';
 import 'app_version.dart';
 import 'auth/biometric_auth.dart';
 import 'blockchain/blockchain_provider.dart';
@@ -48,7 +50,7 @@ QrScanner _defaultQrScanner() {
   return FileQrScanner();
 }
 
-class MobileWalletDemoApp extends StatelessWidget {
+class MobileWalletDemoApp extends StatefulWidget {
   const MobileWalletDemoApp({
     super.key,
     SecureKeyValueStore? store,
@@ -88,84 +90,140 @@ class MobileWalletDemoApp extends StatelessWidget {
   final QrScanner? _qrScanner;
   final RutokenNativeAdapter? _rutokenNativeAdapter;
 
-  /// Overrides the UI language. `null` follows the system locale, falling back
-  /// to Russian. Widget tests pin this so copy assertions stay deterministic.
+  /// Pins the UI language regardless of the stored choice or the system
+  /// locale. Widget tests set this so copy assertions stay deterministic; the
+  /// product leaves it null and honours the user's pick in Настройки.
   final Locale? _locale;
 
   @override
+  State<MobileWalletDemoApp> createState() => _MobileWalletDemoAppState();
+}
+
+class _MobileWalletDemoAppState extends State<MobileWalletDemoApp> {
+  /// Built once rather than per build: a locale change rebuilds this widget,
+  /// and re-creating the store or the RPC transport there would churn live
+  /// collaborators for a purely presentational change.
+  late final SecureKeyValueStore _store;
+  late final JsonRpcTransport _rpcTransport;
+  late final BlockchainProvider _blockchainProvider;
+  late final TransactionService _transactionService;
+  late final TransactionBroadcaster _transactionBroadcaster;
+  late final NonceProvider _nonceProvider;
+  late final BiometricAuthGateway _biometricAuthGateway;
+  late final WalletConnectService _walletConnectService;
+  late final WalletConnectTransactionPreflight _walletConnectPreflight;
+  late final QrScanner _qrScanner;
+  late final RutokenNativeAdapter? _rutokenNativeAdapter;
+
+  /// The user's explicit language choice; null means "follow the system".
+  Locale? _selectedLocale;
+
+  @override
+  void initState() {
+    super.initState();
+    _store = widget._store ?? FlutterSecureKeyValueStore();
+    _rpcTransport = widget._trackingTransport ?? HttpJsonRpcTransport();
+    _blockchainProvider =
+        widget._blockchainProvider ??
+        PublicRpcBlockchainProvider(cacheStore: _store);
+    _transactionService =
+        widget._transactionService ??
+        const HardenedTransactionServiceImplementation();
+    _transactionBroadcaster =
+        widget._transactionBroadcaster ?? PublicRpcTransactionBroadcaster();
+    _nonceProvider = widget._nonceProvider ?? PublicRpcNonceProvider();
+    _biometricAuthGateway =
+        widget._biometricAuthGateway ?? defaultBiometricAuthGateway();
+    _walletConnectService =
+        widget._walletConnectService ?? _defaultWalletConnectService();
+    _walletConnectPreflight =
+        widget._walletConnectPreflight ??
+        PublicRpcWalletConnectTransactionPreflight(rpcTransport: _rpcTransport);
+    _qrScanner = widget._qrScanner ?? _defaultQrScanner();
+    _rutokenNativeAdapter =
+        widget._rutokenNativeAdapter ??
+        (Platform.isAndroid ? MethodChannelRutokenNativeAdapter() : null);
+    unawaited(_restoreLocale());
+  }
+
+  /// Applies the persisted choice once it is read. The first frame renders in
+  /// the system/default language; switching after that is a normal rebuild.
+  Future<void> _restoreLocale() async {
+    final stored = await readStoredLocale(_store);
+    if (!mounted || stored == null) {
+      return;
+    }
+    setState(() => _selectedLocale = stored);
+  }
+
+  Future<void> _handleLocaleChanged(Locale? locale) async {
+    setState(() => _selectedLocale = locale);
+    await writeStoredLocale(_store, locale);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final effectiveStore = _store ?? FlutterSecureKeyValueStore();
-    final effectiveRpcTransport = _trackingTransport ?? HttpJsonRpcTransport();
     final theme = buildNocturneTheme();
 
-    return MaterialApp(
-      onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
-      debugShowCheckedModeBanner: false,
-      navigatorKey: _appNavigatorKey,
-      // Nocturne is a dark-only system, so both slots carry the same theme and
-      // the mode is pinned — the OS light/dark setting must not change the app.
-      theme: theme,
-      darkTheme: theme,
-      themeMode: ThemeMode.dark,
-      // Russian is the product's language and most copy is still inline
-      // Russian, so pin it until 13.6 migrates the strings and adds the
-      // language switch. A half-translated UI is worse than a consistent one.
-      locale: _locale ?? const Locale('ru'),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      // Russian is the product's primary language: an unsupported system locale
-      // falls back to it rather than to the ARB template (English).
-      localeResolutionCallback: (locale, supported) {
-        if (locale != null) {
-          for (final candidate in supported) {
-            if (candidate.languageCode == locale.languageCode) {
-              return candidate;
+    return AppLocaleScope(
+      locale: widget._locale ?? _selectedLocale,
+      onLocaleChanged: (locale) => unawaited(_handleLocaleChanged(locale)),
+      child: MaterialApp(
+        onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
+        debugShowCheckedModeBanner: false,
+        navigatorKey: _appNavigatorKey,
+        // Nocturne is a dark-only system, so both slots carry the same theme
+        // and the mode is pinned — the OS light/dark setting must not change
+        // the app.
+        theme: theme,
+        darkTheme: theme,
+        themeMode: ThemeMode.dark,
+        // A test pin wins, then the user's choice in Настройки; null hands the
+        // decision to the system locale and the resolution callback below.
+        locale: widget._locale ?? _selectedLocale,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        // Russian is the product's primary language: an unsupported system
+        // locale falls back to it rather than to the ARB template (English).
+        localeResolutionCallback: (locale, supported) {
+          if (locale != null) {
+            for (final candidate in supported) {
+              if (candidate.languageCode == locale.languageCode) {
+                return candidate;
+              }
             }
           }
-        }
-        return const Locale('ru');
-      },
-      builder: (context, child) {
-        // The build strip takes real layout space above the app instead of
-        // floating over it, and absorbs the status-bar inset for the content.
-        return Column(
-          children: [
-            const VersionBanner(label: appVersionLabel),
-            Expanded(
-              child: MediaQuery.removePadding(
-                context: context,
-                removeTop: true,
-                child: child ?? const SizedBox.shrink(),
+          return const Locale('ru');
+        },
+        builder: (context, child) {
+          // The build strip takes real layout space above the app instead of
+          // floating over it, and absorbs the status-bar inset for the content.
+          return Column(
+            children: [
+              const VersionBanner(label: appVersionLabel),
+              Expanded(
+                child: MediaQuery.removePadding(
+                  context: context,
+                  removeTop: true,
+                  child: child ?? const SizedBox.shrink(),
+                ),
               ),
-            ),
-          ],
-        );
-      },
-      home: WalletFlowScreen(
-        store: effectiveStore,
-        blockchainProvider:
-            _blockchainProvider ??
-            PublicRpcBlockchainProvider(cacheStore: effectiveStore),
-        transactionService:
-            _transactionService ??
-            const HardenedTransactionServiceImplementation(),
-        transactionBroadcaster:
-            _transactionBroadcaster ?? PublicRpcTransactionBroadcaster(),
-        nonceProvider: _nonceProvider ?? PublicRpcNonceProvider(),
-        trackingTransport: effectiveRpcTransport,
-        biometricAuthGateway:
-            _biometricAuthGateway ?? defaultBiometricAuthGateway(),
-        walletConnectService:
-            _walletConnectService ?? _defaultWalletConnectService(),
-        walletConnectPreflight:
-            _walletConnectPreflight ??
-            PublicRpcWalletConnectTransactionPreflight(
-              rpcTransport: effectiveRpcTransport,
-            ),
-        qrScanner: _qrScanner ?? _defaultQrScanner(),
-        rutokenNativeAdapter:
-            _rutokenNativeAdapter ??
-            (Platform.isAndroid ? MethodChannelRutokenNativeAdapter() : null),
+            ],
+          );
+        },
+        home: WalletFlowScreen(
+          store: _store,
+          blockchainProvider: _blockchainProvider,
+          transactionService: _transactionService,
+          transactionBroadcaster: _transactionBroadcaster,
+          nonceProvider: _nonceProvider,
+          trackingTransport: _rpcTransport,
+          biometricAuthGateway: _biometricAuthGateway,
+          walletConnectService: _walletConnectService,
+          walletConnectPreflight: _walletConnectPreflight,
+          qrScanner: _qrScanner,
+          rutokenNativeAdapter: _rutokenNativeAdapter,
+        ),
       ),
     );
   }

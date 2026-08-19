@@ -22,7 +22,9 @@ class WalletFlowController extends ChangeNotifier {
     NonceProvider? nonceProvider,
     QrScanner qrScanner = const UnavailableQrScanner(),
     RutokenNativeAdapter? rutokenNativeAdapter,
-  }) : _store = store,
+    AppLocalizations? messages,
+  }) : _messages = messages ?? lookupAppLocalizations(const Locale('ru')),
+       _store = store,
        _walletConnectService = walletConnectService,
        _walletConnectPreflight = walletConnectPreflight,
        _qrScanner = qrScanner,
@@ -58,6 +60,9 @@ class WalletFlowController extends ChangeNotifier {
             accountLoader: _rutokenProvisioning.loadAccountDescriptor,
             biometricPinStore: _rutokenBiometricPinStore,
           );
+    // The catalogue's label/description are technical identifiers for
+    // diagnostics, not product copy — the UI derives what it shows from
+    // [WalletBackendDescriptor.kind] via [_labelForBackendKind].
     _backendRegistry = WalletBackendRegistry(
       store: store,
       entries: <WalletBackendCatalogEntry>[
@@ -67,7 +72,8 @@ class WalletFlowController extends ChangeNotifier {
             kind: WalletBackendKind.phoneSecureVault,
             label: 'Phone Secure Vault',
             description:
-                'Seed хранится локально в защищённом phone vault под PIN и опциональной биометрией.',
+                'BIP-39 seed encrypted at rest on this device under a '
+                'PIN-derived key, with optional biometric unlock.',
           ),
           backend: _vault,
         ),
@@ -78,7 +84,9 @@ class WalletFlowController extends ChangeNotifier {
               kind: WalletBackendKind.externalDevice,
               label: 'Rutoken NFC',
               description:
-                  'Настоящий неэкспортирующий ECDSA backend: публичный профиль хранится в приложении, каждая подпись требует NFC и PIN Рутокена.',
+                  'Non-exporting ECDSA custody: only the public profile is '
+                  'retained in the app, and every signature needs an NFC tap '
+                  'and the card PIN.',
             ),
             backend: backend,
           ),
@@ -118,6 +126,20 @@ class WalletFlowController extends ChangeNotifier {
     });
     unawaited(_walletConnectService.init());
   }
+
+  /// Source of every user-visible string this controller produces.
+  ///
+  /// The controller has no `BuildContext`, so the localizations are injected
+  /// like every other collaborator (see the DI seam in `app.dart`): an optional
+  /// constructor argument defaulting to the production implementation, which
+  /// here is the Russian bundle. [WalletFlowScreen] re-points it at the
+  /// context's bundle whenever the locale changes, so the next action speaks
+  /// the chosen language. Strings already produced and stored (an
+  /// [errorMessage], a diagnostic result) keep the wording they were created
+  /// with — retranslating them would mean re-running the operation.
+  AppLocalizations _messages;
+
+  set messages(AppLocalizations value) => _messages = value;
 
   late final PhoneSecureVault _vault;
   late final WalletBackendRegistry _backendRegistry;
@@ -274,10 +296,21 @@ class WalletFlowController extends ChangeNotifier {
   bool get isRutokenSelected => activeBackend is RutokenCustodyBackend;
 
   /// Display label for the active/selected backend (locked & unlocked stages).
+  ///
+  /// The catalogue's own `label` is a technical identifier ("Phone Secure
+  /// Vault", "Rutoken NFC") used in diagnostics; the UI shows the translated
+  /// name of the *kind*, so the vendor name never reaches the product surface.
   String get backendLabel {
     final id = _summary?.backendId ?? _selectedBackendId ?? '';
-    return _backendRegistry.descriptorById(id)?.label ?? 'Unknown backend';
+    final kind = _backendRegistry.descriptorById(id)?.kind;
+    return _labelForBackendKind(kind);
   }
+
+  String _labelForBackendKind(WalletBackendKind? kind) => switch (kind) {
+    WalletBackendKind.phoneSecureVault => _messages.custodyPhone,
+    WalletBackendKind.externalDevice => _messages.custodyCard,
+    null => _messages.storageUnknown,
+  };
 
   @override
   void dispose() {
@@ -370,14 +403,14 @@ class WalletFlowController extends ChangeNotifier {
     final adapter = _rutokenNativeAdapter;
     if (adapter == null) return;
     await _runBusy(
-      'Поднеси Рутокен к NFC и удерживай его…',
+      _messages.tapCardTitle,
       () async {
         final session = await adapter.openSession(pin: pin);
         Object? primaryFailure;
         try {
           final account = await adapter.readAccountDescriptor(session);
           if (account == null) {
-            throw StateError('Рутокен не содержит ECDSA-кошелёк.');
+            throw StateError(_messages.errorCardNoWallet);
           }
           final digest = Uint8List.fromList(List<int>.generate(32, (i) => i));
           final signature = await adapter.signDigest(
@@ -385,10 +418,10 @@ class WalletFlowController extends ChangeNotifier {
             derivationPath: account.derivationPath,
             digest: digest,
           );
-          _rutokenDiagnosticResult =
-              'Рутокен доступен: ${account.address}. '
-              'CKM_ECDSA вернул сырую подпись длиной '
-              '${signature.toBytes().length} байта.';
+          _rutokenDiagnosticResult = _messages.cardCheckSuccess(
+            account.address,
+            signature.toBytes().length,
+          );
         } catch (error) {
           primaryFailure = error;
           rethrow;
@@ -418,7 +451,7 @@ class WalletFlowController extends ChangeNotifier {
       }
       result.add((
         id: entry.descriptor.id,
-        label: entry.descriptor.label,
+        label: _labelForBackendKind(entry.descriptor.kind),
         hasWallet: await backend.hasWallet(),
       ));
     }
@@ -436,7 +469,7 @@ class WalletFlowController extends ChangeNotifier {
     if (backendId == effectiveBackendId) {
       return;
     }
-    await _runBusy('Переключаем кошелёк…', () async {
+    await _runBusy(_messages.busySwitchingWallet, () async {
       await _backendRegistry.selectBackend(backendId);
       final backend = _backendRegistry.backendById(backendId) ?? _vault;
       final summary = await backend.getWalletSummary();
@@ -543,7 +576,7 @@ class WalletFlowController extends ChangeNotifier {
     final backend = _rutokenBackend;
     if (provisioning == null || backend == null) return;
     await _runBusy(
-      'Поднеси готовый Рутокен к NFC и удерживай его…',
+      _messages.busyTapExistingCard,
       () async {
         final account = await provisioning.adoptExisting(pin: pin);
         await _backendRegistry.selectBackend(backend.backendId);
@@ -557,10 +590,9 @@ class WalletFlowController extends ChangeNotifier {
         _material = null;
         _lastUnlockAuthMethod = WalletAuthMethod.externalDevice;
         _stage = WalletFlowStage.unlocked;
-        _rutokenProvisioningResult =
-            'Готовый Рутокен подключён без изменения ключей: '
-            '${account.address}. Для этой карты сохранены только адрес и путь; '
-            'AirGap account export недоступен без ранее сохранённого xpub.';
+        _rutokenProvisioningResult = _messages.cardAdoptSuccess(
+          account.address,
+        );
         await _queueRutokenBiometricOffer(pin);
       },
       onCancel: _rutokenNativeAdapter?.cancelPendingOperation,
@@ -576,20 +608,19 @@ class WalletFlowController extends ChangeNotifier {
     final provisioning = _rutokenProvisioning;
     if (provisioning == null) return;
     await _runBusy(
-      'Поднеси пустой Рутокен к NFC и удерживай его…',
+      _messages.busyTapEmptyCard,
       () async {
         final result = await provisioning.provision(
           mnemonic: mnemonic,
           passphrase: passphrase,
           pin: pin,
         );
-        _rutokenProvisioningResult =
-            'Кошелёк записан на Рутокен: ${result.account.address}. '
-            'Он выбран как активный backend; в приложении сохранены только '
-            'публичные данные account xpub.';
+        _rutokenProvisioningResult = _messages.cardProvisionSuccess(
+          result.account.address,
+        );
         final backend = _rutokenBackend;
         if (backend == null) {
-          throw const VaultFailure('Rutoken backend недоступен в этой сборке.');
+          throw VaultFailure(_messages.errorCardUnsupportedBuild);
         }
         await _backendRegistry.selectBackend(backend.backendId);
         await _store.write(_rutokenRegistrationStorageKey, '1');
@@ -618,7 +649,7 @@ class WalletFlowController extends ChangeNotifier {
     if (pin == null || backend == null) return;
     var completed = false;
     await _runBusy(
-      enabled ? 'Сохраняем PIN под защитой биометрии…' : 'Сохраняем выбор…',
+      enabled ? _messages.busySavingPinBiometrics : _messages.busySavingChoice,
       () async {
         if (enabled) {
           await backend.enableBiometricPin(pin);
@@ -650,14 +681,12 @@ class WalletFlowController extends ChangeNotifier {
 
   Future<void> createWallet({required String pin}) async {
     final busy = isExternalBackendSelected
-        ? 'Подключаем устройство…'
-        : 'Создаём кошелёк…';
+        ? _messages.busyConnectingCard
+        : _messages.busyCreatingWallet;
     await _runBusy(busy, () async {
       final backend = activeBackend;
       if (backend is! KeyStorageBackend) {
-        throw const VaultFailure(
-          'Для Рутокена используй отдельный сценарий создания.',
-        );
+        throw VaultFailure(_messages.errorUseCardCreateFlow);
       }
       final material = await backend.createWallet(pin: pin);
       _summary = StoredWalletSummary(
@@ -691,14 +720,12 @@ class WalletFlowController extends ChangeNotifier {
     required String pin,
   }) async {
     final busy = isExternalBackendSelected
-        ? 'Подключаем устройство…'
-        : 'Импортируем кошелёк…';
+        ? _messages.busyConnectingCard
+        : _messages.busyImportingWallet;
     await _runBusy(busy, () async {
       final backend = activeBackend;
       if (backend is! KeyStorageBackend) {
-        throw const VaultFailure(
-          'Для Рутокена используй отдельный сценарий импорта.',
-        );
+        throw VaultFailure(_messages.errorUseCardImportFlow);
       }
       final material = await backend.importWallet(mnemonic: mnemonic, pin: pin);
       _summary = StoredWalletSummary(
@@ -731,12 +758,10 @@ class WalletFlowController extends ChangeNotifier {
   /// read-only and each key op authenticates on demand). Kept so the locked
   /// shell can be re-enabled without re-deriving this logic.
   Future<void> unlockWallet(String pin) async {
-    await _runBusy('Разблокируем кошелёк…', () async {
+    await _runBusy(_messages.busyUnlockingWallet, () async {
       final backend = activeBackend;
       if (backend is! KeyStorageBackend) {
-        throw const VaultFailure(
-          'Аппаратный backend открывается только на время подписи.',
-        );
+        throw VaultFailure(_messages.errorCardUnlocksPerSignature);
       }
       _material = await backend.unlock(pin: pin);
       _lastUnlockAuthMethod = WalletAuthMethod.pin;
@@ -758,9 +783,7 @@ class WalletFlowController extends ChangeNotifier {
       final pin = _pendingBiometricPin;
       if (enabled) {
         if (pin == null || pin.isEmpty) {
-          throw const VaultFailure(
-            'Не удалось включить биометрию: PIN текущей сессии недоступен.',
-          );
+          throw VaultFailure(_messages.errorBiometricsNoPin);
         }
         await backend.setBiometricUnlockEnabled(enabled: true, pin: pin);
       } else {
@@ -875,8 +898,7 @@ class WalletFlowController extends ChangeNotifier {
       if (codec.isTransactionMethod(request.method) &&
           transactionPreview == null) {
         _errorMessage =
-            _pendingRequestPreviewError ??
-            'Дождитесь безопасной проверки транзакции через RPC.';
+            _pendingRequestPreviewError ?? _messages.errorAwaitPreflight;
         return;
       }
       await _withFreshlyAuthorizedSigner(
@@ -906,7 +928,7 @@ class WalletFlowController extends ChangeNotifier {
       }
       await _walletConnectService.respondError(
         request: request,
-        message: 'Запрос отклонён пользователем.',
+        message: _messages.wcRejectedByUser,
       );
       _removePendingRequest(request);
     });
@@ -947,7 +969,7 @@ class WalletFlowController extends ChangeNotifier {
     final address = _summary?.address;
     if (address == null) {
       _pendingRequestPreview = null;
-      _pendingRequestPreviewError = 'Кошелёк не инициализирован.';
+      _pendingRequestPreviewError = _messages.errorWalletNotInitialized;
       _isPendingRequestPreviewLoading = false;
       _notify();
       return;
@@ -1004,11 +1026,11 @@ class WalletFlowController extends ChangeNotifier {
   Future<void> _withFreshlyAuthorizedSigner({
     String? pin,
     bool useBiometrics = false,
-    String busyMessage = 'Разблокируем для подписи…',
+    String? busyMessage,
     required Future<void> Function(WalletTransactionSigner signer) action,
   }) async {
     await _runBusy(
-      busyMessage,
+      busyMessage ?? _messages.busyUnlockingForSignature,
       () async {
         CustodySigningSession? custodySession;
         Object? primaryFailure;
@@ -1023,7 +1045,7 @@ class WalletFlowController extends ChangeNotifier {
               effectivePin = await backend.retrievePinWithBiometrics();
             }
             if (effectivePin == null || effectivePin.isEmpty) {
-              throw const VaultFailure('Введите PIN Рутокена.');
+              throw VaultFailure(_messages.errorEnterCardPin);
             }
             final openedSession = await backend.openSigningSession(
               pin: effectivePin,
@@ -1042,9 +1064,7 @@ class WalletFlowController extends ChangeNotifier {
             return;
           }
           if (backend is! KeyStorageBackend) {
-            throw const VaultFailure(
-              'Активный backend не поддерживает локальную подпись.',
-            );
+            throw VaultFailure(_messages.errorStorageCannotSignLocally);
           }
           if (useBiometrics) {
             _material = await backend.unlockWithBiometrics();
@@ -1106,9 +1126,7 @@ class WalletFlowController extends ChangeNotifier {
   }) async {
     final transactionService = _transactionService;
     if (transactionService is! HardenedTransactionService) {
-      throw const TransactionFailure(
-        'Текущий transaction service не поддерживает Phase 6 hardened flow.',
-      );
+      throw TransactionFailure(_messages.errorHardenedFlowUnsupported);
     }
 
     HardenedSubmitResult? result;
@@ -1140,7 +1158,7 @@ class WalletFlowController extends ChangeNotifier {
   }) async {
     final backend = activeBackend;
     if (backend is WalletCustodyBackend) {
-      await _runBusy('Готовим публичный QR аккаунта…', () async {
+      await _runBusy(_messages.busyPreparingAccountQr, () async {
         if (useBiometrics) {
           if (backend is! RutokenCustodyBackend) {
             throw const BiometricUnavailableFailure();
@@ -1160,11 +1178,11 @@ class WalletFlowController extends ChangeNotifier {
       await _withFreshlyAuthorizedSigner(
         pin: pin,
         useBiometrics: useBiometrics,
-        busyMessage: 'Готовим публичный QR аккаунта…',
+        busyMessage: _messages.busyPreparingAccountQr,
         action: (_) async {
           final material = _material;
           if (material == null) {
-            throw const VaultFailure('Ключ кошелька недоступен.');
+            throw VaultFailure(_messages.errorWalletKeyUnavailable);
           }
           final export = const AccountExportDeriver().deriveAccountExport(
             mnemonic: material.mnemonic,
@@ -1183,39 +1201,35 @@ class WalletFlowController extends ChangeNotifier {
     await _runGuarded(() async {
       final normalized = normalizeUr(payload);
       if (normalized.split('/').length != 2) {
-        throw const UrQrException(
-          'Multipart UR нужно полностью отсканировать камерой.',
-        );
+        throw UrQrException(_messages.errorMultipartUrNeedsCamera);
       }
       final request = const Eip4527Codec().decodeSignRequest(normalized);
       if (request.chainId != 1 && request.chainId != 11155111) {
         throw Eip4527Exception(
-          'AirGap поддерживает только Ethereum Mainnet и Sepolia (получен chainId ${request.chainId}).',
+          _messages.errorUnsupportedChain(request.chainId),
         );
       }
       if (request.dataType != EthSignDataType.transaction &&
           request.dataType != EthSignDataType.typedTransaction) {
-        throw const Eip4527Exception(
-          'В базовом AirGap режиме поддерживаются только ETH-транзакции.',
-        );
+        throw Eip4527Exception(_messages.errorOnlyEthTransfers);
       }
       if (request.dataType == EthSignDataType.transaction &&
           request.chainId != 1) {
-        throw const Eip4527Exception(
-          'Legacy EIP-155 AirGap поддержан только для Mainnet; для Sepolia MetaMask должен использовать EIP-1559.',
-        );
+        throw Eip4527Exception(_messages.errorLegacyMainnetOnly);
       }
       final expectedAddress = _summary?.address.toLowerCase();
       final requestAddress = request.addressHex?.toLowerCase();
       if (requestAddress != null && requestAddress != expectedAddress) {
         throw Eip4527Exception(
-          'Запрос адресован другому аккаунту ($requestAddress).',
+          _messages.errorRequestOtherAccount(requestAddress),
         );
       }
       if (requestAddress == null &&
           request.derivationPath.toPathString() != "M/44'/60'/0'/0/0") {
         throw Eip4527Exception(
-          'Запрос без адреса использует неизвестный путь ${request.derivationPath.toPathString()}.',
+          _messages.errorRequestUnknownPath(
+            request.derivationPath.toPathString(),
+          ),
         );
       }
       final preview = const Eip4527TransactionPreviewDecoder().decode(request);
@@ -1254,7 +1268,7 @@ class WalletFlowController extends ChangeNotifier {
     final requestPayload = _airGapRequestPayload;
     if (requestPayload == null || _airGapRequest == null) {
       await _runGuarded(() async {
-        throw const Eip4527Exception('Сначала отсканируйте запрос MetaMask.');
+        throw Eip4527Exception(_messages.errorScanRequestFirst);
       });
       return;
     }
@@ -1341,7 +1355,7 @@ class WalletFlowController extends ChangeNotifier {
     try {
       await cancel();
     } catch (error) {
-      _errorMessage = 'Не удалось отменить ожидание NFC: $error';
+      _errorMessage = _messages.errorCancelNfcFailed('$error');
     } finally {
       _notify();
     }
@@ -1394,7 +1408,7 @@ class WalletFlowController extends ChangeNotifier {
       // relay error while signing or responding to a request) must surface,
       // not vanish — otherwise an action like "approve request" looks like the
       // button does nothing. The message carries the cause for diagnosis.
-      _errorMessage = 'Не удалось выполнить операцию: $error';
+      _errorMessage = _messages.errorOperationFailed('$error');
       _notify();
     }
   }

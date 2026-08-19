@@ -1,5 +1,8 @@
-import 'package:flutter/foundation.dart';
+// widgets.dart rather than foundation.dart: this controller needs `Locale` for
+// its default message bundle, and widgets re-exports foundation anyway.
+import 'package:flutter/widgets.dart';
 
+import '../l10n/app_localizations.dart';
 import 'blockchain/blockchain_provider.dart';
 import 'blockchain/network_config.dart';
 
@@ -15,10 +18,19 @@ class ChainDataController extends ChangeNotifier {
   ChainDataController({
     required BlockchainProvider blockchainProvider,
     EvmNetwork initialNetwork = EvmNetwork.ethereumMainnet,
+    AppLocalizations? messages,
   }) : _blockchainProvider = blockchainProvider,
-       _selectedNetwork = initialNetwork;
+       _selectedNetwork = initialNetwork,
+       _messages = messages ?? lookupAppLocalizations(const Locale('ru'));
 
   final BlockchainProvider _blockchainProvider;
+
+  /// Source of the strings this controller produces. Injected like every other
+  /// collaborator because a [ChangeNotifier] has no `BuildContext`; the screen
+  /// re-points it whenever the locale changes.
+  AppLocalizations _messages;
+
+  set messages(AppLocalizations value) => _messages = value;
 
   EvmNetwork _selectedNetwork;
   WalletChainSnapshot? _snapshot;
@@ -111,7 +123,7 @@ class ChainDataController extends ChangeNotifier {
       if (!_isCurrent(refreshId, network)) {
         return;
       }
-      _errorMessage = 'Не удалось загрузить данные сети: $error';
+      _errorMessage = _messages.errorChainLoadFailed('$error');
     } finally {
       if (_isCurrent(refreshId, network)) {
         _isLoading = false;

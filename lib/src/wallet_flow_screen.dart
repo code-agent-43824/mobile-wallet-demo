@@ -16,6 +16,7 @@ import 'auth/wallet_operation_auth.dart';
 import 'blockchain/blockchain_provider.dart';
 import 'blockchain/network_config.dart';
 import '../l10n/app_localizations.dart';
+import 'app_locale.dart';
 import 'chain_data_controller.dart';
 import 'design/app_shell.dart';
 import 'design/nocturne.dart';
@@ -127,6 +128,17 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       blockchainProvider: widget.blockchainProvider,
     )..addListener(_onChainDataChanged);
     _controller.loadInitialState();
+  }
+
+  /// The controllers produce user-visible strings but hold no `BuildContext`,
+  /// so the active bundle is pushed into them here — on first build and again
+  /// whenever the locale changes.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final l10n = AppLocalizations.of(context);
+    _controller.messages = l10n;
+    _chainData.messages = l10n;
   }
 
   /// The tabs render from [_chainData], so the shell must rebuild when a
