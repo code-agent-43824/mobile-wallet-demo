@@ -112,5 +112,76 @@
   "airgapLoadQrFile": "Load a QR from a file",
   "busyTakesSeconds": "This takes a few seconds.",
   "busyCancelNfc": "Cancel waiting for the card",
-  "busyCancelling": "Cancelling…"
+  "busyCancelling": "Cancelling…",
+  "transferTitle": "Prepare and send a transfer",
+  "transferAssetAndAmount": "Asset and amount",
+  "transferAsset": "Asset",
+  "transferRecipientLabel": "Recipient address",
+  "transferAmount": "Amount",
+  "transferAmountHint": "For example 0.1",
+  "transferAvailable": "Available: {amount} {symbol}",
+  "transferPreviewAction": "Check the transfer",
+  "transferSignAndSend": "Sign and send",
+  "transferSending": "Sending…",
+  "transferPickAssetFirst": "Pick an asset to send first.",
+  "transferNeedsKey": "Signing and sending a transfer needs private-key access.",
+  "transferSendState": "Send status",
+  "transferStatus": "Status",
+  "transferSuccess": "Sent successfully",
+  "transferRecipient": "Recipient",
+  "transferTotalDebit": "Total debited",
+  "transferReplaced": "Replaced transaction",
+  "transferAttempts": "Send attempts: {count}",
+  "@transferAvailable": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "symbol": {
+        "type": "String"
+      }
+    }
+  },
+  "@transferAttempts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "transferInProgress": "Preparing the transfer and sending it to the network.",
+  "transferBroadcast": "Transfer sent. Waiting for network confirmation…",
+  "transferBroadcastAfterRetry": "Transfer sent on attempt {count}. Waiting for network confirmation…",
+  "transferReplacedBody": "The network required a higher fee, so the transfer was resent with a fee {multiplier}× higher.",
+  "transferTrackingIdle": "Tracking has not started yet.",
+  "transferTrackingFailed": "Could not track the transfer: {error}",
+  "transferStatusLine": "Status: {status}",
+  "@transferBroadcastAfterRetry": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@transferReplacedBody": {
+    "placeholders": {
+      "multiplier": {
+        "type": "String"
+      }
+    }
+  },
+  "@transferTrackingFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "@transferStatusLine": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  }
 }

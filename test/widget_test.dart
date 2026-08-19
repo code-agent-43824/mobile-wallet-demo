@@ -377,7 +377,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Подтвердите операцию'), findsNothing);
-    expect(find.text('Итоговый debit'), findsOneWidget);
+    // Renamed from the developer-ish "Итоговый debit" while localizing.
+    expect(find.text('Спишется всего'), findsOneWidget);
     expect(find.text('Получатель'), findsOneWidget);
     expect(find.textContaining('Preview валиден'), findsOneWidget);
   });

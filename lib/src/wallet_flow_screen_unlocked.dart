@@ -148,10 +148,11 @@ class _TransferPreparationSectionState
   }
 
   Future<void> _signAndSubmit() async {
+    final l10n = AppLocalizations.of(context);
     final asset = _selectedAsset;
     if (asset == null) {
       setState(() {
-        _error = 'Сначала выбери актив для отправки.';
+        _error = l10n.transferPickAssetFirst;
       });
       return;
     }
@@ -175,7 +176,7 @@ class _TransferPreparationSectionState
 
     final credential = await _promptForAuth(
       context,
-      reason: 'Подпись и отправка перевода требует доступа к приватному ключу.',
+      reason: l10n.transferNeedsKey,
       biometricsOffered: widget.canUnlockWithBiometrics,
     );
     if (credential == null || !mounted) {
@@ -252,7 +253,7 @@ class _TransferPreparationSectionState
               }
               final message = error is TransactionFailure
                   ? error.message
-                  : 'Tracking завершился с ошибкой: $error';
+                  : l10n.transferTrackingFailed('$error');
               setState(() {
                 _trackingReceipt = TransactionReceipt(
                   status: TransactionStatus.failed,
@@ -279,6 +280,7 @@ class _TransferPreparationSectionState
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final preview = _preview;
     final assets = _assets;
     final submittedTransfer = _submittedTransfer;
@@ -288,7 +290,7 @@ class _TransferPreparationSectionState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle('Подготовка и отправка перевода'),
+        _SectionTitle(l10n.transferTitle),
         const SizedBox(height: 16),
         if (_replacementTransfer)
           Container(
@@ -307,7 +309,7 @@ class _TransferPreparationSectionState
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Заменённая транзакция',
+                        l10n.transferReplaced,
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
                               color: NocturneColors.warning,
@@ -316,7 +318,9 @@ class _TransferPreparationSectionState
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'RPC запросил replacement с более высоким gas price. Повторная отправка выполнена с multiplier ×${_gasMultiplier.toStringAsFixed(2)}.',
+                        l10n.transferReplacedBody(
+                          _gasMultiplier.toStringAsFixed(2),
+                        ),
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -329,7 +333,7 @@ class _TransferPreparationSectionState
         DropdownButtonFormField<String>(
           initialValue: _selectedAsset?.id,
           decoration: const InputDecoration(
-            labelText: 'Актив',
+            labelText: l10n.transferAsset,
             border: OutlineInputBorder(),
           ),
           items: assets
@@ -358,7 +362,7 @@ class _TransferPreparationSectionState
         TextField(
           controller: _addressController,
           decoration: const InputDecoration(
-            labelText: 'Адрес получателя',
+            labelText: l10n.transferRecipientLabel,
             hintText: '0x…',
             border: OutlineInputBorder(),
           ),
@@ -368,11 +372,14 @@ class _TransferPreparationSectionState
           controller: _amountController,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: InputDecoration(
-            labelText: 'Сумма',
-            hintText: 'Например 0.1',
+            labelText: l10n.transferAmount,
+            hintText: l10n.transferAmountHint,
             helperText: _selectedAsset == null
                 ? null
-                : 'Доступно: ${_selectedAsset!.balanceFormatted} ${_selectedAsset!.symbol}',
+                : l10n.transferAvailable(
+                    _selectedAsset!.balanceFormatted,
+                    _selectedAsset!.symbol,
+                  ),
             border: const OutlineInputBorder(),
           ),
         ),
@@ -386,7 +393,7 @@ class _TransferPreparationSectionState
               FilledButton.icon(
                 onPressed: _isSubmitting ? null : _buildPreview,
                 icon: const Icon(Icons.visibility_outlined),
-                label: const Text('Проверить перевод'),
+                label: Text(l10n.transferPreviewAction),
               ),
               FilledButton.icon(
                 onPressed: _isSubmitting ? null : _signAndSubmit,
@@ -398,7 +405,9 @@ class _TransferPreparationSectionState
                       )
                     : const Icon(Icons.send_outlined),
                 label: Text(
-                  _isSubmitting ? 'Отправка…' : 'Подписать и отправить',
+                  _isSubmitting
+                      ? l10n.transferSending
+                      : l10n.transferSignAndSend,
                 ),
               ),
             ],
@@ -410,9 +419,12 @@ class _TransferPreparationSectionState
         ],
         if (preview != null) ...[
           const SizedBox(height: 16),
-          _SummaryTile(label: 'Получатель', value: preview.toAddress),
+          _SummaryTile(label: l10n.transferRecipient, value: preview.toAddress),
           const SizedBox(height: 10),
-          _SummaryTile(label: 'Актив и сумма', value: preview.amountFormatted),
+          _SummaryTile(
+            label: l10n.transferAssetAndAmount,
+            value: preview.amountFormatted,
+          ),
           const SizedBox(height: 10),
           _SummaryTile(
             label: 'Estimated gas',
@@ -426,18 +438,17 @@ class _TransferPreparationSectionState
           ),
           const SizedBox(height: 10),
           _SummaryTile(
-            label: 'Итоговый debit',
+            label: l10n.transferTotalDebit,
             value: preview.totalDebitFormatted,
           ),
           const SizedBox(height: 10),
-          _SummaryTile(label: 'Статус', value: preview.previewNote),
+          _SummaryTile(label: l10n.transferStatus, value: preview.previewNote),
         ],
         if (_isSubmitting) ...[
           const SizedBox(height: 16),
           const _SummaryTile(
-            label: 'Состояние отправки',
-            value:
-                'Идёт операция: готовим transfer, получаем nonce, подписываем локально и отправляем raw transaction в RPC.',
+            label: l10n.transferSendState,
+            value: l10n.transferInProgress,
           ),
         ],
         if (loadedNonce != null) ...[
@@ -459,7 +470,7 @@ class _TransferPreparationSectionState
         if (submittedTransfer != null) ...[
           const SizedBox(height: 10),
           _SummaryTile(
-            label: 'Успешная отправка',
+            label: l10n.transferSuccess,
             value:
                 '${submittedTransfer.networkTransactionHash}\nRPC: ${submittedTransfer.providerLabel}\n${submittedTransfer.submittedAtUtc.toIso8601String()}',
           ),
@@ -474,14 +485,15 @@ class _TransferPreparationSectionState
   }
 
   String _buildTrackingStatus() {
+    final l10n = AppLocalizations.of(context);
     final receipt = _trackingReceipt;
     if (_submittedTransfer == null) {
-      return 'Tracking ещё не запускался.';
+      return l10n.transferTrackingIdle;
     }
     if (receipt == null) {
       return _submissionAttempts > 1
-          ? 'Транзакция отправлена после retry ($_submissionAttempts попытки). Идёт ожидание receipt…'
-          : 'Транзакция отправлена. Идёт ожидание receipt…';
+          ? l10n.transferBroadcastAfterRetry(_submissionAttempts)
+          : l10n.transferBroadcast;
     }
 
     final statusLabel = switch (receipt.status) {
@@ -492,10 +504,10 @@ class _TransferPreparationSectionState
     };
 
     final details = <String>[
-      'Статус: $statusLabel',
+      l10n.transferStatusLine(statusLabel),
       if (receipt.blockNumber != null) 'Block: ${receipt.blockNumber}',
       if (receipt.gasUsed != null) 'Gas used: ${receipt.gasUsed}',
-      if (_submissionAttempts > 1) 'Попыток отправки: $_submissionAttempts',
+      if (_submissionAttempts > 1) l10n.transferAttempts(_submissionAttempts),
       if (receipt.errorMessage != null) receipt.errorMessage!,
     ];
 
