@@ -29,7 +29,7 @@ Current factual status of the project:
 milestone is an optional Rutoken custody backend for Android/iOS whose signing keys stay non-exporting after
 recoverable provisioning and which supports the same own-send, WalletConnect, and EIP-4527 AirGap flows.
 
-- **NOW — v1.54.0+65:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
+- **NOW — v1.55.0+66:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
   MetaMask-compatible EIP-4527 AirGap, per-operation authentication, hardened QR scanning, and the
   Rutoken custody/signature foundation, physically validated Android read/sign/provisioning, and the registered
   production backend are built. A compatible pre-provisioned card can be adopted read-only without rewriting its
@@ -669,8 +669,8 @@ icons; no pure black or white; elevation is a hairline edge plus ambient darknes
 Goal: let the wallet hold **several registered cards**, each with its own address, and switch between them the
 way it switches storage backends today. Requested by the owner 2026-08-18 while dogfooding the redesign.
 
-Status: 📋 Planned. Not attempted yet — see the architectural note below for why this is a phase and not a
-patch.
+Status: 🟡 In progress — 14.1–14.4 are built and CI green; 14.5 (physical two-card dogfood) is the remaining
+exit criterion and needs the owner's hardware.
 
 ### Why it is not a quick change
 Today "which wallet" and "which backend" are the same question: the switcher selects a **backend id**, and the
@@ -688,17 +688,42 @@ model) in the open-session result — but Dart never reads it. So identifying ca
 work, only plumbing.
 
 ### Chunks
-- **14.1** — model: a keyed set of card profiles (address, derivation path, serial, label) plus a "selected
-  card" pointer, replacing the single-profile store. Migration for the one profile existing installs already
-  hold.
-- **14.2** — surface the serial: read `tokenSerial` through the adapter into the public profile, so a card can
-  be told apart from another by more than its address.
-- **14.3** — provisioning: allow adopting/creating an *additional* card instead of rejecting it, keeping the
-  per-card address binding intact (the check becomes "matches the selected profile", never "matches any").
-- **14.4** — switcher: list wallets rather than backends — the phone vault plus each registered card, showing
-  address and serial — and make `switchActiveWallet` select a profile.
+- **14.1 — DONE (CI green)** — model: the profile store holds a list of card profiles plus a `selectedId`
+  instead of one inline record, and the loaders the custody backend calls resolve the selected one. Schemas 1
+  and 2 migrate on read, so an install that registered a card before v1.55 keeps it, still selected, without
+  touching the token. A profile is keyed by its lowercased address — two cards holding the same key are the
+  same wallet, and unlike the serial an address exists for profiles registered before serials were read. Two
+  properties preserved deliberately: `pending` still means "half-written, not usable" (excluded from listings,
+  never selectable), and re-provisioning the selected card clears the selection until the write completes. An
+  unknown schema now throws rather than reading as absent, so a downgrade cannot truncate a newer format.
+- **14.2 — DONE (CI green)** — serial: `RutokenRuntime` always returned `tokenSerial`/`tokenLabel`/`tokenModel`
+  from `openSession` and Dart discarded them; they now reach `RutokenNativeSession` and are recorded on the
+  profile. Missing or blank values read as null rather than failing the session — token identity is
+  descriptive, not load-bearing. Adopting an already-registered card records its serial without disturbing the
+  retained account xpub.
+- **14.3 — DONE (CI green)** — provisioning: adopting a card the phone does not know adds a profile instead of
+  throwing «На телефоне уже зарегистрирован другой Рутокен»; a card it does know keeps everything it has. The
+  adopted card becomes the selected one. The binding is unchanged and now has its own test: each operation
+  still binds to exactly one card, because `_verifyRegisteredAccount` compares against the *selected* profile.
+  That is deliberate — auto-switching to whichever card was tapped would let a transfer previewed against one
+  wallet's balance and nonce complete as another's.
+- **14.4 — DONE (CI green)** — switcher: Настройки lists the phone vault plus each registered card with its
+  address and serial, ticking the selected profile rather than the backend. Adds «Забыть карту» (drops only
+  the phone's record; the card keeps its key) with a fallback to another card → the phone vault → onboarding,
+  and «Подключить ещё карту», which runs the same PIN prompt and NFC wait as the first one.
+  **Found and fixed here, outside the chunk's scope but not worth leaving:**
+  `PhoneSecureVault.createWallet`/`importWallet` silently replaced an existing wallet's seed. Onboarding never
+  reached them in that state, but the switcher's empty-slot row leads to the welcome screen, which put a
+  fresh-seed button a few taps from a wallet in use. Both now refuse when a wallet exists.
 - **14.5** — physical dogfood on two cards: switch, sign with each, and confirm a card still cannot sign for
   the other's address.
+
+### Not covered by 14.1–14.4
+- Creating or importing a key onto a *second* card is only reachable through the switcher's empty-slot row,
+  which opens the welcome screen. «Подключить ещё карту» deliberately goes straight to adoption instead, since
+  routing to that screen puts phone-vault creation one tap away. A dedicated "add card" screen offering all
+  three actions is the tidy answer and is not built yet.
+- Card profiles have no user-assigned names (owner's call: serial + address is enough).
 
 ### Constraint
 The registered-address binding is a security property with physical evidence behind it (Phase 10, v1.51). Any

@@ -18,6 +18,45 @@ Entry template:
 
 ---
 
+## 2026-08-19 — Phase 14 chunks 14.1–14.4: several cards — branch claude/wonderful-rubin-eBDKZ — done (14.5 open)
+- Plan: build the multi-card support the owner asked for while dogfooding — data layer first (profile set +
+  serial), then provisioning, then the switcher — keeping the registered-address binding and its Phase 10
+  physical evidence intact at every step.
+- Done: **14.1** profile list + `selectedId` + schema 1/2 migration; **14.2** `tokenSerial`/`tokenLabel` read
+  through the adapter onto the profile; **14.3** adoption registers an additional card instead of refusing it;
+  **14.4** the switcher lists wallets (phone vault + each card with address and serial), «Забыть карту», and
+  «Подключить ещё карту».
+- **Owner decisions (asked, 2026-08-19):** removal of a registered card — yes, with a confirmation; card
+  naming — serial + address is enough, no user-assigned names.
+- **The binding decision, made rather than defaulted.** With several profiles, "the card must match" can mean
+  the *selected* profile or *any registered* profile. Any-registered is friendlier — tap whichever card you
+  have — but a transfer is previewed against one wallet's balance and nonce, so completing it with another
+  card's key is wrong in a way the user cannot see. Selected-only it is, and it falls out for free because
+  `_verifyRegisteredAccount` already compares against whatever the loaders resolve. Covered by its own test.
+- **Preserved deliberately, both with teeth:** `pending` still means half-written-and-unusable (excluded from
+  listings, never selectable, migrates as pending); re-provisioning the selected card clears the selection
+  until the write completes. Both were properties of the single-record store that a naive list conversion
+  would have dropped.
+- **Found while wiring «Подключить ещё карту», and fixed:** `PhoneSecureVault.createWallet`/`importWallet`
+  silently replaced an existing wallet's seed — the only copy of that key. Onboarding never reached them in
+  that state, which is why it survived this long, but the switcher's empty-slot row opens the welcome screen,
+  and that screen's «Создать кошелёк» was then a few taps from a wallet in use. Both calls now refuse. This is
+  outside 14.4's scope; folding it in was still the right call, because 14.4 is what made it reachable.
+- **Deliberately not routed to the welcome screen.** «Подключить ещё карту» goes straight to adoption for the
+  same reason. The cost: creating/importing a key onto a *second* card is only reachable via the empty-slot
+  row. A dedicated "add card" screen offering all three actions is the tidy answer — recorded in the plan, not
+  built.
+- Next / open: **14.5** — the physical two-card dogfood is the remaining exit criterion and needs the owner's
+  hardware: switch between cards, sign with each, and confirm a registered-but-unselected card still cannot
+  sign for the other's address. That last row is the one that re-opens `docs/device-test-matrix.md`.
+- Refs: `a4b0eab`, `1866115`, `1d8a025`; `lib/src/key_storage/rutoken_provisioning.dart`,
+  `lib/src/key_storage/custody_backend.dart`, `lib/src/key_storage/rutoken_method_channel_adapter.dart`,
+  `lib/src/key_storage/phone_secure_vault.dart`, `lib/src/wallet_flow_controller.dart`,
+  `lib/src/wallet_flow_screen_tabs.dart`, `test/rutoken_provisioning_test.dart`,
+  `test/phone_secure_vault_test.dart`
+
+---
+
 ## 2026-08-19 — Phase 13 chunk 13.6 (done): localization finished + RU/EN switch — branch claude/wonderful-rubin-eBDKZ — done
 - Plan: finish the ARB migration (onboarding/card screens, then the controllers), then unpin Russian and add the
   language switch. Controller approach was the owner's call — **variant A**: inject a message source, matching
