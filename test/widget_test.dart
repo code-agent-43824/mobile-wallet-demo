@@ -675,7 +675,8 @@ void main() {
 
     expect(find.text('Успешная отправка'), findsOneWidget);
     expect(
-      find.textContaining('Транзакция отправлена. Идёт ожидание receipt'),
+      // Reworded away from "ожидание receipt" while localizing.
+      find.textContaining('Перевод отправлен'),
       findsOneWidget,
     );
     expect(find.text('Подписать и отправить'), findsOneWidget);
