@@ -46,14 +46,28 @@ Entry template:
   same reason. The cost: creating/importing a key onto a *second* card is only reachable via the empty-slot
   row. A dedicated "add card" screen offering all three actions is the tidy answer — recorded in the plan, not
   built.
+- **Two more defects, both found re-reading my own 14.4 wiring rather than from a failing test.** Worth naming
+  because neither would have surfaced in CI:
+  1. The «Новая карта» row was a no-op once a card was registered. The early return treated "same backend,
+     same profile" as nothing-to-do without noticing the row carries *no* profile, and the stage came from the
+     resolved summary rather than from the row. The one row whose purpose is reaching create/import-on-card
+     did nothing. Now an empty row always opens setup; test added.
+  2. Forgetting a card left its PIN in the biometric secret store, which is address-scoped — a stored PIN for
+     a card the phone no longer knows. `RutokenBiometricPinStore.forget()` drops the secret *and* the
+     offer decision; unlike `decline()` it records no answer, so re-connecting that card offers biometrics
+     afresh instead of inheriting one from a registration that no longer exists.
+  The lesson is the same one from 13.6: a bulk change needs a review pass by a different method than the one
+  that made it. Here the method was "walk each new call path by hand and ask what it does in the *second*
+  card's world", which is exactly the case none of the existing tests exercised.
 - Next / open: **14.5** — the physical two-card dogfood is the remaining exit criterion and needs the owner's
   hardware: switch between cards, sign with each, and confirm a registered-but-unselected card still cannot
   sign for the other's address. That last row is the one that re-opens `docs/device-test-matrix.md`.
-- Refs: `a4b0eab`, `1866115`, `1d8a025`; `lib/src/key_storage/rutoken_provisioning.dart`,
+- Refs: `a4b0eab`, `1866115`, `1d8a025`, `1bc6594`, `7ed9dae`, `8883c40`; `lib/src/key_storage/rutoken_provisioning.dart`,
   `lib/src/key_storage/custody_backend.dart`, `lib/src/key_storage/rutoken_method_channel_adapter.dart`,
   `lib/src/key_storage/phone_secure_vault.dart`, `lib/src/wallet_flow_controller.dart`,
-  `lib/src/wallet_flow_screen_tabs.dart`, `test/rutoken_provisioning_test.dart`,
-  `test/phone_secure_vault_test.dart`
+  `lib/src/wallet_flow_screen_tabs.dart`, `lib/src/key_storage/rutoken_biometric_pin_store.dart`,
+  `test/rutoken_provisioning_test.dart`, `test/phone_secure_vault_test.dart`,
+  `docs/device-test-matrix.md` (the 14.5 two-card gate)
 
 ---
 
