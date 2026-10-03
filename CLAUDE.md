@@ -26,9 +26,12 @@ the secret-free transient device signer. v1.49 can instead adopt an existing com
 profile, rejects a card whose address differs from that profile, and can release its separately stored PIN only
 after system biometric authentication. v1.50 makes the Android NFC wait cancellable, maps stable sanitized native
 errors, detects a removed token before later operations, and preserves the primary operation failure if teardown
-also fails. Physical signing-matrix dogfood and the Swift implementation are next.
-See the NOW / NEXT
-/ LATER section and Phase 10 Definition of Done in `docs/development-plan.md`.
+also fails. The Android physical signing matrix passed on v1.51 (2026-08-17), including WalletConnect,
+AirGap, invalid PIN, cancellation, timeout, and different-card rejection. Mid-operation NFC loss still displays
+a generic error; physical crash/log-output review and the Swift/iOS implementation remain open. The exact
+`wtpkcs11ecp.xcframework` was received and retained privately, but its archive has no redistribution grant;
+do not commit it or expose it through public CI artifacts. See the NOW / NEXT / LATER section and Phase 10
+Definition of Done in `docs/development-plan.md`.
 
 Use `docs/device-test-matrix.md` for physical-device and live-service evidence; do not turn simulator or fake
 coverage into hardware/security claims.

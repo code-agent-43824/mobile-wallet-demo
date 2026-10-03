@@ -18,6 +18,21 @@ Entry template:
 
 ---
 
+## 2026-10-03 — Reconcile Rutoken status with recorded evidence — branch docs/reconcile-rutoken-status-2026-10-03 — done
+- Plan: compare the current Phase 10 roadmap, physical matrix, and agent handoff with the already-recorded
+  2026-08-17 owner dogfood and the 2026-07-29 private iOS vendor-input audit. Correct only stale status claims;
+  keep NFC-loss categorization, physical crash/log review, iOS implementation, and framework distribution terms
+  explicitly open. Do not put the proprietary archive in the public repository.
+- Done: corrected the Phase 10 roadmap, physical-device matrix, and agent handoff to reflect the owner-verified
+  Android WalletConnect/AirGap, wrong-PIN, cancellation, timeout, and different-card results from 2026-08-17.
+  Removed claims that full Android dogfood or a second card are still pending. Rechecked the privately retained
+  iOS archive against its recorded SHA-256; the exact vendor framework is available, but redistribution
+  permission is not established by the supplied archive. This is documentation-only; no SDK binary, app code,
+  or version changed.
+- Next / open: fix and physically retest mid-operation NFC-loss error categorization; capture and review actual
+  Android crash/log output; establish permitted framework delivery for iOS builds, implement the Swift backend,
+  and run the physical iOS matrix. Blocked-PIN and arbitrary SDK-error paths are not yet physically evidenced.
+
 ## 2026-08-18 — Phase 13 chunk 13.6 (in progress): copy into ARB — branch claude/wonderful-rubin-eBDKZ — partial (CI green)
 - Plan: migrate UI copy into ARB so the RU/EN switch can be enabled. The locale stays **pinned to Russian**
   throughout the migration and the ARB values are the existing Russian strings, so no step is user-visible and

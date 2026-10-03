@@ -43,7 +43,8 @@ recoverable provisioning and which supports the same own-send, WalletConnect, an
   with both Sepolia broadcasts verified on-chain (`0xe22d7a84…47e5`, `0x9ff1e06b…5a6e`). Two items remain:
   (1) an **open defect** — removing the card mid-operation reports the generic native error instead of the
   specified NFC-loss message (teardown itself is correct); (2) the physical crash/log-output review, which needs
-  adb capture. iOS follows proven Android behavior once the exact vendor framework is available.
+  adb capture. The exact iOS vendor framework has been received and retained privately; Swift integration and
+  physical iOS validation remain, with redistribution/build-delivery terms still unresolved.
 - **LATER:** optional lock-on-open privacy, broader device/platform integration tests, and only then additional
   chains/accounts if product scope changes. They are not Phase 10 prerequisites.
 
@@ -109,7 +110,7 @@ This keeps the UX compatible with future support for an external NFC hardware si
 - Within one operation, ask for PIN only once
 - Biometric unlock is routed through a dedicated biometric secret store (`key_storage/biometric_secret_store.dart`): the seed is encrypted under a random DEK, the PIN is never persisted, no usable key is co-located with the seed ciphertext, PBKDF2 runs at 600k iterations, and repeated wrong PINs trigger a temporary lockout. Full hardware-bound biometric key release (native keystore) remains follow-up hardening.
 
-### Hardware custody path (Phase 10; real device not implemented yet)
+### Hardware custody path (Phase 10; Android implemented, iOS pending)
 - Replace the current simulation with a non-exporting Rutoken backend
 - The user chooses one custody backend:
   - phone secure vault;
@@ -406,8 +407,9 @@ creation, including the expected EVM address. v1.48 registers the production bac
 signing transport through its transient native session. v1.49 adds existing-card adoption, registered-address
 binding, and biometric-gated PIN convenience. v1.50 adds cancellable Android NFC discovery, stable native failure
 categories, pre-operation card-presence checks, and teardown error precedence. v1.51 prevents unknown raw native
-diagnostics from crossing the platform channel or reaching Dart error text. Full physical signing dogfood and iOS
-remain.
+diagnostics from crossing the platform channel or reaching Dart error text. Android physical WalletConnect,
+AirGap, wrong-PIN, cancellation, timeout, and different-card checks passed on 2026-08-17. Mid-operation NFC-loss
+categorization and real crash/log-output inspection remain open; iOS implementation and physical validation remain.
 
 > **Reference:** `docs/nfc-pkcs11-integration-notes.md` contains the vendor mechanisms, native-stack setup,
 > Ethereum corrections, and physical-device questions. The existing demo adapter is a test double, not an
@@ -472,20 +474,22 @@ Small, reviewable steps; each chunk records plan and result in `docs/worklog.md`
   native path refuses a token that already contains a BIP32 master, verifies the imported address against the
   software reference, and tears the session down unconditionally. Owner Android dogfood confirms both importing
   an existing seed phrase and generating a new recoverable wallet succeed and return the expected address.
-- **10.5 — complete signing matrix:** validate own-send; WalletConnect transaction, `personal_sign`, and EIP-712;
-  and EIP-4527 AirGap transaction signing through the real device backend. v1.48 production wiring and automated
-  orchestration coverage are complete; physical Android validation is pending.
-- **10.5a — DONE IN v1.49; OWNER DOGFOOD PASSED EXCEPT CARD SWAP:** adopt a compatible card that already has a BIP-32 master without calling
+- **10.5 — ANDROID PHYSICAL SIGNING MATRIX PASSED (v1.51, 2026-08-17):** own-send, WalletConnect transaction,
+  `personal_sign` and EIP-712, and EIP-4527 AirGap signing passed with a real card. Both WalletConnect and
+  AirGap Sepolia broadcasts were verified on-chain; see `docs/device-test-matrix.md`. iOS remains unimplemented.
+- **10.5a — DONE IN v1.49; CARD SWAP PHYSICALLY PASSED IN v1.51:** adopt a compatible card that already has a BIP-32 master without calling
   `C_CreateObject`; persist its public address/path as the wallet profile and keep xpub metadata optional. Verify
   each later NFC session resolves to that registered address. After the first successful PIN use, offer an
   explicit one-time choice to store the card PIN in a separate biometric-gated secret store; a later biometric
   operation must authenticate through the platform prompt before the PIN is released to the transient native
   session. A declined offer is remembered for that account, and neither public profile nor logs contain the PIN.
-  Owner v1.49 dogfood passed ready-card adoption, biometric opt-in/release, and a Sepolia send. Different-card
-  rejection remains automated-only until a second physical card is available.
-- **10.6 — ANDROID HARDENING DONE IN v1.51; iOS PENDING:** Android now provides cancellable NFC discovery,
+  Owner v1.49 dogfood passed ready-card adoption, biometric opt-in/release, and a Sepolia send. The second-card
+  rejection was physically confirmed on 2026-08-17; the registered card still worked afterwards.
+- **10.6 — ANDROID CODE HARDENING IN v1.51; NFC-LOSS UX AND LOG REVIEW OPEN; iOS PENDING:** Android provides cancellable NFC discovery,
   stable sanitized PIN/timeout/NFC-loss errors, card-presence checks, primary-failure-preserving teardown, and
-  fixed generic platform errors that do not surface raw vendor diagnostics.
+  fixed generic platform errors that do not surface raw vendor diagnostics. Physical cancellation, timeout,
+  and invalid-PIN handling passed; mid-operation card removal still reports the generic error rather than the
+  specific NFC-loss message. The physical crash/log-output review has not been performed.
   Port the proven shared contracts to the vendor iOS stack and run the same physical-device matrix. The public
   Rutoken SDK release 15.05.2026 contains signed generic `rtpkcs11ecp.xcframework` and `RtPcsc.xcframework`,
   but header inspection confirms that it does **not** expose the wallet-only BIP32 mechanisms. The compatible
@@ -749,8 +753,8 @@ possible, since the owner has a second card.
   Dart ignores raw vendor message/details; source and adapter regressions pin the no-diagnostic-leak boundary
 
 ## Current non-goals and validation limits
-- no iOS hardware-device SDK implementation yet; Android production signing is wired but still requires the
-  maintained physical signing-matrix dogfood before being declared complete
+- no iOS hardware-device SDK implementation yet; Android physical signing passed on v1.51, while
+  mid-operation NFC-loss error categorization and physical crash/log-output inspection remain open
 - no additional chains beyond Ethereum Mainnet and Sepolia in the initial AirGap UI
 - no multi-chain support beyond Ethereum Mainnet and Sepolia yet
 - **single-account by design** (audit decision): one EVM address derived at `m/44'/60'/0'/0/0`; HD-account discovery / multiple accounts are out of scope — Phase 9 WalletConnect sessions expose this one account (`eip155:*:<address>`)
