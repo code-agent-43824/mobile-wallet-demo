@@ -15,23 +15,16 @@ test:
   stage: test
   tags: [linux-x64]
   script:
-    - export PUB_CACHE=/opt/flutter-cache/pub
     - flutter pub get
     - dart format --output=none --set-exit-if-changed .
     - flutter analyze
     - flutter test
-  artifacts:
-    paths: [.pub-cache/, .dart_tool/]
-    expire_in: 1 hour
-    when: always
-
 # --- build: Android APK (Runner 544, тег android) ---
 build-android:
   stage: build
   tags: [android]
   needs: [test]
   script:
-    - export PUB_CACHE=/opt/flutter-cache/pub
     - flutter pub get
     - flutter build apk --release --dart-define-from-file=dart_defines.json
     - cp build/app/outputs/flutter-apk/app-release.apk mobile-wallet-demo-android.apk
