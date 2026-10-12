@@ -11,11 +11,10 @@ workflow:
 stages: [sast, test, build, pages, release]
 
 # --- sast: статический анализ (semgrep) на выделенном sast-раннере (.81, ID 555).
-# Фаза report-only: allow_failure=true, находки НЕ блокируют пайплайн.
+# BLOCKING режим: находки роняют пайплайн (политика 2026-10-12, sudo-харденинг).
 semgrep-sast:
   stage: sast
   tags: [sast]
-  allow_failure: true
   script:
     - export PATH=$HOME/.local/bin:$PATH
     - semgrep --version
