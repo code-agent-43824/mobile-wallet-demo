@@ -8,35 +8,15 @@ workflow:
     - if: '$CI_COMMIT_BRANCH'
       variables: { PIPELINE_KIND: "ci" }
 
+include:
+  - project: 'mko/ci-security'
+    ref: v1.1.3                # защищённый тег — НЕ main
+    file: 'ci-semgrep.yml'
+
 stages: [sast, test, build, pages, release]
 
-# --- sast: статический анализ (semgrep) на выделенном sast-раннере (.81, ID 555).
-# BLOCKING режим: находки роняют пайплайн (политика 2026-10-12, sudo-харденинг).
-semgrep-sast:
-  stage: sast
-  tags: [sast]
-  script:
-    - export PATH=$HOME/.local/bin:$PATH
-    - semgrep --version
-    - semgrep scan --config p/default --metrics=off --quiet --json --output gl-sast-report.json || true
-    - |
-      python3 -c "
-      import json
-      try:
-          r = json.load(open('gl-sast-report.json'))
-      except Exception:
-          print('SAST report not generated'); raise SystemExit
-      n = len(r.get('results', []))
-      print(f'SEMGREP SAST: {n} finding(s)')
-      for f in r.get('results', []):
-          print('  - [' + f['check_id'] + '] ' + f['path'])
-      if n:
-          print('REPORT-ONLY MODE: findings do not block this pipeline')
-      "
-  artifacts:
-    paths: [gl-sast-report.json]
-    when: always
-    expire_in: 1 week
+# --- sast: semgrep-sast + osv-scan приходят из include (стадия sast, BLOCKING).
+# Правила вендорены в центральном репо ci-security (пин защищённого тега — НЕ main).
 
 # --- test: формат / анализ / юнит-тесты (ветки и теги) ---
 test:
