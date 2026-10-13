@@ -21,7 +21,7 @@ SIXTEEN_KB = 0x4000
 
 def load_segment_aligns(data: bytes):
     """Return the list of PT_LOAD p_align values, or None if not an ELF."""
-    if data[:4] != b"\x7fELF":
+    if data[:4] != b"\x7fELF":  # nosemgrep: generic-obfuscation-stringified-binaries — magic bytes ELF из спецификации формата, константа, не обфускация
         return None
     ei_class = data[4]  # 1 = 32-bit, 2 = 64-bit
     endian = "<" if data[5] == 1 else ">"
