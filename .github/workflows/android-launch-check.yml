@@ -63,14 +63,18 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build ${{ inputs.build-mode }} APK
-        run: flutter build apk --${{ inputs.build-mode }} --dart-define-from-file=dart_defines.json  # nosemgrep: yaml.github-actions.security.run-shell-injection.run-shell-injection — inputs.build-mode задается нашим же workflow-вызовом, не внешними данными
+      - name: Build APK
+        env:
+          BUILD_MODE: ${{ inputs.build-mode }}
+        run: flutter build apk --"$BUILD_MODE" --dart-define-from-file=dart_defines.json
 
       - name: Inspect native libs (inventory + 16 KB alignment)
         # Non-fatal: a misalignment is a strong crash hint, but we still want the
         # emulator launch result in the same run. Surface it as a warning.
-        run: |  # nosemgrep: yaml.github-actions.security.run-shell-injection.run-shell-injection — inputs.build-mode задается нашим же workflow-вызовом, не внешними данными
-          python3 scripts/check_apk_alignment.py "build/app/outputs/flutter-apk/app-${{ inputs.build-mode }}.apk" || echo "::warning::Bundled native libs are not 16 KB-aligned — likely crash on Android 15+ 16 KB-page devices (see step log)."
+        env:
+          BUILD_MODE: ${{ inputs.build-mode }}
+        run: |
+          python3 scripts/check_apk_alignment.py "build/app/outputs/flutter-apk/app-$BUILD_MODE.apk" || echo "::warning::Bundled native libs are not 16 KB-aligned — likely crash on Android 15+ 16 KB-page devices (see step log)."
 
       - name: Enable KVM (Linux x86_64 only)
         if: runner.os == 'Linux'
