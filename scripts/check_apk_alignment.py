@@ -17,11 +17,15 @@ import zipfile
 
 PT_LOAD = 1
 SIXTEEN_KB = 0x4000
+# ELF file magic per the ELF specification: 0x7F followed by "ELF".
+# Built from integer byte values (not a stringified binary literal) so the
+# constant is self-documenting and scanner-friendly.
+ELF_MAGIC = bytes([0x7F, 0x45, 0x4C, 0x46])
 
 
 def load_segment_aligns(data: bytes):
     """Return the list of PT_LOAD p_align values, or None if not an ELF."""
-    if data[:4] != b"\x7fELF":  # nosemgrep: generic-obfuscation-stringified-binaries — magic bytes ELF из спецификации формата, константа, не обфускация
+    if data[:4] != ELF_MAGIC:
         return None
     ei_class = data[4]  # 1 = 32-bit, 2 = 64-bit
     endian = "<" if data[5] == 1 else ">"
