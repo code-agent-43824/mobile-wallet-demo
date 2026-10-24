@@ -20,8 +20,10 @@ pluginManagement {
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "9.1.0" apply false
-    // Legacy KGP mode: built-in Kotlin is blocked by unmigrated pub plugins
-    // (list and the required android.newDsl=false in gradle.properties).
+    // No module declares KGP. In the current legacy mode (gradle.properties)
+    // Flutter applies it from this classpath; under built-in Kotlin it still
+    // sets the Kotlin version (AGP 9.1 alone embeds 2.2.10, below Flutter's
+    // 2.2.20 minimum), so keep it when flipping builtInKotlin.
     id("org.jetbrains.kotlin.android") version "2.4.0" apply false
 }
 
