@@ -63,11 +63,10 @@ class SnapshotCache {
                     timestampUtc: _tryParseTimestamp(
                       item['timestampUtc'] as String?,
                     ),
-                    directionLabel:
-                        item['directionLabel'] as String? ?? 'Unknown',
+                    direction: _readDirection(item),
                     counterparty: item['counterparty'] as String? ?? '—',
                     valueFormatted: item['valueFormatted'] as String? ?? '0',
-                    statusLabel: item['statusLabel'] as String? ?? 'Unknown',
+                    status: _readStatus(item),
                   ),
                 )
                 .toList(growable: false),
@@ -104,15 +103,44 @@ class SnapshotCache {
               (tx) => <String, dynamic>{
                 'hash': tx.hash,
                 'timestampUtc': tx.timestampUtc?.toIso8601String(),
-                'directionLabel': tx.directionLabel,
+                'direction': tx.direction.name,
                 'counterparty': tx.counterparty,
                 'valueFormatted': tx.valueFormatted,
-                'statusLabel': tx.statusLabel,
+                'status': tx.status.name,
               },
             )
             .toList(growable: false),
       }),
     );
+  }
+
+  /// Reads the enum name; snapshots cached before v1.57 stored a display label
+  /// instead, so those are mapped rather than dropped.
+  static HistoryDirection _readDirection(Map<String, dynamic> item) {
+    final name = item['direction'] as String?;
+    for (final value in HistoryDirection.values) {
+      if (value.name == name) return value;
+    }
+    return switch (item['directionLabel'] as String?) {
+      'Входящая' => HistoryDirection.incoming,
+      'Исходящая' => HistoryDirection.outgoing,
+      'Self' => HistoryDirection.self,
+      'Контракт' => HistoryDirection.contract,
+      _ => HistoryDirection.unknown,
+    };
+  }
+
+  static HistoryStatus _readStatus(Map<String, dynamic> item) {
+    final name = item['status'] as String?;
+    for (final value in HistoryStatus.values) {
+      if (value.name == name) return value;
+    }
+    return switch (item['statusLabel'] as String?) {
+      'Success' || 'Confirmed' => HistoryStatus.success,
+      'error' => HistoryStatus.failed,
+      'pending' => HistoryStatus.pending,
+      _ => HistoryStatus.unknown,
+    };
   }
 
   DateTime? _tryParseTimestamp(String? timestamp) {

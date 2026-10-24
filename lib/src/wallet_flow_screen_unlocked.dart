@@ -142,7 +142,7 @@ class _TransferPreparationSectionState
         _signedTransfer = null;
         _submittedTransfer = null;
         _trackingReceipt = null;
-        _error = error.message;
+        _error = describeError(AppLocalizations.of(context), error);
       });
     }
   }
@@ -169,7 +169,7 @@ class _TransferPreparationSectionState
       );
     } on TransactionFailure catch (error) {
       setState(() {
-        _error = error.message;
+        _error = describeError(AppLocalizations.of(context), error);
       });
       return;
     }
@@ -252,7 +252,7 @@ class _TransferPreparationSectionState
                 return;
               }
               final message = error is TransactionFailure
-                  ? error.message
+                  ? describeError(l10n, error)
                   : l10n.transferTrackingFailed('$error');
               setState(() {
                 _trackingReceipt = TransactionReceipt(
@@ -267,7 +267,7 @@ class _TransferPreparationSectionState
         return;
       }
       setState(() {
-        _error = error.message;
+        _error = describeError(AppLocalizations.of(context), error);
       });
     } finally {
       if (mounted && _isSubmitting) {

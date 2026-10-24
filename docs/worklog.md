@@ -18,6 +18,28 @@ Entry template:
 
 ---
 
+## 2026-10-24 — Phase 13 close-out + LATER items: error codes, sequential confirmation, add-card screen, lock-on-open — branch claude/friendly-hawking-hpbpbv — in progress
+- Plan (owner request): four functional chunks, each tested, then one version bump (v1.57.0).
+  - **A. Error codes.** Domain/infrastructure failures (`key_storage/`, `qr/`, `walletconnect/`, `airgap/`,
+    `transactions/`, `auth/`) stop carrying inline Russian. Each exception keeps its type (catch sites rely on
+    it) and gains an `AppError` = `AppErrorCode` + args; `describeError(l10n, error)` at the UI edge turns it
+    into RU/EN text through an exhaustive `switch`, so a code without copy fails to compile. Protocol parse
+    failures (RLP, BC-UR, EIP-712, WC params) collapse into a few codes with a language-neutral technical
+    detail, per the 13.6 decision that protocol diagnostics stay untranslated. JSON-RPC errors sent *to dApps*
+    become fixed English (protocol-facing, not UI). Also: biometric prompt reasons come from the active
+    locale, history direction/status become enums (old cached labels still read), and the last inline UI copy
+    (create-wallet stage, camera scanner) moves into ARB.
+  - **B. Sequential confirmation (13.5 deviation).** One sheet walks PIN → card tap / signing → result instead
+    of stacking a PIN sheet over the send sheet with the busy overlay on top; the send sheet itself becomes
+    form → review → PIN → signing → result. WalletConnect approve, AirGap export/sign and connecting another
+    card use the same sheet. The root busy overlay stays for everything else.
+  - **C. Add-card screen.** «Подключить ещё карту» and the switcher's empty card row open one screen offering
+    all three card actions (connect a ready card, create a new key, import a seed); create/import return to it.
+  - **D. Lock-on-open (optional, off by default).** A Настройки switch; when on, the app opens on the locked
+    screen and re-locks after a minute in the background (a grace period, so the file picker, the biometric
+    dialog or NFC do not lock it mid-task). Phone vault: PIN or vault biometrics; card: card PIN + tap, or the
+    stored-PIN biometrics when enabled. No key material is kept after the check.
+
 ## 2026-10-24 — Latest Flutter, Kotlin plugin cleanup, v1.56.0 release — branch claude/friendly-hawking-hpbpbv — done (v1.56.0+67)
 - Plan (owner request): stop pinning Flutter — CI and `.fvmrc` follow the latest stable (3.47.8 today);
   remove the Kotlin Gradle Plugin problems as far as the dependency tree allows; delete the stale branches;

@@ -8,6 +8,7 @@ import 'package:mobile_wallet_demo/src/auth/external_digest_signer.dart';
 import 'package:mobile_wallet_demo/src/auth/wallet_operation_auth.dart';
 import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
+import 'package:mobile_wallet_demo/src/errors/app_error.dart';
 import 'package:mobile_wallet_demo/src/key_storage/custody_backend.dart';
 import 'package:mobile_wallet_demo/src/key_storage/key_storage_backend.dart';
 import 'package:mobile_wallet_demo/src/transactions/transaction_service.dart';
@@ -60,7 +61,13 @@ void main() {
 
       await expectLater(
         backend.readAccountPublicKey(pin: '1234'),
-        throwsA(isA<StateError>()),
+        throwsA(
+          isA<VaultFailure>().having(
+            (error) => error.errorCode,
+            'errorCode',
+            AppErrorCode.cardNoAccountXpub,
+          ),
+        ),
       );
       expect(adapter.openCount, 0);
       expect(adapter.closeCount, 0);
@@ -117,9 +124,9 @@ void main() {
           backend.openSigningSession(pin: '1234'),
           throwsA(
             isA<VaultFailure>().having(
-              (error) => error.message,
-              'message',
-              contains('другой Рутокен'),
+              (error) => error.errorCode,
+              'errorCode',
+              AppErrorCode.cardWrongCard,
             ),
           ),
         );

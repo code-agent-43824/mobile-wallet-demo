@@ -58,6 +58,11 @@ platform hardware/security claim.
 
 ## Phase 10 Rutoken gate
 
+Since v1.57 card errors are coded in Dart and worded without the vendor name, per the redesign's rule that
+«Рутокен» never appears in the UI: «Ожидание карты отменено.», «Неверный PIN карты.», «Связь с картой потеряна.
+Поднесите карту заново.», «Поднесена другая карта…». Rows above quote what v1.51 showed; a rerun should expect
+the new wording.
+
 Add exact token model, firmware, SDK version, device/OS, and issue/evidence link when execution starts.
 
 | Check | Android | iOS | Acceptance |
@@ -89,7 +94,7 @@ re-provisioning, so the existing keys stay as they are.
 | Register the second card | NOT RUN | «Подключить ещё карту» → that card's PIN → tap. It is added *alongside* the first (no «уже зарегистрирован» error) and becomes active. |
 | Both cards listed with serial and address | NOT RUN | The switcher shows two card rows with different addresses and different serial numbers, exactly one ticked. |
 | Switch and sign with each | NOT RUN | Switch to card A, sign one operation with A; switch to card B, sign one with B. The dashboard address follows the switch. |
-| **Unselected card cannot sign** | NOT RUN | With card A selected, present card B (using B's own PIN — PIN login precedes the address check). Must be rejected with «Поднесён другой Рутокен…». This is the security property; a PASS here is what re-closes the "different-card rejection" row above. |
+| **Unselected card cannot sign** | NOT RUN | With card A selected, present card B (using B's own PIN — PIN login precedes the address check). Must be rejected with «Поднесена другая карта…» (v1.57 copy; v1.51–v1.56 said «Поднесён другой Рутокен…»). This is the security property; a PASS here is what re-closes the "different-card rejection" row above. |
 | Forget a card | NOT RUN | «Забыть карту» on the inactive card removes only that row; the active card keeps working. Forgetting the active card falls back to the other one. |
 | Re-connect a forgotten card | NOT RUN | The forgotten card can be added again with «Подключить ещё карту» and returns with the same address. |
 

@@ -4,16 +4,35 @@ import 'dart:typed_data';
 import 'package:web3dart/web3dart.dart' show hexToBytes, keccak256;
 
 import '../auth/wallet_operation_auth.dart';
+import '../errors/app_error.dart';
 import '../transactions/transaction_service.dart';
 import '../walletconnect/eip712.dart';
 import 'eip4527.dart';
 
 /// Thrown when an [EthSignRequest] cannot be signed — e.g. it targets a
 /// different account, or its [EthSignDataType] is not supported.
-class Eip4527SignException implements Exception {
-  const Eip4527SignException(this.message);
+class Eip4527SignException implements Exception, CodedError {
+  /// A failure whose text comes from outside the app; shown as is.
+  const Eip4527SignException(String message)
+    : _message = message,
+      errorCode = null,
+      errorArgs = const <String, Object>{};
 
-  final String message;
+  const Eip4527SignException.coded(
+    AppErrorCode this.errorCode, [
+    this.errorArgs = const <String, Object>{},
+  ]) : _message = null;
+
+  final String? _message;
+
+  @override
+  final AppErrorCode? errorCode;
+
+  @override
+  final Map<String, Object> errorArgs;
+
+  @override
+  String get message => _message ?? debugDescribeError(errorCode!, errorArgs);
 
   @override
   String toString() => 'Eip4527SignException: $message';
@@ -169,14 +188,18 @@ class Eip4527InboundCoordinator {
     required int chainId,
   }) {
     if (rawSig.length != 65) {
-      throw Eip4527SignException(
-        'Ожидалась 65-байтовая подпись, получено ${rawSig.length}.',
+      throw Eip4527SignException.coded(
+        AppErrorCode.airgapSignatureInvalid,
+        <String, Object>{
+          'detail': 'signature is ${rawSig.length} bytes, expected 65',
+        },
       );
     }
     final recId = rawSig[64] - 27;
     if (recId != 0 && recId != 1) {
-      throw Eip4527SignException(
-        'Неожиданный recovery id в подписи (v=${rawSig[64]}).',
+      throw Eip4527SignException.coded(
+        AppErrorCode.airgapSignatureInvalid,
+        <String, Object>{'detail': 'unexpected recovery id v=${rawSig[64]}'},
       );
     }
     final int mappedV;
@@ -194,8 +217,11 @@ class Eip4527InboundCoordinator {
         break;
     }
     if (mappedV < 0 || mappedV > 0xff) {
-      throw Eip4527SignException(
-        'Значение v ($mappedV) не помещается в один байт для chainId $chainId.',
+      throw Eip4527SignException.coded(
+        AppErrorCode.airgapSignatureInvalid,
+        <String, Object>{
+          'detail': 'v=$mappedV does not fit one byte for chainId $chainId',
+        },
       );
     }
     final out = Uint8List.fromList(rawSig);
@@ -216,8 +242,9 @@ class Eip4527InboundCoordinator {
     final requestedAddress = request.addressHex;
     if (requestedAddress != null &&
         requestedAddress.toLowerCase() != signer.address.toLowerCase()) {
-      throw Eip4527SignException(
-        'Запрос адресован другому аккаунту ($requestedAddress).',
+      throw Eip4527SignException.coded(
+        AppErrorCode.requestOtherAccount,
+        <String, Object>{'address': requestedAddress},
       );
     }
   }
@@ -227,13 +254,15 @@ class Eip4527InboundCoordinator {
     try {
       decoded = jsonDecode(utf8.decode(signData));
     } catch (error) {
-      throw Eip4527SignException(
-        'EIP-712 sign-data не является корректным JSON: $error',
+      throw Eip4527SignException.coded(
+        AppErrorCode.airgapTypedDataInvalid,
+        <String, Object>{'detail': 'not valid JSON: $error'},
       );
     }
     if (decoded is! Map) {
-      throw const Eip4527SignException(
-        'EIP-712 sign-data должен быть JSON-объектом.',
+      throw const Eip4527SignException.coded(
+        AppErrorCode.airgapTypedDataInvalid,
+        <String, Object>{'detail': 'must be a JSON object'},
       );
     }
     return decoded.cast<String, dynamic>();

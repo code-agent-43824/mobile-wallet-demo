@@ -1,4 +1,5 @@
 import 'network_config.dart';
+import '../errors/app_error.dart';
 
 /// Ceiling for a single network round trip.
 ///
@@ -9,10 +10,28 @@ import 'network_config.dart';
 /// a network switch.
 const Duration networkRequestTimeout = Duration(seconds: 12);
 
-class BlockchainFailure implements Exception {
-  const BlockchainFailure(this.message);
+class BlockchainFailure implements Exception, CodedError {
+  /// A failure whose text comes from outside the app; shown as is.
+  const BlockchainFailure(String message)
+    : _message = message,
+      errorCode = null,
+      errorArgs = const <String, Object>{};
 
-  final String message;
+  const BlockchainFailure.coded(
+    AppErrorCode this.errorCode, [
+    this.errorArgs = const <String, Object>{},
+  ]) : _message = null;
+
+  final String? _message;
+
+  @override
+  final AppErrorCode? errorCode;
+
+  @override
+  final Map<String, Object> errorArgs;
+
+  @override
+  String get message => _message ?? debugDescribeError(errorCode!, errorArgs);
 
   @override
   String toString() => 'BlockchainFailure: $message';
@@ -62,20 +81,27 @@ class TokenBalanceSnapshot {
   final String contractAddress;
 }
 
+/// Which way a history entry moved value, relative to the wallet. Data, not a
+/// label: the UI names it in the active language.
+enum HistoryDirection { incoming, outgoing, self, contract, unknown }
+
+/// How a history entry ended, as the explorer reports it.
+enum HistoryStatus { success, failed, pending, unknown }
+
 class RecentTransactionSnapshot {
   const RecentTransactionSnapshot({
     required this.hash,
     required this.timestampUtc,
-    required this.directionLabel,
+    required this.direction,
     required this.counterparty,
     required this.valueFormatted,
-    required this.statusLabel,
+    required this.status,
   });
 
   final String hash;
   final DateTime? timestampUtc;
-  final String directionLabel;
+  final HistoryDirection direction;
   final String counterparty;
   final String valueFormatted;
-  final String statusLabel;
+  final HistoryStatus status;
 }

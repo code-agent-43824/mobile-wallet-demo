@@ -21,6 +21,7 @@ import 'chain_data_controller.dart';
 import 'design/app_shell.dart';
 import 'design/nocturne.dart';
 import 'design/platform_style.dart';
+import 'error_text.dart';
 import 'key_storage/backend_registry.dart';
 import 'key_storage/custody_backend.dart';
 import 'key_storage/key_storage_backend.dart';
@@ -498,13 +499,11 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       case WalletFlowStage.createWallet:
         // The card has its own provisioning stages, so this one is always the
         // phone wallet.
+        final l10n = AppLocalizations.of(context);
         return _PinSetupStage(
-          title: 'Кошелёк на этом телефоне',
-          description:
-              'Сначала задайте PIN — им будет зашифрован кошелёк. Потом '
-              'приложение создаст seed-фразу и покажет её один раз, чтобы вы '
-              'сохранили резервную копию.',
-          actionLabel: 'Создать кошелёк',
+          title: l10n.createPhoneWalletTitle,
+          description: l10n.createPhoneWalletBody,
+          actionLabel: l10n.createPhoneWalletAction,
           onSubmit: controller.createWallet,
           onBack: controller.goToWelcome,
         );

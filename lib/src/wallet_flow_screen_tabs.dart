@@ -33,6 +33,23 @@ class _WalletSwitcherData {
 
 /// A language's name in that language — deliberately not translated, so the
 /// list reads the same whichever language the app is currently showing.
+String _historyDirectionLabel(AppLocalizations l10n, HistoryDirection value) =>
+    switch (value) {
+      HistoryDirection.incoming => l10n.historyIncoming,
+      HistoryDirection.outgoing => l10n.historyOutgoing,
+      HistoryDirection.self => l10n.historySelf,
+      HistoryDirection.contract => l10n.historyContract,
+      HistoryDirection.unknown => l10n.historyUnknown,
+    };
+
+String _historyStatusLabel(AppLocalizations l10n, HistoryStatus value) =>
+    switch (value) {
+      HistoryStatus.success => l10n.historySuccess,
+      HistoryStatus.failed => l10n.historyFailed,
+      HistoryStatus.pending => l10n.historyPending,
+      HistoryStatus.unknown => l10n.historyUnknown,
+    };
+
 String _languageName(Locale locale) => switch (locale.languageCode) {
   'en' => 'English',
   _ => 'Русский',
@@ -93,7 +110,9 @@ class _ActivityTab extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: NocturneSpacing.x3),
             child: _SummaryTile(
-              label: '${tx.directionLabel} · ${tx.statusLabel}',
+              label:
+                  '${_historyDirectionLabel(l10n, tx.direction)} · '
+                  '${_historyStatusLabel(l10n, tx.status)}',
               value:
                   '${tx.valueFormatted}\n${tx.counterparty}\n'
                   '${tx.timestampUtc?.toIso8601String() ?? l10n.activityUnknownTime}',

@@ -2,13 +2,35 @@ import 'package:flutter/services.dart';
 import 'package:pointycastle/ecc/curves/secp256k1.dart';
 import 'package:web3dart/web3dart.dart' show bytesToHex, publicKeyToAddress;
 
+import '../errors/app_error.dart';
 import 'custody_backend.dart';
 
-class RutokenNativeException implements Exception {
-  const RutokenNativeException(this.message, {this.code = 'rutoken_native'});
+class RutokenNativeException implements Exception, CodedError {
+  /// A failure whose text comes from outside the app; shown as is.
+  const RutokenNativeException(String message, {this.code = 'rutoken_native'})
+    : _message = message,
+      errorCode = null,
+      errorArgs = const <String, Object>{};
 
-  final String message;
+  const RutokenNativeException.coded(
+    AppErrorCode this.errorCode, {
+    this.code = 'rutoken_native',
+    this.errorArgs = const <String, Object>{},
+  }) : _message = null;
+
+  final String? _message;
+
+  /// The native layer's stable failure category (`rutoken_cancelled`, …).
   final String code;
+
+  @override
+  final AppErrorCode? errorCode;
+
+  @override
+  final Map<String, Object> errorArgs;
+
+  @override
+  String get message => _message ?? debugDescribeError(errorCode!, errorArgs);
 
   @override
   String toString() => message;
@@ -186,17 +208,15 @@ class MethodChannelRutokenNativeAdapter implements RutokenNativeAdapter {
   }
 
   RutokenNativeException _nativeFailure(PlatformException error) {
-    final message = switch (error.code) {
-      'rutoken_cancelled' => 'Ожидание Рутокена отменено.',
-      'rutoken_timeout' =>
-        'Рутокен не обнаружен за 30 секунд. Поднесите карту и повторите.',
-      'rutoken_pin_invalid' => 'Неверный PIN Рутокена.',
-      'rutoken_pin_locked' => 'PIN Рутокена заблокирован.',
-      'rutoken_nfc_lost' =>
-        'Связь с Рутокеном потеряна. Поднесите карту заново.',
-      _ => 'Ошибка нативного модуля Рутокена.',
+    final errorCode = switch (error.code) {
+      'rutoken_cancelled' => AppErrorCode.cardCancelled,
+      'rutoken_timeout' => AppErrorCode.cardTimeout,
+      'rutoken_pin_invalid' => AppErrorCode.cardPinInvalid,
+      'rutoken_pin_locked' => AppErrorCode.cardPinLocked,
+      'rutoken_nfc_lost' => AppErrorCode.cardNfcLost,
+      _ => AppErrorCode.cardNativeFailure,
     };
-    return RutokenNativeException(message, code: error.code);
+    return RutokenNativeException.coded(errorCode, code: error.code);
   }
 
   Uint8List _bytes(Map<Object?, Object?> response, String key) {

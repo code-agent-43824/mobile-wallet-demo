@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
+import 'package:mobile_wallet_demo/src/errors/app_error.dart';
 import 'package:mobile_wallet_demo/src/walletconnect/wallet_connect_preflight.dart';
 import 'package:mobile_wallet_demo/src/walletconnect/wallet_connect_service.dart';
 
@@ -172,9 +173,9 @@ void main() {
         ),
         throwsA(
           isA<WalletConnectPreflightFailure>().having(
-            (error) => error.message,
-            'message',
-            contains('live RPC preflight'),
+            (error) => error.errorCode,
+            'errorCode',
+            AppErrorCode.wcPreflightNoFees,
           ),
         ),
       );

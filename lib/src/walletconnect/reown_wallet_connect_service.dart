@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:reown_walletkit/reown_walletkit.dart';
 
 import '../blockchain/network_config.dart';
+import '../errors/app_error.dart';
 import 'wallet_connect_service.dart';
 import 'wallet_connect_v2.dart';
 import 'wc_config.dart';
@@ -77,8 +78,8 @@ class ReownWalletConnectService implements WalletConnectService {
   ReownWalletKit _requireKit() {
     final kit = _kit;
     if (kit == null) {
-      throw const WalletConnectServiceException(
-        'WalletConnect ещё не инициализирован (нет связи с реле?).',
+      throw const WalletConnectServiceException.coded(
+        AppErrorCode.wcNotInitialized,
       );
     }
     return kit;
@@ -90,8 +91,8 @@ class ReownWalletConnectService implements WalletConnectService {
     try {
       parsed = Uri.parse(uri.trim());
     } on FormatException {
-      throw const WalletConnectServiceException(
-        'Некорректный WalletConnect URI.',
+      throw const WalletConnectServiceException.coded(
+        AppErrorCode.wcInvalidUri,
       );
     }
     await _requireKit().pair(uri: parsed);
@@ -108,8 +109,8 @@ class ReownWalletConnectService implements WalletConnectService {
   }) async {
     final data = _pendingProposals[proposal.id];
     if (data == null) {
-      throw const WalletConnectServiceException(
-        'Это предложение сессии больше не активно.',
+      throw const WalletConnectServiceException.coded(
+        AppErrorCode.wcProposalExpired,
       );
     }
     final response = await _requireKit().approveSession(
@@ -120,8 +121,8 @@ class ReownWalletConnectService implements WalletConnectService {
     final session = response.session;
     _emitSessions();
     if (session == null) {
-      throw const WalletConnectServiceException(
-        'Реле не вернуло данные сессии после одобрения.',
+      throw const WalletConnectServiceException.coded(
+        AppErrorCode.wcRelayNoSession,
       );
     }
     return _mapSession(session);
@@ -141,7 +142,7 @@ class ReownWalletConnectService implements WalletConnectService {
       id: proposal.id,
       reason: ReownSignError(
         code: 5000,
-        message: reason ?? 'Запрос отклонён пользователем.',
+        message: reason ?? DappErrorText.userRejected,
       ),
     );
   }
@@ -201,7 +202,10 @@ class ReownWalletConnectService implements WalletConnectService {
     }
     await kit.disconnectSession(
       topic: topic,
-      reason: const ReownSignError(code: 6000, message: 'Отключено кошельком.'),
+      reason: const ReownSignError(
+        code: 6000,
+        message: DappErrorText.disconnected,
+      ),
     );
     _emitSessions();
   }
@@ -344,10 +348,16 @@ class WalletConnectNamespacePolicy {
           .where((method) => !supportedMethods.contains(method))
           .toList();
       if (unsupportedChains.isNotEmpty || unsupportedMethods.isNotEmpty) {
-        throw WalletConnectServiceException(
-          'dApp требует неподдерживаемые WalletConnect возможности: '
-          'сети ${unsupportedChains.join(', ')}, '
-          'методы ${unsupportedMethods.join(', ')}.',
+        throw WalletConnectServiceException.coded(
+          AppErrorCode.wcUnsupportedNamespaces,
+          <String, Object>{
+            'chains': unsupportedChains.isEmpty
+                ? '—'
+                : unsupportedChains.join(', '),
+            'methods': unsupportedMethods.isEmpty
+                ? '—'
+                : unsupportedMethods.join(', '),
+          },
         );
       }
       approved

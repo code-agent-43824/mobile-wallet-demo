@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import '../errors/app_error.dart';
 import 'key_storage_backend.dart';
 import 'rutoken_biometric_pin_store.dart';
 
@@ -300,11 +301,7 @@ class RutokenCustodyBackend implements WalletCustodyBackend {
   }) async {
     final metadata = await _loadPublicAccount();
     if (metadata == null) {
-      throw StateError(
-        'Для этой готовой карты на телефоне нет account xpub: '
-        'AirGap export доступен только после создания или импорта ключа '
-        'через Wallet Demo.',
-      );
+      throw const VaultFailure.coded(AppErrorCode.cardNoAccountXpub);
     }
     return metadata;
   }
@@ -355,9 +352,7 @@ class RutokenCustodyBackend implements WalletCustodyBackend {
     }
     if (actual.derivationPath != expected.derivationPath ||
         actual.address.toLowerCase() != expected.address.toLowerCase()) {
-      throw const VaultFailure(
-        'Поднесён другой Рутокен: адрес карты не совпадает с активным кошельком.',
-      );
+      throw const VaultFailure.coded(AppErrorCode.cardWrongCard);
     }
   }
 }

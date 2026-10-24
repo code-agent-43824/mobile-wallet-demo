@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../auth/biometric_auth.dart';
+import '../errors/app_error.dart';
 import 'biometric_secret_store.dart';
 import 'key_storage_backend.dart';
 import 'secure_key_value_store.dart';
@@ -15,8 +16,10 @@ class RutokenBiometricPinStore {
     required SecureKeyValueStore store,
     required BiometricAuthGateway biometricAuth,
     BiometricSecretStore? secretStore,
+    BiometricPromptText? biometricPromptText,
   }) : _store = store,
        _biometricAuth = biometricAuth,
+       _biometricPromptText = biometricPromptText ?? defaultBiometricPromptText,
        _secretStore =
            secretStore ??
            GatedBiometricSecretStore(
@@ -30,6 +33,7 @@ class RutokenBiometricPinStore {
   final SecureKeyValueStore _store;
   final BiometricAuthGateway _biometricAuth;
   final BiometricSecretStore _secretStore;
+  final BiometricPromptText _biometricPromptText;
 
   Future<bool> isAvailable() => _secretStore.isAvailable();
 
@@ -44,13 +48,13 @@ class RutokenBiometricPinStore {
 
   Future<void> enable({required String address, required String pin}) async {
     if (pin.isEmpty) {
-      throw const VaultFailure('PIN Рутокена не должен быть пустым.');
+      throw const VaultFailure.coded(AppErrorCode.cardPinEmpty);
     }
     if (!await isAvailable()) {
       throw const BiometricUnavailableFailure();
     }
     await _biometricAuth.authenticate(
-      reason: 'Подтвердите биометрию, чтобы сохранить PIN Рутокена.',
+      reason: _biometricPromptText(BiometricPrompt.saveCardPin),
     );
     final bytes = utf8.encode(pin);
     try {
@@ -82,7 +86,7 @@ class RutokenBiometricPinStore {
     }
     final bytes = await _secretStore.retrieve(
       id: _secretId(address),
-      reason: 'Подтвердите биометрию для доступа к PIN Рутокена.',
+      reason: _biometricPromptText(BiometricPrompt.releaseCardPin),
     );
     if (bytes == null) {
       throw const BiometricNotEnabledFailure();

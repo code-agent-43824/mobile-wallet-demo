@@ -157,18 +157,20 @@ class BlockscoutExplorerClient {
           return RecentTransactionSnapshot(
             hash: item['hash'] as String? ?? '—',
             timestampUtc: _tryParseTimestamp(item['timestamp'] as String?),
-            directionLabel: direction,
-            counterparty: direction == 'Входящая' ? fromAddress : toAddress,
+            direction: direction,
+            counterparty: direction == HistoryDirection.incoming
+                ? fromAddress
+                : toAddress,
             valueFormatted:
                 '${_formatNativeBalance(BigInt.tryParse(item['value'] as String? ?? '0') ?? BigInt.zero)} $nativeSymbol',
-            statusLabel: _statusLabel(item),
+            status: _status(item),
           );
         })
         .take(5)
         .toList(growable: false);
   }
 
-  String _transactionDirection({
+  HistoryDirection _transactionDirection({
     required String walletAddress,
     required String fromAddress,
     required String toAddress,
@@ -177,29 +179,32 @@ class BlockscoutExplorerClient {
     final to = toAddress.toLowerCase();
 
     if (from == walletAddress && to == walletAddress) {
-      return 'Self';
+      return HistoryDirection.self;
     }
     if (to == walletAddress) {
-      return 'Входящая';
+      return HistoryDirection.incoming;
     }
     if (from == walletAddress) {
-      return 'Исходящая';
+      return HistoryDirection.outgoing;
     }
-    return 'Контракт';
+    return HistoryDirection.contract;
   }
 
-  String _statusLabel(Map<String, dynamic> item) {
+  /// Blockscout reports `status` (`ok` / `error`, null while pending) and
+  /// `result` (`success`, `pending`, or the revert reason).
+  HistoryStatus _status(Map<String, dynamic> item) {
     final result = item['result'] as String?;
-    if (result == 'success') {
-      return 'Success';
-    }
-
     final status = item['status'] as String?;
-    if (status == 'ok') {
-      return 'Confirmed';
+    if (result == 'success' || status == 'ok') {
+      return HistoryStatus.success;
     }
-
-    return status ?? result ?? 'Unknown';
+    if (status == 'error') {
+      return HistoryStatus.failed;
+    }
+    if (result == 'pending' || (status == null && result == null)) {
+      return HistoryStatus.pending;
+    }
+    return result == null ? HistoryStatus.unknown : HistoryStatus.failed;
   }
 
   DateTime? _tryParseTimestamp(String? timestamp) {

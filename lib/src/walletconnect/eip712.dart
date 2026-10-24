@@ -3,10 +3,30 @@ import 'dart:typed_data';
 
 import 'package:web3dart/web3dart.dart' show keccak256;
 
-class Eip712Exception implements Exception {
-  const Eip712Exception(this.message);
+import '../errors/app_error.dart';
 
-  final String message;
+class Eip712Exception implements Exception, CodedError {
+  /// A failure whose text comes from outside the app; shown as is.
+  const Eip712Exception(String message)
+    : _message = message,
+      errorCode = null,
+      errorArgs = const <String, Object>{};
+
+  const Eip712Exception.coded(
+    AppErrorCode this.errorCode, [
+    this.errorArgs = const <String, Object>{},
+  ]) : _message = null;
+
+  final String? _message;
+
+  @override
+  final AppErrorCode? errorCode;
+
+  @override
+  final Map<String, Object> errorArgs;
+
+  @override
+  String get message => _message ?? debugDescribeError(errorCode!, errorArgs);
 
   @override
   String toString() => 'Eip712Exception: $message';
@@ -25,7 +45,10 @@ class Eip712Encoder {
     final types = _types(typedData['types']);
     final primaryType = typedData['primaryType'];
     if (primaryType is! String) {
-      throw const Eip712Exception('EIP-712: primaryType отсутствует.');
+      throw const Eip712Exception.coded(
+        AppErrorCode.wcMalformedTypedData,
+        <String, Object>{'detail': 'primaryType is missing'},
+      );
     }
     final domain = _asMap(typedData['domain'], 'domain');
     final message = _asMap(typedData['message'], 'message');
@@ -53,7 +76,10 @@ class Eip712Encoder {
   ) {
     final fields = types[type];
     if (fields == null) {
-      throw Eip712Exception('EIP-712: тип "$type" не объявлен.');
+      throw Eip712Exception.coded(
+        AppErrorCode.wcMalformedTypedData,
+        <String, Object>{'detail': 'type "$type" is not declared'},
+      );
     }
     final typeHash = keccak256(
       Uint8List.fromList(utf8.encode(_encodeType(type, types))),
@@ -74,7 +100,10 @@ class Eip712Encoder {
     for (final type in ordered) {
       final fields = types[type];
       if (fields == null) {
-        throw Eip712Exception('EIP-712: тип "$type" не объявлен.');
+        throw Eip712Exception.coded(
+          AppErrorCode.wcMalformedTypedData,
+          <String, Object>{'detail': 'type "$type" is not declared'},
+        );
       }
       buffer
         ..write(type)
@@ -94,7 +123,10 @@ class Eip712Encoder {
     if (arrayMatch != null) {
       final baseType = arrayMatch.group(1)!;
       if (value is! List) {
-        throw Eip712Exception('EIP-712: ожидался массив для "$type".');
+        throw Eip712Exception.coded(
+          AppErrorCode.wcMalformedTypedData,
+          <String, Object>{'detail': 'expected an array for "$type"'},
+        );
       }
       final concat = <int>[];
       for (final item in value) {
@@ -132,7 +164,10 @@ class Eip712Encoder {
         RegExp(r'^int(\d+)?$').hasMatch(type)) {
       return _encodeInt(_bigInt(value));
     }
-    throw Eip712Exception('EIP-712: неподдерживаемый тип "$type".');
+    throw Eip712Exception.coded(
+      AppErrorCode.wcMalformedTypedData,
+      <String, Object>{'detail': 'unsupported type "$type"'},
+    );
   }
 
   Uint8List _encodeInt(BigInt value) {
@@ -148,12 +183,18 @@ class Eip712Encoder {
 
   Map<String, List<_Field>> _types(dynamic raw) {
     if (raw is! Map) {
-      throw const Eip712Exception('EIP-712: types отсутствует.');
+      throw const Eip712Exception.coded(
+        AppErrorCode.wcMalformedTypedData,
+        <String, Object>{'detail': 'types is missing'},
+      );
     }
     final result = <String, List<_Field>>{};
     raw.forEach((key, value) {
       if (value is! List) {
-        throw Eip712Exception('EIP-712: поля типа "$key" некорректны.');
+        throw Eip712Exception.coded(
+          AppErrorCode.wcMalformedTypedData,
+          <String, Object>{'detail': 'fields of type "$key" are invalid'},
+        );
       }
       result[key as String] = value.map((f) {
         final m = (f as Map).cast<String, dynamic>();
@@ -182,7 +223,10 @@ class Eip712Encoder {
 
   Map<String, dynamic> _asMap(dynamic v, String what) {
     if (v is! Map) {
-      throw Eip712Exception('EIP-712: "$what" должен быть объектом.');
+      throw Eip712Exception.coded(
+        AppErrorCode.wcMalformedTypedData,
+        <String, Object>{'detail': '"$what" must be an object'},
+      );
     }
     return v.cast<String, dynamic>();
   }
@@ -205,8 +249,9 @@ class Eip712Encoder {
       }
       return out;
     }
-    throw Eip712Exception(
-      'EIP-712: ожидались байты, получено ${v.runtimeType}.',
+    throw Eip712Exception.coded(
+      AppErrorCode.wcMalformedTypedData,
+      <String, Object>{'detail': 'expected bytes, got ${v.runtimeType}'},
     );
   }
 
@@ -224,8 +269,9 @@ class Eip712Encoder {
       }
       return BigInt.parse(s);
     }
-    throw Eip712Exception(
-      'EIP-712: ожидалось число, получено ${v.runtimeType}.',
+    throw Eip712Exception.coded(
+      AppErrorCode.wcMalformedTypedData,
+      <String, Object>{'detail': 'expected a number, got ${v.runtimeType}'},
     );
   }
 }

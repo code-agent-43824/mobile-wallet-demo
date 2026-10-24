@@ -40,10 +40,10 @@ class _FakeBlockchainProvider implements BlockchainProvider {
         RecentTransactionSnapshot(
           hash: '0xTx',
           timestampUtc: null,
-          directionLabel: 'Входящая',
+          direction: HistoryDirection.incoming,
           counterparty: '0xCounterparty',
           valueFormatted: '0.25 ETH',
-          statusLabel: 'Confirmed',
+          status: HistoryStatus.success,
         ),
       ],
     );
@@ -396,7 +396,7 @@ void main() {
     // Renamed from the developer-ish "Итоговый debit" while localizing.
     expect(find.text('Спишется всего'), findsOneWidget);
     expect(find.text('Получатель'), findsOneWidget);
-    expect(find.textContaining('Preview валиден'), findsOneWidget);
+    expect(find.textContaining('Preview is valid'), findsOneWidget);
   });
 
   testWidgets('uses funded balance after switching networks', (
@@ -456,7 +456,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Недостаточно'), findsNothing);
-    expect(find.textContaining('Preview валиден'), findsOneWidget);
+    expect(find.textContaining('Preview is valid'), findsOneWidget);
   });
 
   testWidgets('ignores a late snapshot from the previous network', (

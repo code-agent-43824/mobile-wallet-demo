@@ -136,7 +136,7 @@ void main() {
       },
     );
 
-    test('states the remaining lockout in minutes, not raw seconds', () async {
+    test('reports how long the lockout still lasts', () async {
       var fakeNow = DateTime.utc(2026, 1, 1, 12, 0, 0);
       vault = PhoneSecureVault(
         store: store,
@@ -153,27 +153,27 @@ void main() {
         throwsA(isA<InvalidPinFailure>()),
       );
 
-      // "через 300 с" is accurate and unreadable; the wait is stated in minutes.
+      // The vault reports the wait as data; readable units are the UI's job
+      // (see error_text_test.dart).
       await expectLater(
         vault.unlock(pin: '123456'),
         throwsA(
           isA<VaultLockedOutFailure>().having(
-            (failure) => failure.message,
-            'message',
-            allOf(contains('5 мин'), isNot(contains(' с.'))),
+            (failure) => failure.remaining,
+            'remaining',
+            const Duration(minutes: 5),
           ),
         ),
       );
 
-      // Under a minute it still reads in seconds.
       fakeNow = fakeNow.add(const Duration(minutes: 4, seconds: 40));
       await expectLater(
         vault.unlock(pin: '123456'),
         throwsA(
           isA<VaultLockedOutFailure>().having(
-            (failure) => failure.message,
-            'message',
-            contains(' с.'),
+            (failure) => failure.remaining,
+            'remaining',
+            const Duration(seconds: 20),
           ),
         ),
       );

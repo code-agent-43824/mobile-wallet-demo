@@ -74,9 +74,14 @@ class WalletFlowController extends ChangeNotifier {
        _transactionBroadcaster =
            transactionBroadcaster ?? PublicRpcTransactionBroadcaster(),
        _nonceProvider = nonceProvider ?? PublicRpcNonceProvider() {
+    // The system biometric dialog reads its sentence from the active language
+    // at the moment it opens, not from the language at construction.
+    String promptText(BiometricPrompt prompt) =>
+        biometricPromptText(_messages, prompt);
     _vault = PhoneSecureVault(
       store: store,
       biometricAuth: biometricAuthGateway,
+      biometricPromptText: promptText,
     );
     _rutokenProvisioning = rutokenNativeAdapter == null
         ? null
@@ -89,6 +94,7 @@ class WalletFlowController extends ChangeNotifier {
         : RutokenBiometricPinStore(
             store: store,
             biometricAuth: biometricAuthGateway,
+            biometricPromptText: promptText,
           );
     _rutokenBackend =
         rutokenNativeAdapter == null || _rutokenProvisioning == null
@@ -428,7 +434,7 @@ class WalletFlowController extends ChangeNotifier {
       if (_disposed) {
         return;
       }
-      _errorMessage = error.message;
+      _errorMessage = describeError(_messages, error);
       _stage = WalletFlowStage.welcome;
       _notify();
     }
@@ -1060,7 +1066,7 @@ class WalletFlowController extends ChangeNotifier {
       }
       await _walletConnectService.respondError(
         request: request,
-        message: _messages.wcRejectedByUser,
+        message: DappErrorText.userRejected,
       );
       _removePendingRequest(request);
     });
@@ -1126,7 +1132,7 @@ class WalletFlowController extends ChangeNotifier {
           pendingRequest?.topic != request.topic) {
         return;
       }
-      _pendingRequestPreviewError = error.toString();
+      _pendingRequestPreviewError = describeError(_messages, error);
     } finally {
       if (pendingRequest?.id == request.id &&
           pendingRequest?.topic == request.topic) {
@@ -1444,7 +1450,7 @@ class WalletFlowController extends ChangeNotifier {
       _notify();
       return result;
     } on QrScannerException catch (error) {
-      _errorMessage = error.message;
+      _errorMessage = describeError(_messages, error);
       _notify();
       return null;
     }
@@ -1520,27 +1526,12 @@ class WalletFlowController extends ChangeNotifier {
       await action();
       _errorMessage = null;
       _notify();
-    } on VaultFailure catch (error) {
-      _errorMessage = error.message;
-      _notify();
-    } on WalletConnectServiceException catch (error) {
-      _errorMessage = error.message;
-      _notify();
-    } on Eip4527Exception catch (error) {
-      _errorMessage = error.message;
-      _notify();
-    } on Eip4527SignException catch (error) {
-      _errorMessage = error.message;
-      _notify();
-    } on UrQrException catch (error) {
-      _errorMessage = error.message;
-      _notify();
     } catch (error) {
-      // Catch-all: any other failure (e.g. an unexpected WalletConnect SDK /
-      // relay error while signing or responding to a request) must surface,
-      // not vanish — otherwise an action like "approve request" looks like the
-      // button does nothing. The message carries the cause for diagnosis.
-      _errorMessage = _messages.errorOperationFailed('$error');
+      // Every failure must surface, not vanish — otherwise an action like
+      // "approve request" looks like the button does nothing. Coded domain
+      // failures read in the active language; anything unexpected keeps its
+      // cause visible for diagnosis.
+      _errorMessage = describeError(_messages, error);
       _notify();
     }
   }

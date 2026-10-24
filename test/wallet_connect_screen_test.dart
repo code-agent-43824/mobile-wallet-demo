@@ -382,7 +382,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text('Ожидался BC-UR, начинающийся с "ur:".'),
+        find.text(
+          'QR-код не похож на корректный запрос '
+          '(expected a value starting with "ur:").',
+        ),
         findsOneWidget,
       );
     },

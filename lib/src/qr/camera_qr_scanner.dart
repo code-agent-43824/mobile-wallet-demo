@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../l10n/app_localizations.dart';
+import '../error_text.dart';
+import '../errors/app_error.dart';
 import 'file_qr_scanner.dart';
 import 'qr_scanner.dart';
 import 'ur_qr.dart';
@@ -38,9 +41,7 @@ class CameraQrScanner implements QrScanner {
   Future<String?> scanWithCamera({String title = ''}) async {
     final navigator = _navigatorKey.currentState;
     if (navigator == null) {
-      throw const QrScannerException(
-        'Не удалось открыть камеру: навигатор недоступен.',
-      );
+      throw const QrScannerException.coded(AppErrorCode.qrCameraOpenFailed);
     }
     return navigator.push<String>(
       MaterialPageRoute<String>(
@@ -57,9 +58,7 @@ class CameraQrScanner implements QrScanner {
   }) async {
     final navigator = _navigatorKey.currentState;
     if (navigator == null) {
-      throw const QrScannerException(
-        'Не удалось открыть камеру: навигатор недоступен.',
-      );
+      throw const QrScannerException.coded(AppErrorCode.qrCameraOpenFailed);
     }
     return navigator.push<String>(
       MaterialPageRoute<String>(
@@ -145,7 +144,12 @@ class _CameraScannerScreenState extends State<_CameraScannerScreen> {
           }
         } on UrQrException catch (error) {
           if (mounted) {
-            setState(() => _sequenceError = error.message);
+            setState(
+              () => _sequenceError = describeError(
+                AppLocalizations.of(context),
+                error,
+              ),
+            );
           }
         }
         return;
@@ -155,19 +159,20 @@ class _CameraScannerScreenState extends State<_CameraScannerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final hint = widget.title.isEmpty
-        ? 'Наведите камеру на QR-код'
-        : 'Наведите камеру на QR-код (${widget.title})';
+        ? l10n.qrScanHint
+        : l10n.qrScanHintFor(widget.title);
     final assembler = _urAssembler;
     final sequenceHint = assembler == null
         ? hint
         : assembler.expectedCount > 0
-        ? '$hint\nСобрано: ${assembler.receivedCount}/${assembler.expectedCount}'
-        : '$hint\nОжидание первого UR-фрагмента';
+        ? '$hint\n${l10n.qrScanProgress(assembler.receivedCount, assembler.expectedCount)}'
+        : '$hint\n${l10n.qrScanAwaitFirstFragment}';
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('Сканирование QR'),
+        title: Text(l10n.qrScanTitle),
         actions: [_TorchButton(controller: _controller)],
       ),
       body: LayoutBuilder(
@@ -188,14 +193,13 @@ class _CameraScannerScreenState extends State<_CameraScannerScreen> {
               MobileScanner(
                 controller: _controller,
                 onDetect: _onDetect,
-                errorBuilder: (context, error) => const Center(
+                errorBuilder: (context, error) => Center(
                   child: Padding(
-                    padding: EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(24),
                     child: Text(
-                      'Не удалось открыть камеру. Проверьте разрешение на '
-                      'доступ к камере или используйте загрузку QR из файла.',
+                      l10n.qrScanCameraError,
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Colors.white),
                     ),
                   ),
                 ),
@@ -255,7 +259,9 @@ class _TorchButton extends StatelessWidget {
         final on = state.torchState == TorchState.on;
         return IconButton(
           icon: Icon(on ? Icons.flash_on : Icons.flash_off),
-          tooltip: on ? 'Выключить фонарик' : 'Включить фонарик',
+          tooltip: on
+              ? AppLocalizations.of(context).qrTorchOff
+              : AppLocalizations.of(context).qrTorchOn,
           onPressed: () => controller.toggleTorch(),
         );
       },

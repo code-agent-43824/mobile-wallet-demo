@@ -4,12 +4,31 @@ import 'dart:typed_data';
 import 'package:web3dart/web3dart.dart' show bytesToHex, hexToBytes;
 
 import '../transactions/transaction_service.dart';
+import '../errors/app_error.dart';
 
 /// Raised when a WalletConnect payload can't be parsed/serialized by the codec.
-class WalletConnectCodecException implements Exception {
-  const WalletConnectCodecException(this.message);
+class WalletConnectCodecException implements Exception, CodedError {
+  /// A failure whose text comes from outside the app; shown as is.
+  const WalletConnectCodecException(String message)
+    : _message = message,
+      errorCode = null,
+      errorArgs = const <String, Object>{};
 
-  final String message;
+  const WalletConnectCodecException.coded(
+    AppErrorCode this.errorCode, [
+    this.errorArgs = const <String, Object>{},
+  ]) : _message = null;
+
+  final String? _message;
+
+  @override
+  final AppErrorCode? errorCode;
+
+  @override
+  final Map<String, Object> errorArgs;
+
+  @override
+  String get message => _message ?? debugDescribeError(errorCode!, errorArgs);
 
   @override
   String toString() => 'WalletConnectCodecException: $message';
@@ -139,8 +158,11 @@ class WalletConnectV2RequestCodec {
     List<Object?> params,
   ) {
     if (params.isEmpty || params.first is! String) {
-      throw const WalletConnectCodecException(
-        'wallet_getCapabilities требует адрес кошелька.',
+      throw const WalletConnectCodecException.coded(
+        AppErrorCode.wcMalformedRequest,
+        <String, Object>{
+          'detail': 'wallet_getCapabilities needs the wallet address',
+        },
       );
     }
     final address = params.first! as String;
@@ -148,8 +170,11 @@ class WalletConnectV2RequestCodec {
     if (params.length > 1 && params[1] != null) {
       final rawChains = params[1];
       if (rawChains is! List || rawChains.any((value) => value is! String)) {
-        throw const WalletConnectCodecException(
-          'wallet_getCapabilities требует массив chainId.',
+        throw const WalletConnectCodecException.coded(
+          AppErrorCode.wcMalformedRequest,
+          <String, Object>{
+            'detail': 'wallet_getCapabilities needs an array of chain ids',
+          },
         );
       }
       chainIds = rawChains.cast<String>();
@@ -160,14 +185,18 @@ class WalletConnectV2RequestCodec {
   /// Decodes EIP-3326 / EIP-1193 `[{chainId: "0x..."}]` parameters.
   int decodeSwitchEthereumChainId(List<Object?> params) {
     if (params.isEmpty || params.first is! Map) {
-      throw const WalletConnectCodecException(
-        'wallet_switchEthereumChain требует объект с chainId.',
+      throw const WalletConnectCodecException.coded(
+        AppErrorCode.wcMalformedRequest,
+        <String, Object>{
+          'detail': 'wallet_switchEthereumChain needs an object with chainId',
+        },
       );
     }
     final raw = (params.first as Map)['chainId'];
     if (raw is! String || raw.isEmpty) {
-      throw const WalletConnectCodecException(
-        'В wallet_switchEthereumChain отсутствует chainId.',
+      throw const WalletConnectCodecException.coded(
+        AppErrorCode.wcMalformedRequest,
+        <String, Object>{'detail': 'wallet_switchEthereumChain has no chainId'},
       );
     }
     final normalized = raw.toLowerCase().startsWith('0x')
@@ -178,8 +207,11 @@ class WalletConnectV2RequestCodec {
       radix: raw.toLowerCase().startsWith('0x') ? 16 : 10,
     );
     if (chainId == null) {
-      throw WalletConnectCodecException(
-        'Некорректный chainId в wallet_switchEthereumChain: $raw.',
+      throw WalletConnectCodecException.coded(
+        AppErrorCode.wcMalformedRequest,
+        <String, Object>{
+          'detail': 'invalid chainId in wallet_switchEthereumChain: $raw',
+        },
       );
     }
     return chainId;
@@ -189,14 +221,18 @@ class WalletConnectV2RequestCodec {
   /// where `typedData` is the EIP-712 object as a JSON string or a Map.
   WalletConnectTypedDataRequest decodeTypedDataRequest(List<Object?> params) {
     if (params.length < 2) {
-      throw const WalletConnectCodecException(
-        'Запрос eth_signTypedData требует [address, typedData].',
+      throw const WalletConnectCodecException.coded(
+        AppErrorCode.wcMalformedRequest,
+        <String, Object>{
+          'detail': 'eth_signTypedData needs [address, typedData]',
+        },
       );
     }
     final address = params[0];
     if (address is! String || address.isEmpty) {
-      throw const WalletConnectCodecException(
-        'В запросе на подпись typed data отсутствует адрес.',
+      throw const WalletConnectCodecException.coded(
+        AppErrorCode.wcMalformedRequest,
+        <String, Object>{'detail': 'typed data request has no address'},
       );
     }
     final raw = params[1];
@@ -204,16 +240,20 @@ class WalletConnectV2RequestCodec {
     if (raw is String) {
       final decoded = jsonDecode(raw);
       if (decoded is! Map) {
-        throw const WalletConnectCodecException(
-          'typed data: ожидался JSON-объект.',
+        throw const WalletConnectCodecException.coded(
+          AppErrorCode.wcMalformedRequest,
+          <String, Object>{'detail': 'typed data must be a JSON object'},
         );
       }
       typedData = decoded.cast<String, dynamic>();
     } else if (raw is Map) {
       typedData = raw.cast<String, dynamic>();
     } else {
-      throw const WalletConnectCodecException(
-        'typed data: ожидался JSON-объект или строка.',
+      throw const WalletConnectCodecException.coded(
+        AppErrorCode.wcMalformedRequest,
+        <String, Object>{
+          'detail': 'typed data must be a JSON object or string',
+        },
       );
     }
     return WalletConnectTypedDataRequest(
@@ -230,8 +270,11 @@ class WalletConnectV2RequestCodec {
     List<Object?> params,
   ) {
     if (params.length < 2) {
-      throw const WalletConnectCodecException(
-        'Запрос на подпись сообщения должен содержать сообщение и адрес.',
+      throw const WalletConnectCodecException.coded(
+        AppErrorCode.wcMalformedRequest,
+        <String, Object>{
+          'detail': 'message signing needs a message and an address',
+        },
       );
     }
     final Object? messageParam;
@@ -244,13 +287,15 @@ class WalletConnectV2RequestCodec {
       messageParam = params[1];
     }
     if (addressParam is! String || addressParam.isEmpty) {
-      throw const WalletConnectCodecException(
-        'В запросе на подпись отсутствует адрес.',
+      throw const WalletConnectCodecException.coded(
+        AppErrorCode.wcMalformedRequest,
+        <String, Object>{'detail': 'signing request has no address'},
       );
     }
     if (messageParam is! String) {
-      throw const WalletConnectCodecException(
-        'В запросе на подпись отсутствует сообщение.',
+      throw const WalletConnectCodecException.coded(
+        AppErrorCode.wcMalformedRequest,
+        <String, Object>{'detail': 'signing request has no message'},
       );
     }
     final bytes = _messageBytes(messageParam);
@@ -316,8 +361,9 @@ class WalletConnectV2RequestCodec {
         ? responseHex.substring(2)
         : responseHex;
     if (normalized.isEmpty) {
-      throw const WalletConnectCodecException(
-        'WalletConnect вернул пустую подпись.',
+      throw const WalletConnectCodecException.coded(
+        AppErrorCode.wcMalformedRequest,
+        <String, Object>{'detail': 'empty signature'},
       );
     }
     return Uint8List.fromList(hexToBytes(normalized));
@@ -330,21 +376,24 @@ class WalletConnectV2RequestCodec {
     List<Object?> params,
   ) {
     if (params.isEmpty || params.first is! Map) {
-      throw const WalletConnectCodecException(
-        'WalletConnect-запрос не содержит объект транзакции.',
+      throw const WalletConnectCodecException.coded(
+        AppErrorCode.wcMalformedRequest,
+        <String, Object>{'detail': 'request has no transaction object'},
       );
     }
     final tx = (params.first as Map).cast<String, Object?>();
     final from = tx['from'] as String?;
     final to = tx['to'] as String?;
     if (from == null || from.isEmpty) {
-      throw const WalletConnectCodecException(
-        'В транзакции отсутствует поле from.',
+      throw const WalletConnectCodecException.coded(
+        AppErrorCode.wcMalformedRequest,
+        <String, Object>{'detail': 'transaction has no from field'},
       );
     }
     if (to == null || to.isEmpty) {
-      throw const WalletConnectCodecException(
-        'В транзакции отсутствует поле to.',
+      throw const WalletConnectCodecException.coded(
+        AppErrorCode.wcMalformedRequest,
+        <String, Object>{'detail': 'transaction has no to field'},
       );
     }
     return WalletConnectTransactionRequest(

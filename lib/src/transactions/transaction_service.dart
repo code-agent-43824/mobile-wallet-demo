@@ -7,11 +7,30 @@ import '../blockchain/blockchain_provider.dart';
 import '../blockchain/network_config.dart';
 import '../key_storage/key_storage_backend.dart';
 import 'transaction_tracker.dart';
+import '../errors/app_error.dart';
 
-class TransactionFailure implements Exception {
-  const TransactionFailure(this.message);
+class TransactionFailure implements Exception, CodedError {
+  /// A failure whose text comes from outside the app; shown as is.
+  const TransactionFailure(String message)
+    : _message = message,
+      errorCode = null,
+      errorArgs = const <String, Object>{};
 
-  final String message;
+  const TransactionFailure.coded(
+    AppErrorCode this.errorCode, [
+    this.errorArgs = const <String, Object>{},
+  ]) : _message = null;
+
+  final String? _message;
+
+  @override
+  final AppErrorCode? errorCode;
+
+  @override
+  final Map<String, Object> errorArgs;
+
+  @override
+  String get message => _message ?? debugDescribeError(errorCode!, errorArgs);
 
   @override
   String toString() => 'TransactionFailure: $message';
@@ -314,9 +333,7 @@ class LocalTransactionService implements TransactionService {
   }) {
     final normalizedTarget = toAddress.trim();
     if (!_isValidEvmAddress(normalizedTarget)) {
-      throw const TransactionFailure(
-        'Введите корректный EVM-адрес получателя.',
-      );
+      throw const TransactionFailure.coded(AppErrorCode.txRecipientInvalid);
     }
 
     final amountUnits = _parseDecimalToUnits(
@@ -324,10 +341,13 @@ class LocalTransactionService implements TransactionService {
       decimals: asset.decimals,
     );
     if (amountUnits <= BigInt.zero) {
-      throw const TransactionFailure('Сумма должна быть больше нуля.');
+      throw const TransactionFailure.coded(AppErrorCode.txAmountNotPositive);
     }
     if (amountUnits > asset.balanceRaw) {
-      throw TransactionFailure('Недостаточно ${asset.symbol} для такой суммы.');
+      throw TransactionFailure.coded(
+        AppErrorCode.txInsufficientAsset,
+        <String, Object>{'symbol': asset.symbol},
+      );
     }
 
     final gasLimit = asset.kind == TransferAssetKind.native
@@ -347,15 +367,15 @@ class LocalTransactionService implements TransactionService {
 
     if (asset.kind == TransferAssetKind.native &&
         amountUnits + feeWei > snapshot.nativeBalanceWei) {
-      throw const TransactionFailure(
-        'Недостаточно нативного баланса для суммы и estimated network fee.',
+      throw const TransactionFailure.coded(
+        AppErrorCode.txInsufficientNativeForAmountAndFee,
       );
     }
 
     if (asset.kind == TransferAssetKind.erc20 &&
         feeWei > snapshot.nativeBalanceWei) {
-      throw const TransactionFailure(
-        'Недостаточно нативного баланса для оплаты network fee.',
+      throw const TransactionFailure.coded(
+        AppErrorCode.txInsufficientNativeForFee,
       );
     }
 
@@ -377,8 +397,7 @@ class LocalTransactionService implements TransactionService {
       estimatedNetworkFeeNativeFormatted:
           '$estimatedFeeFormatted ${networkConfig.nativeSymbol}',
       totalDebitFormatted: totalDebitFormatted,
-      previewNote:
-          'Preview валиден. Дальше приложение подпишет, отправит транзакцию и отследит её lifecycle.',
+      previewNote: 'Preview is valid; next: sign, broadcast and track.',
     );
 
     return PreparedTransfer(
@@ -428,7 +447,7 @@ class LocalTransactionService implements TransactionService {
       maxFeePerGasGwei: maxFeePerGasWei.toDouble() / 1000000000,
       estimatedNetworkFeeNativeFormatted: '${_formatUnits(feeWei, 18)} $symbol',
       totalDebitFormatted: '${_formatUnits(valueWei + feeWei, 18)} $symbol',
-      previewNote: 'Входящий WalletConnect-запрос на подпись.',
+      previewNote: 'Inbound WalletConnect signing request.',
     );
     return PreparedTransfer(
       preview: preview,
@@ -455,14 +474,12 @@ class LocalTransactionService implements TransactionService {
     required int nonce,
   }) {
     if (nonce < 0) {
-      throw const TransactionFailure('Nonce должен быть неотрицательным.');
+      throw const TransactionFailure.coded(AppErrorCode.txNonceNegative);
     }
 
     if (walletMaterial.address.toLowerCase() !=
         preparedTransfer.preview.fromAddress.toLowerCase()) {
-      throw const TransactionFailure(
-        'Материал кошелька не соответствует адресу отправителя.',
-      );
+      throw const TransactionFailure.coded(AppErrorCode.txSenderMismatch);
     }
 
     final credentials = EthPrivateKey.fromHex(walletMaterial.privateKeyHex);
@@ -492,8 +509,7 @@ class LocalTransactionService implements TransactionService {
       rawTransactionBytes: signedBytes,
       rawTransactionHex: rawTransactionHex,
       transactionHashHex: transactionHashHex,
-      signingNote:
-          'Транзакция локально подписана. Для этой операции PIN нужен только один раз на весь high-level signing flow.',
+      signingNote: 'Signed locally with one PIN for the whole operation.',
     );
   }
 
@@ -546,7 +562,7 @@ class LocalTransactionService implements TransactionService {
         keccak256(rawSignedTransaction),
         include0x: true,
       ),
-      signingNote: signingNote ?? 'Транзакция собрана из внешней подписи.',
+      signingNote: signingNote ?? 'Assembled from an external signature.',
     );
   }
 
@@ -620,12 +636,12 @@ class LocalTransactionService implements TransactionService {
   BigInt _parseDecimalToUnits({required String text, required int decimals}) {
     final normalized = text.trim().replaceAll(',', '.');
     if (normalized.isEmpty) {
-      throw const TransactionFailure('Введите сумму перевода.');
+      throw const TransactionFailure.coded(AppErrorCode.txAmountEmpty);
     }
 
     final parts = normalized.split('.');
     if (parts.length > 2) {
-      throw const TransactionFailure('Сумма указана в неверном формате.');
+      throw const TransactionFailure.coded(AppErrorCode.txAmountFormat);
     }
 
     final wholePart = parts.first.isEmpty ? '0' : parts.first;
@@ -633,11 +649,12 @@ class LocalTransactionService implements TransactionService {
     if (!RegExp(r'^\d+$').hasMatch(wholePart) ||
         (fractionalPart.isNotEmpty &&
             !RegExp(r'^\d+$').hasMatch(fractionalPart))) {
-      throw const TransactionFailure('Сумма должна содержать только цифры.');
+      throw const TransactionFailure.coded(AppErrorCode.txAmountDigitsOnly);
     }
     if (fractionalPart.length > decimals) {
-      throw TransactionFailure(
-        'Слишком много знаков после запятой для ${decimals.toString()} decimals.',
+      throw TransactionFailure.coded(
+        AppErrorCode.txAmountTooManyDecimals,
+        <String, Object>{'decimals': decimals},
       );
     }
 
