@@ -26,10 +26,10 @@ Current factual status of the project:
   log/crash review and iOS remain
 - ✅ Phase 11 is complete: read-only app open plus fresh authentication for every private-key operation
 - ✅ Phase 12 is complete: MetaMask-compatible EIP-4527 / BC-UR AirGap signer
-- 🟡 Phase 13 (Nocturne redesign + RU/EN localization) is functionally complete through v1.54.0+65; the only
-  known deviation is 13.5's stacked rather than sequential confirmation sheets
-- 🟡 Phase 14 (multiple registered cards) is built and CI green in v1.55.0+66 (14.1–14.4); 14.5, the physical
-  two-card dogfood, is the remaining exit criterion
+- ✅ Phase 13 (Nocturne redesign + RU/EN localization) is complete in v1.57.0+68: the 13.5 deviation is closed
+  (one sheet walks PIN → signing/tap → result) and domain errors are coded, so the English UI is whole
+- 🟡 Phase 14 (multiple registered cards) is built and CI green (14.1–14.4 in v1.55, the «Новая карта» screen in
+  v1.57); 14.5, the physical two-card dogfood, is the remaining exit criterion
 
 ## Direction
 
@@ -37,13 +37,15 @@ Current factual status of the project:
 milestone is an optional Rutoken custody backend for Android/iOS whose signing keys stay non-exporting after
 recoverable provisioning and which supports the same own-send, WalletConnect, and EIP-4527 AirGap flows.
 
-- **NOW — v1.56.0+67:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
+- **NOW — v1.57.0+68:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
   MetaMask-compatible EIP-4527 AirGap, per-operation authentication, hardened QR scanning, and the
   Rutoken custody/signature foundation, physically validated Android read/sign/provisioning, and the registered
   production backend are built. A compatible pre-provisioned card can be adopted read-only without rewriting its
   key; every later card is bound to the registered address; an explicit one-time opt-in can keep the PIN in a
   separate biometric-gated secret store; and Android NFC discovery is cancellable with stable sanitized
-  PIN/timeout/NFC-loss errors and primary-failure-preserving teardown.
+  PIN/timeout/NFC-loss errors and primary-failure-preserving teardown. Every signature and card operation
+  walks one sheet (PIN → signing or card tap → result), failures are coded and read in RU or EN, another card
+  is added from its own «Новая карта» screen, and an optional lock-on-open privacy screen exists.
 - **NEXT — Phase 10 completion:** the deferred physical matrix was executed in full on v1.51.0+62
   (Nothing Phone 3a / Android 16, 2026-08-17) and **Android now passes every required row except one**:
   Rutoken-backed WalletConnect `personal_sign`/EIP-712/transaction, EIP-4527 AirGap export + live-camera scan +
@@ -56,10 +58,9 @@ recoverable provisioning and which supports the same own-send, WalletConnect, an
   crash/log-output review, which needs adb capture. The exact iOS vendor framework has been received and
   retained privately; Swift integration and physical iOS validation remain, with redistribution/build-delivery
   terms still unresolved.
-- **LATER:** optional lock-on-open privacy, broader device/platform integration tests, localizing the
-  domain-layer error strings (`qr/`, `key_storage/`, `walletconnect/`, `airgap/`) by giving them error codes
-  rather than translating literals, and only then additional chains/accounts if product scope changes. They are
-  not Phase 10 prerequisites.
+- **LATER:** broader device/platform integration tests, and only then additional chains/accounts if product
+  scope changes. Not Phase 10 prerequisites. (Lock-on-open, coded domain errors and the add-card screen moved
+  from here into v1.57.)
 
 History is preserved in the phase sections and `docs/worklog.md`; the operational source of truth is the
 NOW / NEXT / LATER summary above plus the Phase 10 exit criteria below.
@@ -646,9 +647,10 @@ icons; no pure black or white; elevation is a hairline edge plus ambient darknes
   units. Step order untouched, so Phase 10 evidence stands; owner re-runs one card signature to confirm.
 - **13.5 — DONE (CI green)** — Связи in plain language: the WalletConnect request card states what is asked,
   in named networks and native units rather than method names, chain ids and wei; AirGap became a three-step
-  wizard with progress and the design's copy, dropping the protocol vocabulary. Known deviation: form → PIN →
-  tap → result are still stacked sheets rather than sequential — functionally fine (the tap overlay is above
-  every route) but not yet the design's shape.
+  wizard with progress and the design's copy, dropping the protocol vocabulary. The stacked-sheets deviation
+  (form → PIN → tap → result as separate sheets under the busy overlay) was closed in v1.57: the send sheet
+  walks form → review → PIN → signing → result itself, and every other key or card operation uses one shared
+  confirmation sheet with the same steps.
 - **13.6 — DONE (CI green)** — full RU/EN localization and the language switch. Every user-visible string in
   `wallet_flow_screen*.dart` now comes from `lib/l10n/app_ru.arb` / `app_en.arb` (~270 keys). The two
   `ChangeNotifier`s hold no `BuildContext`, so the bundle is **injected** like every other collaborator —
@@ -662,9 +664,9 @@ icons; no pure black or white; elevation is a hairline edge plus ambient darknes
   catalogue's label is now an internal identifier and the UI derives what it shows from the backend *kind*.
   `MobileWalletDemoApp` became stateful to hold the choice, which also stopped it re-creating the store, the
   RPC transport and the blockchain provider on every rebuild.
-  **Not done:** the domain/infrastructure error strings under `qr/`, `key_storage/`, `walletconnect/` and
-  `airgap/` are still inline Russian. They reach the user through the controller's catch-all, and doing them
-  properly means giving them error codes rather than swapping literals — see NOW / NEXT / LATER.
+  **Closed in v1.57:** the domain/infrastructure error strings were the part left; they now carry
+  `AppErrorCode`s (`lib/src/errors/app_error.dart`) and `describeError` (`lib/src/error_text.dart`) reads them
+  in the active language.
 - **13.7 — DONE (CI green)** — onboarding variant B: «Кошелёк за минуту» replaces the storage-backend question,
   three actions choose the backend implicitly, and the card's actions are disclosed only after the user says
   they have one. Backend ids resolve from the catalogue by kind. Copy stranded by the simulation's removal
@@ -737,10 +739,9 @@ work, only plumbing.
   the other's address.
 
 ### Not covered by 14.1–14.4
-- Creating or importing a key onto a *second* card is only reachable through the switcher's empty-slot row,
-  which opens the welcome screen. «Подключить ещё карту» deliberately goes straight to adoption instead, since
-  routing to that screen puts phone-vault creation one tap away. A dedicated "add card" screen offering all
-  three actions is the tidy answer and is not built yet.
+- ~~A dedicated "add card" screen~~ — built in v1.57: «Подключить ещё карту» and the switcher's empty card row
+  open «Новая карта», which offers the three card actions (and the card check) but never phone-vault creation,
+  leaves the active wallet alone until a card is connected, and is where create/import return on «Назад».
 - Card profiles have no user-assigned names (owner's call: serial + address is enough).
 
 ### Constraint
@@ -816,6 +817,10 @@ possible, since the owner has a second card.
 - `v1.56` — toolchain release: latest Flutter stable (unpinned, 3.47.8 at release), app module in built-in-Kotlin
   form, `package_info_plus` 10 override so only `walletconnect_pay` still applies KGP, obsolete
   `flutter_secure_storage` override dropped, GitHub release job (`v*` tag or manual `release` run on main)
+- `v1.57` — Phase 13 close-out and three LATER items: domain failures carry `AppErrorCode`s read in RU/EN at the
+  UI edge (dApp-facing JSON-RPC errors fixed English, biometric dialog text localized, history labels as data);
+  one confirmation sheet walks PIN → signing/tap → result (13.5); the «Новая карта» screen; optional
+  lock-on-open (lock screen on start and after a minute in the background; card unlock = PIN + tap, no signing)
 
 ## Current non-goals and validation limits
 - no iOS hardware-device SDK implementation yet; Android physical signing passed on v1.51, while the v1.55
@@ -824,8 +829,9 @@ possible, since the owner has a second card.
 - no multi-chain support beyond Ethereum Mainnet and Sepolia yet
 - **single-account by design** (audit decision): one EVM address per wallet, derived at `m/44'/60'/0'/0/0`
   (Phase 14 lets several cards each be such a wallet); HD-account discovery / multiple accounts are out of scope — Phase 9 WalletConnect sessions expose this one account (`eip155:*:<address>`)
-- **localization**: RU + EN via ARB since Phase 13.6 (Russian primary; widget tests pin `Locale('ru')`); domain-layer
-  error strings under `qr/`, `key_storage/`, `walletconnect/`, `airgap/` are still inline Russian (see LATER)
+- **localization**: RU + EN via ARB since Phase 13.6 (Russian primary; widget tests pin `Locale('ru')`); since v1.57
+  domain failures are coded and translated at the UI edge, with protocol detail (RLP, BC-UR, EIP-712) left as an
+  untranslated technical suffix; JSON-RPC errors sent to dApps are English by design
 - **test fidelity**: deterministic tests use in-memory fakes; secure storage, public RPC, Reown relay, camera,
   and future NFC behavior cross native/device boundaries and require the maintained manual device matrix in
   addition to CI. WalletConnect and AirGap have owner dogfood evidence, but are not fully automated end-to-end

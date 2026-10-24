@@ -91,7 +91,7 @@ re-provisioning, so the existing keys stay as they are.
 | Check | Android | Acceptance |
 | --- | --- | --- |
 | Existing profile survives the upgrade | NOT RUN | After installing over v1.53/v1.54, the already-registered card is still there and still selected; no re-adoption, no NFC tap on startup. |
-| Register the second card | NOT RUN | «Подключить ещё карту» → that card's PIN → tap. It is added *alongside* the first (no «уже зарегистрирован» error) and becomes active. |
+| Register the second card | NOT RUN | «Подключить ещё карту» opens «Новая карта» (v1.57) → «Подключить готовую карту» → that card's PIN → tap, all in one sheet. It is added *alongside* the first (no «уже зарегистрирован» error) and becomes active. |
 | Both cards listed with serial and address | NOT RUN | The switcher shows two card rows with different addresses and different serial numbers, exactly one ticked. |
 | Switch and sign with each | NOT RUN | Switch to card A, sign one operation with A; switch to card B, sign one with B. The dashboard address follows the switch. |
 | **Unselected card cannot sign** | NOT RUN | With card A selected, present card B (using B's own PIN — PIN login precedes the address check). Must be rejected with «Поднесена другая карта…» (v1.57 copy; v1.51–v1.56 said «Поднесён другой Рутокен…»). This is the security property; a PASS here is what re-closes the "different-card rejection" row above. |
@@ -100,3 +100,14 @@ re-provisioning, so the existing keys stay as they are.
 
 A FAIL on the unselected-card row invalidates the Phase 10 «different-card rejection» evidence recorded for
 v1.51.0+62, because that row tested one registered card and this changes what "registered" means.
+
+## v1.57 checks (one-sheet confirmation, lock-on-open)
+
+Automated widget/controller tests cover these with fakes; none of them is physical evidence.
+
+| Check | Android | Acceptance |
+| --- | --- | --- |
+| Card signature in one sheet | NOT RUN | Send, WalletConnect approve and AirGap sign with a card: PIN → the pulsing tap target *inside the sheet* (no overlay on top) → result. «Отменить ожидание NFC» in the sheet cancels and the sheet offers «Повторить». |
+| Card errors read without the vendor name | NOT RUN | Wrong PIN, timeout, cancel and card removal show «Неверный PIN карты.», the 30-second message, «Ожидание карты отменено.», «Связь с картой потеряна…» — in Russian and, after switching the language, in English. |
+| Lock-on-open, phone vault | NOT RUN | With the switch on, a cold start opens the lock screen (keypad); the PIN opens the dashboard. A minute in the background locks again; the file picker and the biometric dialog do not. |
+| Lock-on-open, card | NOT RUN | The card's PIN + tap opens the dashboard without a signature; a different card is refused with «Поднесена другая карта…». With the card PIN under biometrics, the fingerprint alone opens it. |
