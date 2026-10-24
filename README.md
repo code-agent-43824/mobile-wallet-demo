@@ -3,7 +3,7 @@
 Flutter-демо single-account EVM-кошелька с рабочим phone vault, WalletConnect и
 MetaMask-совместимым AirGap signer.
 
-**Сейчас:** v1.55 поддерживает Mainnet/Sepolia, локальные переводы, wallet-side WalletConnect,
+**Сейчас:** v1.56 поддерживает Mainnet/Sepolia, локальные переводы, wallet-side WalletConnect,
 EIP-4527/BC-UR AirGap и авторизацию на каждую операцию. Реальный Android Rutoken backend
 может создать/импортировать ключ либо без перезаписи принять уже готовую совместимую карту:
 read-only профиль загружается без NFC, адрес каждой поднесённой карты сверяется с профилем,
@@ -87,7 +87,7 @@ Live/native release evidence is tracked separately in
 
 ## Версионирование
 
-- Текущая версия: `v1.55.0+66`
+- Текущая версия: `v1.56.0+67`
 - По договорённости в этом проекте дальше повышаем minor-версию с каждым функциональным шагом
 
 ## Что покрывает текущий этап
@@ -179,12 +179,12 @@ CI собирает два независимых iOS-артефакта (пар
 Пошаговая инструкция, чтобы собрать и запустить приложение на своём iPhone/iPad с **бесплатным**
 Apple ID (Personal Team) — через Xcode, без платного Apple Developer Program.
 
-**Что понадобится:** Mac с **Xcode** и **Flutter `3.41.7`** — та же версия, что в CI (см.
-`.github/workflows/ci.yml` и файл `.fvmrc`); на других версиях сборка может вести себя иначе.
+**Что понадобится:** Mac с **Xcode** и свежий стабильный **Flutter** — CI всегда берёт последний
+релиз канала `stable` (см. `.github/workflows/ci.yml` и `.fvmrc`), версия не закреплена.
 
 1. **Установи Xcode** из Mac App Store и открой его хотя бы раз (доустановит компоненты командной строки).
-2. **Установи Flutter `3.41.7`.** Через [fvm](https://fvm.app): `fvm install 3.41.7 && fvm use 3.41.7`
-   (версия уже зафиксирована в `.fvmrc`), либо вручную поставь этот релиз и проверь `flutter --version`.
+2. **Установи Flutter (канал `stable`).** Через [fvm](https://fvm.app): `fvm use stable` (канал уже указан в
+   `.fvmrc`), либо `flutter channel stable && flutter upgrade`, затем проверь `flutter --version`.
 3. **Склонируй репозиторий** и зайди в папку проекта:
    ```bash
    git clone <repo-url>
@@ -256,7 +256,7 @@ Apple ID (Personal Team) — через Xcode, без платного Apple Dev
 | Android | `android/app/build.gradle.kts` → `applicationId` (и `namespace`) | `com.example.mobile_wallet_demo` |
 | Windows | `windows/runner/Runner.rc` → `CompanyName` | `com.example` |
 
-Локальный запуск (после `flutter pub get`; та же Flutter `3.41.7`, что в CI / `.fvmrc`):
+Локальный запуск (после `flutter pub get`; свежий Flutter `stable`, как в CI / `.fvmrc`):
 
 - **Android:** включи на устройстве **USB-debugging** (*Settings → Developer options*), подключи кабелем и
   запусти `flutter run -d android`. Debug-сборка подписывается автоматически локальным debug-keystore —

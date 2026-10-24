@@ -18,6 +18,32 @@ Entry template:
 
 ---
 
+## 2026-10-24 — Latest Flutter, Kotlin plugin cleanup, v1.56.0 release — branch claude/friendly-hawking-hpbpbv — done (v1.56.0+67)
+- Plan (owner request): stop pinning Flutter — CI and `.fvmrc` follow the latest stable (3.47.8 today);
+  remove the Kotlin Gradle Plugin problems as far as the dependency tree allows; delete the stale branches;
+  release v1.56.0. Findings that shape the plan: AGP 9.1 has no per-module built-in-Kotlin opt-out (only the
+  global `android.builtInKotlin`), and Flutter 3.47's own `flutter create` template still writes
+  `android.newDsl=false` + `android.builtInKotlin=false` and auto-applies KGP to modules that do not declare it.
+  After `pub upgrade`, only two Android plugins still apply KGP themselves: `package_info_plus` 9.0.1 (10.x is
+  migrated, but `reown_core`/`walletconnect_pay` cap it `<10`) and `walletconnect_pay` 1.1.0 (latest, pulled by
+  `reown_walletkit`, applies `kotlin-android` unconditionally; its WalletConnect Community License assigns any
+  modification to Reown, so it is not patched here).
+- Done: `ci.yml`/`android-launch-check.yml` use `subosito/flutter-action` with `channel: stable` (no version),
+  `.fvmrc` says `stable`; `pubspec.lock` re-resolved on 3.47.8 (`pub upgrade` within constraints). Kotlin: the
+  app module dropped `kotlin-android` (Flutter 3.47 template form; Flutter applies KGP to it in legacy mode, and
+  its "app applies KGP" warning is gone); `package_info_plus` forced to ^10.2.2 (API-compatible; reason in
+  `pubspec.yaml`); the obsolete `flutter_secure_storage` override removed (reown_core 1.5 accepts ^10). Flutter's
+  build now names only `walletconnect_pay` as a KGP-applying plugin. Tried full built-in Kotlin: it fails exactly
+  on `walletconnect_pay` ("does not specify compileSdk" after its `kotlin-android` apply), and without KGP on the
+  classpath Flutter rejects AGP 9.1's embedded Kotlin 2.2.10 (< 2.2.20) — so KGP stays `apply false` and the two
+  flags stay, now documented as Flutter's own template defaults plus the single upstream blocker. Added a
+  tag-only `release` job to `ci.yml` (gh CLI, job token, env-var inputs, CHANGELOG section as notes, APK asset).
+  Version v1.56.0+67. Local on Flutter 3.47.8: format clean, analyze clean, 221/221 tests,
+  `flutter build apk --release` OK.
+- Next / open: flip `android.builtInKotlin=true` when Reown ships a migrated `walletconnect_pay` (consider
+  reporting it upstream); drop the `package_info_plus` override when Reown widens `<10`. GitLab's builder Flutter
+  is outside this repo's control — it resolves the same lock on whatever stable it has. Hardware items unchanged.
+
 ## 2026-10-24 — Merge v1.54/v1.55 into main + fix the red GitHub Android build — branch claude/friendly-hawking-hpbpbv — done
 - Plan: (1) `claude/wonderful-rubin-eBDKZ` carried 16 commits never merged to `main` — Phase 13.6 completion
   (v1.54.0+65), Phase 14.1–14.4 multiple cards and the NFC-loss classification fix (v1.55.0+66) — while `main`

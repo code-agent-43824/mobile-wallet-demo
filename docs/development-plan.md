@@ -6,8 +6,9 @@ This file is the canonical development plan for the project. Use it as the sourc
 
 Current factual status of the project:
 - ✅ CI foundation covers Android, iOS Simulator/Device, and Windows x64 on GitHub Actions, plus the GitLab
-  pipeline (blocking SAST, tests, Android APK, Pages, tag releases). The GitHub Android job was red from the
-  AGP 9.1 toolchain move until `android.newDsl=false` (2026-10-24)
+  pipeline (blocking SAST, tests, Android APK, Pages, tag releases). Since v1.56 CI follows the latest Flutter
+  stable instead of a pinned version; the Android build uses Flutter's AGP 9 template flags, with
+  `android.builtInKotlin=false` kept only for `walletconnect_pay`
 - ✅ Phase 0 is effectively completed
 - ✅ Phase 1 is implemented as a user-facing flow
 - ✅ Phase 2 is implemented, including real biometric integration on Android/iOS and a Windows demo simulation path
@@ -36,7 +37,7 @@ Current factual status of the project:
 milestone is an optional Rutoken custody backend for Android/iOS whose signing keys stay non-exporting after
 recoverable provisioning and which supports the same own-send, WalletConnect, and EIP-4527 AirGap flows.
 
-- **NOW — v1.55.0+66:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
+- **NOW — v1.56.0+67:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
   MetaMask-compatible EIP-4527 AirGap, per-operation authentication, hardened QR scanning, and the
   Rutoken custody/signature foundation, physically validated Android read/sign/provisioning, and the registered
   production backend are built. A compatible pre-provisioned card can be adopted read-only without rewriting its
@@ -812,6 +813,9 @@ possible, since the owner has a second card.
 - `v1.54` — Phase 13.6–13.7: full RU/EN localization with the language switch, onboarding variant B
 - `v1.55` — Phase 14.1–14.4 multiple registered cards (profile list + selection, token serial, switcher, «Забыть
   карту»); presence-based mid-operation NFC-loss classification
+- `v1.56` — toolchain release: latest Flutter stable (unpinned, 3.47.8 at release), app module in built-in-Kotlin
+  form, `package_info_plus` 10 override so only `walletconnect_pay` still applies KGP, obsolete
+  `flutter_secure_storage` override dropped, GitHub release job on `v*` tags
 
 ## Current non-goals and validation limits
 - no iOS hardware-device SDK implementation yet; Android physical signing passed on v1.51, while the v1.55

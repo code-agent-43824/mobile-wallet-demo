@@ -10,7 +10,7 @@ flutter test
 
 Android APK: `flutter build apk --release --dart-define-from-file=dart_defines.json`.
 
-Требуется Flutter 3.41.7 (Dart ^3.11.0), Java 17 для Android.
+Требуется свежий Flutter канала `stable` (версия не закреплена; Dart ^3.11.0 как нижняя граница), Java 17 для Android.
 
 ## Правила
 

@@ -7,11 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.56.0] - 2026-10-24
+
 ### Added
 
 - Влиты v1.54.0+65 и v1.55.0+66: полная RU/EN-локализация с переключателем языка, онбординг
   «Кошелёк за минуту», несколько зарегистрированных карт Рутокен (выбор, «Забыть карту»,
   «Подключить ещё карту», серийный номер карты).
+- GitHub Release по тегу `v*`: после сборки всех платформ публикуется APK с заметками из
+  этого файла (аналог релизного job в GitLab).
+
+### Changed
+
+- Flutter больше не закреплён: CI и `.fvmrc` берут последний стабильный релиз (на момент
+  выпуска — 3.47.8); `pubspec.lock` пересобран под него.
+- Android: модуль приложения переведён на форму встроенного Kotlin (без `kotlin-android`),
+  флаги AGP 9 совпадают с шаблоном `flutter create`; `package_info_plus` поднят до 10.x
+  через override, так что Kotlin Gradle Plugin сам применяет только `walletconnect_pay`.
+- Убран устаревший override `flutter_secure_storage`: `reown_core` 1.5 принимает 10.x.
 
 ### Fixed
 

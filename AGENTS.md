@@ -30,7 +30,8 @@ pick up cleanly.
 
 ## Practical notes
 
-- Toolchain (pinned in `.github/workflows/ci.yml`): Flutter 3.41.7, Dart `^3.11.0`, Java 17.
+- Toolchain: latest Flutter **stable**, deliberately unpinned (`ci.yml` uses `channel: stable`, `.fvmrc` says
+  `stable`); Dart `^3.11.0` is only a floor; Java 17.
 - Run `dart format .` before committing — the CI `validate` job (format → analyze → test)
   fails on unformatted code. Platform builds (Android/iOS/Windows) run only after `validate`.
 - Develop on a feature branch. `main` is **not** required to stay green, but record any
