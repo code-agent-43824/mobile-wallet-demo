@@ -3,13 +3,15 @@
 Flutter-демо single-account EVM-кошелька с рабочим phone vault, WalletConnect и
 MetaMask-совместимым AirGap signer.
 
-**Сейчас:** v1.51 поддерживает Mainnet/Sepolia, локальные переводы, wallet-side WalletConnect,
+**Сейчас:** v1.56 поддерживает Mainnet/Sepolia, локальные переводы, wallet-side WalletConnect,
 EIP-4527/BC-UR AirGap и авторизацию на каждую операцию. Реальный Android Rutoken backend
 может создать/импортировать ключ либо без перезаписи принять уже готовую совместимую карту:
 read-only профиль загружается без NFC, адрес каждой поднесённой карты сверяется с профилем,
-а PIN после явного согласия можно заменить системной биометрией смартфона.
-**Следующий milestone:** физически пройти полную signing matrix, затем перенести доказанный контур
-на iOS. Подробная карта NOW / NEXT / LATER — в
+а PIN после явного согласия можно заменить системной биометрией смартфона. На телефоне можно
+зарегистрировать несколько карт и переключаться между ними. Интерфейс — тёмная тема Nocturne,
+четыре вкладки, русский и английский языки.
+**Следующий milestone:** физически перепроверить исправление потери NFC и пройти dogfood на двух картах,
+затем перенести доказанный контур на iOS. Подробная карта NOW / NEXT / LATER — в
 [`docs/development-plan.md`](docs/development-plan.md).
 Live/native release evidence is tracked separately in
 [`docs/device-test-matrix.md`](docs/device-test-matrix.md).
@@ -64,7 +66,10 @@ Live/native release evidence is tracked separately in
 - Android Rutoken lifecycle hardening: ожидание NFC можно отменить из progress overlay; timeout, неверный/
   заблокированный PIN и потеря карты имеют стабильные безопасные сообщения; первичная ошибка операции не
   маскируется вторичной ошибкой teardown
-- Demo runtime path для внешнего backend: simulated external device, отдельная UX-ветка и отдельный auth/signing путь без реального NFC SDK
+- Несколько карт (Phase 14): список зарегистрированных карт с адресом и серийным номером, выбор активной,
+  «Забыть карту» и «Подключить ещё карту»; каждая операция по-прежнему привязана к адресу выбранной карты
+- Интерфейс Nocturne (Phase 13): тёмная тема, четыре вкладки (Кошелёк / Активность / Связи / Настройки),
+  раздельные паттерны iOS и Android, онбординг «Кошелёк за минуту»
 - WalletConnect v2 wallet-side flow: QR pairing, queued inbound transaction/message/typed-data requests,
   `wallet_switchEthereumChain` для Mainnet/Sepolia, бесшумный EIP-5792 `wallet_getCapabilities` и локальная
   подпись после RPC-симуляции/безопасного gas+fee preview
@@ -73,13 +78,16 @@ Live/native release evidence is tracked separately in
   Mainnet/Sepolia preview и `eth-signature` QR после PIN
 - Android vault persistence: crash-safe migration/current secure-storage implementation, synchronous durable writes,
   recovery from a stale backend-selection record и отключённый Auto Backup для keystore-зашифрованных данных
+- Русская и английская локализация интерфейса: язык берётся из настроек приложения, затем из системного,
+  иначе русский; переключатель — в разделе «Настройки»
 - Unit- и widget-тесты для ключевых flow
-- GitHub Actions для сборки и публикации артефактов
+- GitHub Actions для сборки и публикации артефактов; основной CI/CD — во внутреннем GitLab (SAST, тесты,
+  Android APK, Pages, релизы по тегам)
 - Артефакты iOS / Windows без двойной упаковки
 
 ## Версионирование
 
-- Текущая версия: `v1.53.0+64`
+- Текущая версия: `v1.56.0+67`
 - По договорённости в этом проекте дальше повышаем minor-версию с каждым функциональным шагом
 
 ## Что покрывает текущий этап
@@ -108,8 +116,7 @@ Live/native release evidence is tracked separately in
 - post-submit transaction tracking без блокировки отправочного UI
 - retry/replacement flow с повышением gas price при underpriced reject
 - foundation для multi-backend runtime: selection model + backend-compatible signing/auth contracts
-- simulated external-device flow: backend selection, device-style lock/unlock UX и отдельный signer runtime path
-- mock device lifecycle: online/offline availability, reconnect, session disconnect и error-state handling для external backend
+- реальный Rutoken backend вместо прежней симуляции внешнего устройства (симуляция удалена в v1.53)
 - security hardening: DEK-схема хранения seed (PIN не персистится), биометрия через отдельный gated secret store, PBKDF2 600k + lockout после серии неверных PIN
 - transaction-layer cleanup: общий базовый signer, запас по base fee, тесты на failure-отправку и реконсиляцию nonce
 
@@ -172,12 +179,12 @@ CI собирает два независимых iOS-артефакта (пар
 Пошаговая инструкция, чтобы собрать и запустить приложение на своём iPhone/iPad с **бесплатным**
 Apple ID (Personal Team) — через Xcode, без платного Apple Developer Program.
 
-**Что понадобится:** Mac с **Xcode** и **Flutter `3.41.7`** — та же версия, что в CI (см.
-`.github/workflows/ci.yml` и файл `.fvmrc`); на других версиях сборка может вести себя иначе.
+**Что понадобится:** Mac с **Xcode** и свежий стабильный **Flutter** — CI всегда берёт последний
+релиз канала `stable` (см. `.github/workflows/ci.yml` и `.fvmrc`), версия не закреплена.
 
 1. **Установи Xcode** из Mac App Store и открой его хотя бы раз (доустановит компоненты командной строки).
-2. **Установи Flutter `3.41.7`.** Через [fvm](https://fvm.app): `fvm install 3.41.7 && fvm use 3.41.7`
-   (версия уже зафиксирована в `.fvmrc`), либо вручную поставь этот релиз и проверь `flutter --version`.
+2. **Установи Flutter (канал `stable`).** Через [fvm](https://fvm.app): `fvm use stable` (канал уже указан в
+   `.fvmrc`), либо `flutter channel stable && flutter upgrade`, затем проверь `flutter --version`.
 3. **Склонируй репозиторий** и зайди в папку проекта:
    ```bash
    git clone <repo-url>
@@ -249,7 +256,7 @@ Apple ID (Personal Team) — через Xcode, без платного Apple Dev
 | Android | `android/app/build.gradle.kts` → `applicationId` (и `namespace`) | `com.example.mobile_wallet_demo` |
 | Windows | `windows/runner/Runner.rc` → `CompanyName` | `com.example` |
 
-Локальный запуск (после `flutter pub get`; та же Flutter `3.41.7`, что в CI / `.fvmrc`):
+Локальный запуск (после `flutter pub get`; свежий Flutter `stable`, как в CI / `.fvmrc`):
 
 - **Android:** включи на устройстве **USB-debugging** (*Settings → Developer options*), подключи кабелем и
   запусти `flutter run -d android`. Debug-сборка подписывается автоматически локальным debug-keystore —

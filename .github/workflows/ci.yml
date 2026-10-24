@@ -3,8 +3,14 @@ name: ci
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      release:
+        description: Publish a GitHub release (tag v<pubspec version>) — main only
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -14,7 +20,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  FLUTTER_VERSION: 3.41.7
   JAVA_VERSION: '17'
 
 jobs:
@@ -26,7 +31,7 @@ jobs:
 
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
           cache: true
 
       - name: Cache pub packages
@@ -64,7 +69,7 @@ jobs:
 
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
           cache: true
 
       - name: Cache pub packages
@@ -97,7 +102,7 @@ jobs:
 
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
           cache: true
 
       - name: Cache pub packages
@@ -152,7 +157,7 @@ jobs:
 
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
           cache: true
 
       - name: Cache pub packages
@@ -224,7 +229,7 @@ jobs:
 
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
           cache: true
 
       - name: Cache pub packages
@@ -247,3 +252,46 @@ jobs:
           name: windows-x64
           path: build/windows/x64/runner/Release
           if-no-files-found: error
+
+  # Publish the APK as a GitHub Release once every platform built — on a pushed
+  # v* tag, or from a manual run on main with `release` ticked (gh then creates
+  # the tag at this commit). Mirrors the GitLab `release` job. Uses the
+  # preinstalled gh CLI with this job's token (no third-party action), and all
+  # inputs go through env vars.
+  release:
+    name: GitHub release
+    if: startsWith(github.ref, 'refs/tags/v') || (inputs.release && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    needs: [android, ios_simulator, ios_device, windows]
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Create release with the APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: *\([0-9][0-9.]*\).*/\1/p' pubspec.yaml)"
+          if [ "$REF_TYPE" = tag ]; then
+            TAG="$REF_NAME"
+            [ "$TAG" = "v$version" ] || { echo "Tag $TAG does not match pubspec version $version"; exit 1; }
+            target=(--verify-tag)
+          else
+            TAG="v$version"
+            target=(--target "$SHA")
+          fi
+          gh run download "$RUN_ID" -n android-apk -D dist
+          apk="dist/mobile-wallet-demo-${version}-android.apk"
+          mv dist/app-release.apk "$apk"
+          # Release notes = this version's CHANGELOG section, if present.
+          awk -v v="$version" 'index($0, "## [" v "]") == 1 {f=1; next} f && /^## \[/ {exit} f' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "Release $TAG" > notes.md
+          gh release create "$TAG" "$apk" "${target[@]}" --title "$TAG" --notes-file notes.md

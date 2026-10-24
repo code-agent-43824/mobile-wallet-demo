@@ -16,6 +16,7 @@ import 'auth/wallet_operation_auth.dart';
 import 'blockchain/blockchain_provider.dart';
 import 'blockchain/network_config.dart';
 import '../l10n/app_localizations.dart';
+import 'app_locale.dart';
 import 'chain_data_controller.dart';
 import 'design/app_shell.dart';
 import 'design/nocturne.dart';
@@ -129,6 +130,17 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
     _controller.loadInitialState();
   }
 
+  /// The controllers produce user-visible strings but hold no `BuildContext`,
+  /// so the active bundle is pushed into them here — on first build and again
+  /// whenever the locale changes.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final l10n = AppLocalizations.of(context);
+    _controller.messages = l10n;
+    _chainData.messages = l10n;
+  }
+
   /// The tabs render from [_chainData], so the shell must rebuild when a
   /// snapshot, network or loading state changes — not only when the wallet
   /// controller ticks.
@@ -195,24 +207,23 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       final enabled = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          title: const Text('Использовать биометрию для Рутокена?'),
-          content: const Text(
-            'Можно сохранить PIN этой карты в отдельном защищённом хранилище. '
-            'В следующих операциях вместо ручного ввода PIN приложение сначала '
-            'потребует системную биометрическую проверку смартфона.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Не сохранять'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Сохранить под биометрией'),
-            ),
-          ],
-        ),
+        builder: (context) {
+          final l10n = AppLocalizations.of(context);
+          return AlertDialog(
+            title: Text(l10n.cardBiometricOfferTitle),
+            content: Text(l10n.cardBiometricOfferBody),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text(l10n.cardBiometricOfferDecline),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text(l10n.cardBiometricOfferAccept),
+              ),
+            ],
+          );
+        },
       );
       if (mounted) {
         await _controller.completeRutokenBiometricOffer(enabled ?? false);
@@ -386,8 +397,30 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           onRefresh: _chainData.refresh,
           onListWallets: _controller.listSwitchableWallets,
           onSwitchWallet: _controller.switchActiveWallet,
+          onSelectedCardProfileId: _controller.selectedCardProfileId,
+          onForgetCard: _controller.forgetCard,
+          // Goes straight to adoption rather than back to the welcome screen:
+          // that screen's «Создать кошелёк» writes a fresh seed into the phone
+          // vault, and routing here would put that one tap away from a wallet
+          // the user already has.
+          onConnectAnotherCard: widget.rutokenNativeAdapter == null
+              ? null
+              : () => _connectAnotherCard(context),
         );
     }
+  }
+
+  /// Registers an additional card from Настройки. Same prompt and same NFC wait
+  /// as connecting the first one; the adopted card becomes the active wallet.
+  Future<void> _connectAnotherCard(BuildContext context) async {
+    final auth = await _promptForAuth(
+      context,
+      reason: AppLocalizations.of(context).cardAdoptPinReason,
+      biometricsOffered: false,
+    );
+    final pin = auth?.pin;
+    if (pin == null) return;
+    await _controller.adoptExistingRutoken(pin: pin);
   }
 
   Widget _buildOnboarding(BuildContext context) {

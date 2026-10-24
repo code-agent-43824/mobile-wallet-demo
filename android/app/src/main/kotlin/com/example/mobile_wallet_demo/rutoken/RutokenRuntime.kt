@@ -111,8 +111,7 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
         }
     }
 
-    fun readAccountDescriptor(sessionId: String): Map<String, ByteArray> {
-        val open = requireSession(sessionId)
+    fun readAccountDescriptor(sessionId: String): Map<String, ByteArray> = onCard(sessionId) { open ->
         val master = findSingleMasterKey(open.session)
         val addressPublic = derivePublic(
             open.session,
@@ -120,9 +119,7 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
             longArrayOf(hardened(44), hardened(60), hardened(0), 0, 0),
         )
         try {
-            return mapOf(
-                "addressPublicKey" to ecPoint(open.session, addressPublic),
-            )
+            mapOf("addressPublicKey" to ecPoint(open.session, addressPublic))
         } finally {
             open.session.objectManager.destroyObject(addressPublic)
         }
@@ -130,17 +127,18 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
 
     fun signDigest(sessionId: String, derivationPath: LongArray, digest: ByteArray): ByteArray {
         require(digest.size == 32) { "CKM_ECDSA input must be a 32-byte EVM digest." }
-        val open = requireSession(sessionId)
-        val master = findSingleMasterKey(open.session)
-        val derived = derivePrivate(open.session, master, derivationPath)
-        try {
-            return open.session.signManager.signAtOnce(
-                digest,
-                Pkcs11Mechanism.make(CKM_ECDSA),
-                derived,
-            )
-        } finally {
-            open.session.objectManager.destroyObject(derived)
+        return onCard(sessionId) { open ->
+            val master = findSingleMasterKey(open.session)
+            val derived = derivePrivate(open.session, master, derivationPath)
+            try {
+                open.session.signManager.signAtOnce(
+                    digest,
+                    Pkcs11Mechanism.make(CKM_ECDSA),
+                    derived,
+                )
+            } finally {
+                open.session.objectManager.destroyObject(derived)
+            }
         }
     }
 
@@ -171,43 +169,93 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
     ): Map<String, ByteArray> {
         require(masterPrivateKey.size == 32) { "BIP32 master private key must be 32 bytes." }
         require(chainCode.size == 32) { "BIP32 chain code must be 32 bytes." }
-        val open = requireSession(sessionId)
-        check(findMasterKeys(open.session).isEmpty()) {
-            "Rutoken already contains a BIP32 ECDSA master key; Wallet Demo will not replace or add another."
-        }
-        val template = listOf(
-            open.session.attributeFactory.makeAttribute(CKA_CLASS, CKO_PRIVATE_KEY),
-            open.session.attributeFactory.makeAttribute(CKA_PRIVATE, true),
-            open.session.attributeFactory.makeAttribute(CKA_TOKEN, true),
-            open.session.attributeFactory.makeAttribute(CKA_ID, randomObjectId()),
-            open.session.attributeFactory.makeAttribute(CKA_KEY_TYPE, CKK_VENDOR_BIP32),
-            open.session.attributeFactory.makeAttribute(CKA_DERIVE, true),
-            open.session.attributeFactory.makeAttribute(CKA_VALUE, masterPrivateKey),
-            open.session.attributeFactory.makeAttribute(CKA_VENDOR_BIP32_CHAINCODE, chainCode),
-            open.session.attributeFactory.makeAttribute(CKA_EC_PARAMS, SECP256K1_OID),
-        )
-        val imported = open.session.objectManager.createObject(
-            Pkcs11EcPrivateKeyObject::class.java,
-            template,
-        )
-        try {
-            val addressPublic = derivePublic(
-                open.session,
-                imported,
-                longArrayOf(hardened(44), hardened(60), hardened(0), 0, 0),
+        return onCard(sessionId) { open ->
+            check(findMasterKeys(open.session).isEmpty()) {
+                "Rutoken already contains a BIP32 ECDSA master key; Wallet Demo will not replace or add another."
+            }
+            val template = listOf(
+                open.session.attributeFactory.makeAttribute(CKA_CLASS, CKO_PRIVATE_KEY),
+                open.session.attributeFactory.makeAttribute(CKA_PRIVATE, true),
+                open.session.attributeFactory.makeAttribute(CKA_TOKEN, true),
+                open.session.attributeFactory.makeAttribute(CKA_ID, randomObjectId()),
+                open.session.attributeFactory.makeAttribute(CKA_KEY_TYPE, CKK_VENDOR_BIP32),
+                open.session.attributeFactory.makeAttribute(CKA_DERIVE, true),
+                open.session.attributeFactory.makeAttribute(CKA_VALUE, masterPrivateKey),
+                open.session.attributeFactory.makeAttribute(CKA_VENDOR_BIP32_CHAINCODE, chainCode),
+                open.session.attributeFactory.makeAttribute(CKA_EC_PARAMS, SECP256K1_OID),
+            )
+            val imported = open.session.objectManager.createObject(
+                Pkcs11EcPrivateKeyObject::class.java,
+                template,
             )
             try {
-                return mapOf(
-                    "addressPublicKey" to ecPoint(open.session, addressPublic),
+                val addressPublic = derivePublic(
+                    open.session,
+                    imported,
+                    longArrayOf(hardened(44), hardened(60), hardened(0), 0, 0),
                 )
-            } finally {
-                open.session.objectManager.destroyObject(addressPublic)
+                try {
+                    mapOf("addressPublicKey" to ecPoint(open.session, addressPublic))
+                } finally {
+                    open.session.objectManager.destroyObject(addressPublic)
+                }
+            } catch (error: Throwable) {
+                // Do not leave a half-provisioned master if the immediate
+                // reference public-derivation verification fails.
+                runCatching { open.session.objectManager.destroyObject(imported) }
+                throw error
             }
+        }
+    }
+
+    /**
+     * Runs [block] against an open session and reports a card pulled *during*
+     * the operation as NFC loss.
+     *
+     * [requireSession] only catches a card removed between operations. When it
+     * goes mid-operation the vendor library raises its own PKCS#11 failure,
+     * whose text differs by call and by library version — v1.51 dogfood showed
+     * that pattern-matching it produced the generic native error instead of the
+     * specified NFC-loss message. Presence is therefore checked directly: the
+     * slot-event listener already knows whether the card is still there, and
+     * "the card is gone" is the fact the user needs, whatever the library
+     * called it.
+     */
+    private fun <T> onCard(sessionId: String, block: (OpenSession) -> T): T {
+        val open = requireSession(sessionId)
+        try {
+            return block(open)
         } catch (error: Throwable) {
-            // Do not leave a half-provisioned master if the immediate
-            // reference public-derivation verification fails.
-            runCatching { open.session.objectManager.destroyObject(imported) }
-            throw error
+            if (error is RutokenNfcLostException) throw error
+            // A failure the card itself answered — a wrong or locked PIN — keeps
+            // its own classification even if the card is pulled right after.
+            val diagnostic = "${error.javaClass.name} ${error.message}".uppercase()
+            if ("CKR_PIN" in diagnostic) throw error
+            if (!awaitTokenRemoval(open.slotId)) throw error
+            sessions.remove(sessionId)
+            runCatching { open.close() }
+            throw RutokenNfcLostException()
+        }
+    }
+
+    /**
+     * True once the slot no longer holds a token. Waits briefly rather than
+     * sampling once: the slot-event listener runs on its own thread, so a
+     * removal can lose the race against the failure it caused. The wait only
+     * runs on an already-failing operation, so its cost is invisible.
+     */
+    private fun awaitTokenRemoval(slotId: Long): Boolean {
+        synchronized(tokenMonitor) {
+            val deadline = System.nanoTime() + REMOVAL_CONFIRMATION_NANOS
+            while (presentTokens.containsKey(slotId)) {
+                val remaining = deadline - System.nanoTime()
+                if (remaining <= 0) return false
+                tokenMonitor.wait(
+                    remaining / NANOS_PER_MILLISECOND,
+                    (remaining % NANOS_PER_MILLISECOND).toInt(),
+                )
+            }
+            return true
         }
     }
 
@@ -424,6 +472,12 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
     companion object {
         private const val TOKEN_WAIT_NANOS = 30_000_000_000L
         private const val NANOS_PER_MILLISECOND = 1_000_000L
+
+        /**
+         * How long a failed operation waits for the slot-event listener to
+         * confirm a removal before the failure is reported as-is.
+         */
+        private const val REMOVAL_CONFIRMATION_NANOS = 400_000_000L
         private const val HARDENED = 0x80000000L
         private val SECP256K1_OID = byteArrayOf(0x06, 0x05, 0x2B, 0x81.toByte(), 0x04, 0x00, 0x0A)
 

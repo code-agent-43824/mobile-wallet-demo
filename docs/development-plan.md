@@ -5,7 +5,10 @@ This file is the canonical development plan for the project. Use it as the sourc
 ## Status snapshot
 
 Current factual status of the project:
-- ✅ CI foundation is in place and stable on Android, iOS Simulator, and Windows x64
+- ✅ CI foundation covers Android, iOS Simulator/Device, and Windows x64 on GitHub Actions, plus the GitLab
+  pipeline (blocking SAST, tests, Android APK, Pages, tag releases). Since v1.56 CI follows the latest Flutter
+  stable instead of a pinned version; the Android build uses Flutter's AGP 9 template flags, with
+  `android.builtInKotlin=false` kept only for `walletconnect_pay`
 - ✅ Phase 0 is effectively completed
 - ✅ Phase 1 is implemented as a user-facing flow
 - ✅ Phase 2 is implemented, including real biometric integration on Android/iOS and a Windows demo simulation path
@@ -19,9 +22,14 @@ Current factual status of the project:
 - 🟡 Phase 10 is **in progress**: library-independent custody/EVM assembly, physically validated Android
   read/sign/provisioning and production-backend wiring are implemented. The full Android signing matrix
   (WalletConnect, EIP-4527 AirGap, different-card rejection, invalid PIN, cancel/timeout) passed owner dogfood on
-  v1.51.0+62; one open defect (NFC-loss error categorization), the physical log/crash review, and iOS remain
+  v1.51.0+62; the NFC-loss categorization fix shipped in v1.55.0+66 awaits its hardware rerun, and the physical
+  log/crash review and iOS remain
 - ✅ Phase 11 is complete: read-only app open plus fresh authentication for every private-key operation
 - ✅ Phase 12 is complete: MetaMask-compatible EIP-4527 / BC-UR AirGap signer
+- 🟡 Phase 13 (Nocturne redesign + RU/EN localization) is functionally complete through v1.54.0+65; the only
+  known deviation is 13.5's stacked rather than sequential confirmation sheets
+- 🟡 Phase 14 (multiple registered cards) is built and CI green in v1.55.0+66 (14.1–14.4); 14.5, the physical
+  two-card dogfood, is the remaining exit criterion
 
 ## Direction
 
@@ -29,7 +37,7 @@ Current factual status of the project:
 milestone is an optional Rutoken custody backend for Android/iOS whose signing keys stay non-exporting after
 recoverable provisioning and which supports the same own-send, WalletConnect, and EIP-4527 AirGap flows.
 
-- **NOW — v1.53.0+64:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
+- **NOW — v1.56.0+67:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
   MetaMask-compatible EIP-4527 AirGap, per-operation authentication, hardened QR scanning, and the
   Rutoken custody/signature foundation, physically validated Android read/sign/provisioning, and the registered
   production backend are built. A compatible pre-provisioned card can be adopted read-only without rewriting its
@@ -41,12 +49,17 @@ recoverable provisioning and which supports the same own-send, WalletConnect, an
   Rutoken-backed WalletConnect `personal_sign`/EIP-712/transaction, EIP-4527 AirGap export + live-camera scan +
   signature return, different-card rejection (a second card is now available), and invalid-PIN handling all pass,
   with both Sepolia broadcasts verified on-chain (`0xe22d7a84…47e5`, `0x9ff1e06b…5a6e`). Two items remain:
-  (1) an **open defect** — removing the card mid-operation reports the generic native error instead of the
-  specified NFC-loss message (teardown itself is correct); (2) the physical crash/log-output review, which needs
-  adb capture. The exact iOS vendor framework has been received and retained privately; Swift integration and
-  physical iOS validation remain, with redistribution/build-delivery terms still unresolved.
-- **LATER:** optional lock-on-open privacy, broader device/platform integration tests, and only then additional
-  chains/accounts if product scope changes. They are not Phase 10 prerequisites.
+  (1) the NFC-loss classification defect — removing the card mid-operation reported the generic native error
+  instead of the specified message. **A fix shipped in v1.55.0+66 and needs the negative-path rerun**: the
+  native layer no longer pattern-matches the vendor diagnostic but asks the slot-event listener whether the
+  card is still present, which is the fact the user needs whatever the library called it; (2) the physical
+  crash/log-output review, which needs adb capture. The exact iOS vendor framework has been received and
+  retained privately; Swift integration and physical iOS validation remain, with redistribution/build-delivery
+  terms still unresolved.
+- **LATER:** optional lock-on-open privacy, broader device/platform integration tests, localizing the
+  domain-layer error strings (`qr/`, `key_storage/`, `walletconnect/`, `airgap/`) by giving them error codes
+  rather than translating literals, and only then additional chains/accounts if product scope changes. They are
+  not Phase 10 prerequisites.
 
 History is preserved in the phase sections and `docs/worklog.md`; the operational source of truth is the
 NOW / NEXT / LATER summary above plus the Phase 10 exit criteria below.
@@ -409,7 +422,8 @@ binding, and biometric-gated PIN convenience. v1.50 adds cancellable Android NFC
 categories, pre-operation card-presence checks, and teardown error precedence. v1.51 prevents unknown raw native
 diagnostics from crossing the platform channel or reaching Dart error text. Android physical WalletConnect,
 AirGap, wrong-PIN, cancellation, timeout, and different-card checks passed on 2026-08-17. Mid-operation NFC-loss
-categorization and real crash/log-output inspection remain open; iOS implementation and physical validation remain.
+categorization is fixed in code in v1.55 (presence-based, not vendor-text-based) and awaits its hardware rerun;
+real crash/log-output inspection, iOS implementation and physical validation remain.
 
 > **Reference:** `docs/nfc-pkcs11-integration-notes.md` contains the vendor mechanisms, native-stack setup,
 > Ethereum corrections, and physical-device questions. The existing demo adapter is a test double, not an
@@ -485,11 +499,13 @@ Small, reviewable steps; each chunk records plan and result in `docs/worklog.md`
   session. A declined offer is remembered for that account, and neither public profile nor logs contain the PIN.
   Owner v1.49 dogfood passed ready-card adoption, biometric opt-in/release, and a Sepolia send. The second-card
   rejection was physically confirmed on 2026-08-17; the registered card still worked afterwards.
-- **10.6 — ANDROID CODE HARDENING IN v1.51; NFC-LOSS UX AND LOG REVIEW OPEN; iOS PENDING:** Android provides cancellable NFC discovery,
+- **10.6 — ANDROID CODE HARDENING IN v1.51; NFC-LOSS FIX IN v1.55 AWAITS RERUN; LOG REVIEW OPEN; iOS PENDING:** Android provides cancellable NFC discovery,
   stable sanitized PIN/timeout/NFC-loss errors, card-presence checks, primary-failure-preserving teardown, and
   fixed generic platform errors that do not surface raw vendor diagnostics. Physical cancellation, timeout,
-  and invalid-PIN handling passed; mid-operation card removal still reports the generic error rather than the
-  specific NFC-loss message. The physical crash/log-output review has not been performed.
+  and invalid-PIN handling passed; on v1.51 mid-operation card removal reported the generic error rather than the
+  specific NFC-loss message. v1.55 classifies a failed operation by asking the slot-event listener whether the
+  card is still present; that fix has not been physically re-run. The physical crash/log-output review has not
+  been performed.
   Port the proven shared contracts to the vendor iOS stack and run the same physical-device matrix. The public
   Rutoken SDK release 15.05.2026 contains signed generic `rtpkcs11ecp.xcframework` and `RtPcsc.xcframework`,
   but header inspection confirms that it does **not** expose the wallet-only BIP32 mechanisms. The compatible
@@ -633,7 +649,22 @@ icons; no pure black or white; elevation is a hairline edge plus ambient darknes
   wizard with progress and the design's copy, dropping the protocol vocabulary. Known deviation: form → PIN →
   tap → result are still stacked sheets rather than sequential — functionally fine (the tap overlay is above
   every route) but not yet the design's shape.
-- **13.6** — Настройки + the «Подробности» developer sheet + the RU/EN language switch.
+- **13.6 — DONE (CI green)** — full RU/EN localization and the language switch. Every user-visible string in
+  `wallet_flow_screen*.dart` now comes from `lib/l10n/app_ru.arb` / `app_en.arb` (~270 keys). The two
+  `ChangeNotifier`s hold no `BuildContext`, so the bundle is **injected** like every other collaborator —
+  optional constructor argument, defaulting to Russian, re-pointed by the screen in `didChangeDependencies`
+  (the owner chose this over a parallel message table). The Russian pin is gone: the app honours a stored
+  choice, then the system locale, then Russian, and Настройки carries the picker (Как в системе / Русский /
+  English), persisted in the app's key/value store. Translating each screen kept surfacing developer register
+  in the product — "CKM_ECDSA вернул сырую подпись", "Rutoken backend недоступен в этой сборке", "Симулируем
+  транзакцию через RPC…", "Анимированный BC-UR: 3/7", `Backend` / `Locked` / `Biometrics enabled` on the lock
+  screen — all rewritten for the person holding the phone. The vendor name left the UI entirely: the backend
+  catalogue's label is now an internal identifier and the UI derives what it shows from the backend *kind*.
+  `MobileWalletDemoApp` became stateful to hold the choice, which also stopped it re-creating the store, the
+  RPC transport and the blockchain provider on every rebuild.
+  **Not done:** the domain/infrastructure error strings under `qr/`, `key_storage/`, `walletconnect/` and
+  `airgap/` are still inline Russian. They reach the user through the controller's catch-all, and doing them
+  properly means giving them error codes rather than swapping literals — see NOW / NEXT / LATER.
 - **13.7 — DONE (CI green)** — onboarding variant B: «Кошелёк за минуту» replaces the storage-backend question,
   three actions choose the backend implicitly, and the card's actions are disclosed only after the user says
   they have one. Backend ids resolve from the catalogue by kind. Copy stranded by the simulation's removal
@@ -656,8 +687,8 @@ icons; no pure black or white; elevation is a hairline edge plus ambient darknes
 Goal: let the wallet hold **several registered cards**, each with its own address, and switch between them the
 way it switches storage backends today. Requested by the owner 2026-08-18 while dogfooding the redesign.
 
-Status: 📋 Planned. Not attempted yet — see the architectural note below for why this is a phase and not a
-patch.
+Status: 🟡 In progress — 14.1–14.4 are built and CI green; 14.5 (physical two-card dogfood) is the remaining
+exit criterion and needs the owner's hardware.
 
 ### Why it is not a quick change
 Today "which wallet" and "which backend" are the same question: the switcher selects a **backend id**, and the
@@ -675,17 +706,42 @@ model) in the open-session result — but Dart never reads it. So identifying ca
 work, only plumbing.
 
 ### Chunks
-- **14.1** — model: a keyed set of card profiles (address, derivation path, serial, label) plus a "selected
-  card" pointer, replacing the single-profile store. Migration for the one profile existing installs already
-  hold.
-- **14.2** — surface the serial: read `tokenSerial` through the adapter into the public profile, so a card can
-  be told apart from another by more than its address.
-- **14.3** — provisioning: allow adopting/creating an *additional* card instead of rejecting it, keeping the
-  per-card address binding intact (the check becomes "matches the selected profile", never "matches any").
-- **14.4** — switcher: list wallets rather than backends — the phone vault plus each registered card, showing
-  address and serial — and make `switchActiveWallet` select a profile.
+- **14.1 — DONE (CI green)** — model: the profile store holds a list of card profiles plus a `selectedId`
+  instead of one inline record, and the loaders the custody backend calls resolve the selected one. Schemas 1
+  and 2 migrate on read, so an install that registered a card before v1.55 keeps it, still selected, without
+  touching the token. A profile is keyed by its lowercased address — two cards holding the same key are the
+  same wallet, and unlike the serial an address exists for profiles registered before serials were read. Two
+  properties preserved deliberately: `pending` still means "half-written, not usable" (excluded from listings,
+  never selectable), and re-provisioning the selected card clears the selection until the write completes. An
+  unknown schema now throws rather than reading as absent, so a downgrade cannot truncate a newer format.
+- **14.2 — DONE (CI green)** — serial: `RutokenRuntime` always returned `tokenSerial`/`tokenLabel`/`tokenModel`
+  from `openSession` and Dart discarded them; they now reach `RutokenNativeSession` and are recorded on the
+  profile. Missing or blank values read as null rather than failing the session — token identity is
+  descriptive, not load-bearing. Adopting an already-registered card records its serial without disturbing the
+  retained account xpub.
+- **14.3 — DONE (CI green)** — provisioning: adopting a card the phone does not know adds a profile instead of
+  throwing «На телефоне уже зарегистрирован другой Рутокен»; a card it does know keeps everything it has. The
+  adopted card becomes the selected one. The binding is unchanged and now has its own test: each operation
+  still binds to exactly one card, because `_verifyRegisteredAccount` compares against the *selected* profile.
+  That is deliberate — auto-switching to whichever card was tapped would let a transfer previewed against one
+  wallet's balance and nonce complete as another's.
+- **14.4 — DONE (CI green)** — switcher: Настройки lists the phone vault plus each registered card with its
+  address and serial, ticking the selected profile rather than the backend. Adds «Забыть карту» (drops only
+  the phone's record; the card keeps its key) with a fallback to another card → the phone vault → onboarding,
+  and «Подключить ещё карту», which runs the same PIN prompt and NFC wait as the first one.
+  **Found and fixed here, outside the chunk's scope but not worth leaving:**
+  `PhoneSecureVault.createWallet`/`importWallet` silently replaced an existing wallet's seed. Onboarding never
+  reached them in that state, but the switcher's empty-slot row leads to the welcome screen, which put a
+  fresh-seed button a few taps from a wallet in use. Both now refuse when a wallet exists.
 - **14.5** — physical dogfood on two cards: switch, sign with each, and confirm a card still cannot sign for
   the other's address.
+
+### Not covered by 14.1–14.4
+- Creating or importing a key onto a *second* card is only reachable through the switcher's empty-slot row,
+  which opens the welcome screen. «Подключить ещё карту» deliberately goes straight to adoption instead, since
+  routing to that screen puts phone-vault creation one tap away. A dedicated "add card" screen offering all
+  three actions is the tidy answer and is not built yet.
+- Card profiles have no user-assigned names (owner's call: serial + address is enough).
 
 ### Constraint
 The registered-address binding is a security property with physical evidence behind it (Phase 10, v1.51). Any
@@ -751,14 +807,25 @@ possible, since the owner has a second card.
   controller/native-adapter lifecycle regressions
 - `v1.51` — fail closed on unknown Rutoken native failures: the Android channel emits a fixed generic message and
   Dart ignores raw vendor message/details; source and adapter regressions pin the no-diagnostic-leak boundary
+- `v1.52` — Phase 13.1 Nocturne foundation: dark theme tokens, platform-style seam, bundled Inter, ARB scaffolding,
+  build strip
+- `v1.53` — Phase 13.2–13.5 four-tab shell and redesigned flows; the simulated external-device backend is removed
+- `v1.54` — Phase 13.6–13.7: full RU/EN localization with the language switch, onboarding variant B
+- `v1.55` — Phase 14.1–14.4 multiple registered cards (profile list + selection, token serial, switcher, «Забыть
+  карту»); presence-based mid-operation NFC-loss classification
+- `v1.56` — toolchain release: latest Flutter stable (unpinned, 3.47.8 at release), app module in built-in-Kotlin
+  form, `package_info_plus` 10 override so only `walletconnect_pay` still applies KGP, obsolete
+  `flutter_secure_storage` override dropped, GitHub release job (`v*` tag or manual `release` run on main)
 
 ## Current non-goals and validation limits
-- no iOS hardware-device SDK implementation yet; Android physical signing passed on v1.51, while
-  mid-operation NFC-loss error categorization and physical crash/log-output inspection remain open
+- no iOS hardware-device SDK implementation yet; Android physical signing passed on v1.51, while the v1.55
+  mid-operation NFC-loss fix awaits its hardware rerun and physical crash/log-output inspection remains open
 - no additional chains beyond Ethereum Mainnet and Sepolia in the initial AirGap UI
 - no multi-chain support beyond Ethereum Mainnet and Sepolia yet
-- **single-account by design** (audit decision): one EVM address derived at `m/44'/60'/0'/0/0`; HD-account discovery / multiple accounts are out of scope — Phase 9 WalletConnect sessions expose this one account (`eip155:*:<address>`)
-- **localization**: UI strings are intentionally inlined Russian and asserted by widget tests; no ARB/`intl` extraction is planned for the demo
+- **single-account by design** (audit decision): one EVM address per wallet, derived at `m/44'/60'/0'/0/0`
+  (Phase 14 lets several cards each be such a wallet); HD-account discovery / multiple accounts are out of scope — Phase 9 WalletConnect sessions expose this one account (`eip155:*:<address>`)
+- **localization**: RU + EN via ARB since Phase 13.6 (Russian primary; widget tests pin `Locale('ru')`); domain-layer
+  error strings under `qr/`, `key_storage/`, `walletconnect/`, `airgap/` are still inline Russian (see LATER)
 - **test fidelity**: deterministic tests use in-memory fakes; secure storage, public RPC, Reown relay, camera,
   and future NFC behavior cross native/device boundaries and require the maintained manual device matrix in
   addition to CI. WalletConnect and AirGap have owner dogfood evidence, but are not fully automated end-to-end

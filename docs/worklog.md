@@ -18,6 +18,62 @@ Entry template:
 
 ---
 
+## 2026-10-24 — Latest Flutter, Kotlin plugin cleanup, v1.56.0 release — branch claude/friendly-hawking-hpbpbv — done (v1.56.0+67)
+- Plan (owner request): stop pinning Flutter — CI and `.fvmrc` follow the latest stable (3.47.8 today);
+  remove the Kotlin Gradle Plugin problems as far as the dependency tree allows; delete the stale branches;
+  release v1.56.0. Findings that shape the plan: AGP 9.1 has no per-module built-in-Kotlin opt-out (only the
+  global `android.builtInKotlin`), and Flutter 3.47's own `flutter create` template still writes
+  `android.newDsl=false` + `android.builtInKotlin=false` and auto-applies KGP to modules that do not declare it.
+  After `pub upgrade`, only two Android plugins still apply KGP themselves: `package_info_plus` 9.0.1 (10.x is
+  migrated, but `reown_core`/`walletconnect_pay` cap it `<10`) and `walletconnect_pay` 1.1.0 (latest, pulled by
+  `reown_walletkit`, applies `kotlin-android` unconditionally; its WalletConnect Community License assigns any
+  modification to Reown, so it is not patched here).
+- Done: `ci.yml`/`android-launch-check.yml` use `subosito/flutter-action` with `channel: stable` (no version),
+  `.fvmrc` says `stable`; `pubspec.lock` re-resolved on 3.47.8 (`pub upgrade` within constraints). Kotlin: the
+  app module dropped `kotlin-android` (Flutter 3.47 template form; Flutter applies KGP to it in legacy mode, and
+  its "app applies KGP" warning is gone); `package_info_plus` forced to ^10.2.2 (API-compatible; reason in
+  `pubspec.yaml`); the obsolete `flutter_secure_storage` override removed (reown_core 1.5 accepts ^10). Flutter's
+  build now names only `walletconnect_pay` as a KGP-applying plugin. Tried full built-in Kotlin: it fails exactly
+  on `walletconnect_pay` ("does not specify compileSdk" after its `kotlin-android` apply), and without KGP on the
+  classpath Flutter rejects AGP 9.1's embedded Kotlin 2.2.10 (< 2.2.20) — so KGP stays `apply false` and the two
+  flags stay, now documented as Flutter's own template defaults plus the single upstream blocker. Added a
+  `release` job to `ci.yml` (gh CLI, job token, env-var inputs, CHANGELOG section as notes, APK asset) that runs
+  on a `v*` tag (must equal the pubspec version) or on a manual `workflow_dispatch` on main with `release`
+  ticked, where gh creates the tag — this session's git proxy refuses pushes other than the working branch,
+  including tags and branch deletions, so the stale branches must be deleted by the owner.
+  Version v1.56.0+67. Local on Flutter 3.47.8: format clean, analyze clean, 221/221 tests,
+  `flutter build apk --release` OK.
+- Next / open: flip `android.builtInKotlin=true` when Reown ships a migrated `walletconnect_pay` (consider
+  reporting it upstream); drop the `package_info_plus` override when Reown widens `<10`. GitLab's builder Flutter
+  is outside this repo's control — it resolves the same lock on whatever stable it has. Hardware items unchanged.
+
+## 2026-10-24 — Merge v1.54/v1.55 into main + fix the red GitHub Android build — branch claude/friendly-hawking-hpbpbv — done
+- Plan: (1) `claude/wonderful-rubin-eBDKZ` carried 16 commits never merged to `main` — Phase 13.6 completion
+  (v1.54.0+65), Phase 14.1–14.4 multiple cards and the NFC-loss classification fix (v1.55.0+66) — while `main`
+  moved on with the GitLab migration, the AGP 9.1 toolchain and SAST. Merge it and resolve the conflicts.
+  (2) GitHub `ci.yml` has been red since the toolchain move: only the Android APK job fails. Reproduce, fix,
+  verify. (3) Reconcile docs that drifted (CLAUDE.md still described v1.51 and the deleted simulation).
+- Done: merged with `--no-ff`; only `docs/development-plan.md` (NOW/NEXT text) and this worklog conflicted —
+  kept the branch's NFC-loss fix wording plus `main`'s 2026-10-03 iOS framework facts, and both log entries.
+  No code conflicts. Locally on Flutter 3.41.7: format clean, `flutter analyze` clean, `flutter test` 221/221.
+  Android root cause reproduced locally with the exact CI error: AGP 9 enables `android.newDsl` by default and
+  legacy `org.jetbrains.kotlin.android` (kept by `android.builtInKotlin=false`, see the plugin list in
+  `gradle.properties`) cannot apply on it. Added `android.newDsl=false` — AGP's documented temporary bypass;
+  `flutter build apk --release` then succeeds. The GitLab builder (newer Flutter) likely passed because its
+  Flutter tool handles this itself; not verifiable from here. Docs: plan status (Phases 13/14, CI line, 10.6,
+  version history v1.52–v1.55, non-goals), device matrix NFC-loss row, README «Сейчас», CLAUDE.md
+  (overview, key-storage backends, UI/l10n map, GitLab CI, Android toolchain and lockfile gotchas).
+  Confirmed `feat/metamask-airgap-qr` and `fix/walletconnect-capabilities-preview` are fully contained in
+  `main` (a shallow clone had made them look unmerged); they can be deleted.
+- Next / open: owner decision — which Flutter is canonical: `ci.yml`/`.fvmrc` pin 3.41.7, but `pubspec.lock`
+  was last resolved by ≥3.44 on the GitLab builder, so `pub get` on 3.41.7 re-resolves ~11 packages. Drop
+  `newDsl=false`/`builtInKotlin=false` once package_info_plus, shared_preferences_android, url_launcher_android
+  and walletconnect_pay support built-in Kotlin. Hardware: NFC-loss rerun (v1.55), Phase 14.5 two-card
+  dogfood, crash/log review; iOS remains.
+- Refs: merge of `origin/claude/wonderful-rubin-eBDKZ` (`1e54fc7`), `android/gradle.properties`,
+  `android/settings.gradle.kts`, `CLAUDE.md`, `README.md`, `docs/development-plan.md`,
+  `docs/device-test-matrix.md`, `CHANGELOG.md`
+
 ## 2026-10-03 — Reconcile Rutoken status with recorded evidence — branch docs/reconcile-rutoken-status-2026-10-03 — done
 - Plan: compare the current Phase 10 roadmap, physical matrix, and agent handoff with the already-recorded
   2026-08-17 owner dogfood and the 2026-07-29 private iOS vendor-input audit. Correct only stale status claims;
@@ -32,6 +88,129 @@ Entry template:
 - Next / open: fix and physically retest mid-operation NFC-loss error categorization; capture and review actual
   Android crash/log output; establish permitted framework delivery for iOS builds, implement the Swift backend,
   and run the physical iOS matrix. Blocked-PIN and arbitrary SDK-error paths are not yet physically evidenced.
+
+## 2026-08-19 — Phase 10 open defect: NFC-loss classification — branch claude/wonderful-rubin-eBDKZ — code done, hardware rerun pending
+- Plan: close the one functional defect left from the v1.51.0+62 physical matrix — a card pulled *during* an
+  operation reported «Ошибка нативного модуля Рутокена.» instead of the specified «Связь с Рутокеном
+  потеряна…». Teardown was already correct; only the classification was wrong.
+- **Diagnosis.** `requireSession` catches a card removed *between* operations and throws
+  `RutokenNfcLostException`. Mid-operation the vendor library raises its own PKCS#11 failure instead, and
+  `RutokenMethodChannel.nativeErrorCode` tried to recognise it by looking for `CKR_DEVICE_REMOVED` /
+  `CKR_TOKEN_NOT_PRESENT` / `SCARD_W_REMOVED_CARD` in `"${javaClass.name} ${message}"`. The device proved that
+  text does not match — so the bug is the approach, not a missing string.
+- Done: read, sign and import now run through `onCard`, which on failure asks the slot-event listener whether
+  the card is still present. Presence is the fact the user needs, whatever the library called the failure, and
+  it does not depend on vendor message formats or versions. Two guards keep it from over-claiming: a failure
+  the card itself answered (`CKR_PIN…`) keeps its own classification, and the check waits up to 400 ms instead
+  of sampling once, because the listener runs on its own thread and can lose the race against the failure the
+  removal caused. The wait only ever runs on an already-failing operation.
+- **Not verified.** There is no card in this environment, so this is a reasoned fix, not a confirmed one. The
+  matrix row stays PARTIAL and is now marked RETEST; `docs/development-plan.md` says the same in NEXT. If the
+  rerun still shows the generic error, the next step is capturing what the library actually throws — which the
+  fail-closed boundary deliberately keeps out of Dart, so it needs the adb log review that is already pending.
+- Next / open: the negative-path rerun (cancel / wrong PIN / timeout / **NFC loss**) on hardware, plus the
+  physical crash/log-output review. Those two are all that remain of Phase 10 on Android.
+- Refs: `e68c715`; `android/.../rutoken/RutokenRuntime.kt`, `docs/device-test-matrix.md`,
+  `docs/development-plan.md`
+
+---
+
+## 2026-08-19 — Phase 14 chunks 14.1–14.4: several cards — branch claude/wonderful-rubin-eBDKZ — done (14.5 open)
+- Plan: build the multi-card support the owner asked for while dogfooding — data layer first (profile set +
+  serial), then provisioning, then the switcher — keeping the registered-address binding and its Phase 10
+  physical evidence intact at every step.
+- Done: **14.1** profile list + `selectedId` + schema 1/2 migration; **14.2** `tokenSerial`/`tokenLabel` read
+  through the adapter onto the profile; **14.3** adoption registers an additional card instead of refusing it;
+  **14.4** the switcher lists wallets (phone vault + each card with address and serial), «Забыть карту», and
+  «Подключить ещё карту».
+- **Owner decisions (asked, 2026-08-19):** removal of a registered card — yes, with a confirmation; card
+  naming — serial + address is enough, no user-assigned names.
+- **The binding decision, made rather than defaulted.** With several profiles, "the card must match" can mean
+  the *selected* profile or *any registered* profile. Any-registered is friendlier — tap whichever card you
+  have — but a transfer is previewed against one wallet's balance and nonce, so completing it with another
+  card's key is wrong in a way the user cannot see. Selected-only it is, and it falls out for free because
+  `_verifyRegisteredAccount` already compares against whatever the loaders resolve. Covered by its own test.
+- **Preserved deliberately, both with teeth:** `pending` still means half-written-and-unusable (excluded from
+  listings, never selectable, migrates as pending); re-provisioning the selected card clears the selection
+  until the write completes. Both were properties of the single-record store that a naive list conversion
+  would have dropped.
+- **Found while wiring «Подключить ещё карту», and fixed:** `PhoneSecureVault.createWallet`/`importWallet`
+  silently replaced an existing wallet's seed — the only copy of that key. Onboarding never reached them in
+  that state, which is why it survived this long, but the switcher's empty-slot row opens the welcome screen,
+  and that screen's «Создать кошелёк» was then a few taps from a wallet in use. Both calls now refuse. This is
+  outside 14.4's scope; folding it in was still the right call, because 14.4 is what made it reachable.
+- **Deliberately not routed to the welcome screen.** «Подключить ещё карту» goes straight to adoption for the
+  same reason. The cost: creating/importing a key onto a *second* card is only reachable via the empty-slot
+  row. A dedicated "add card" screen offering all three actions is the tidy answer — recorded in the plan, not
+  built.
+- **Two more defects, both found re-reading my own 14.4 wiring rather than from a failing test.** Worth naming
+  because neither would have surfaced in CI:
+  1. The «Новая карта» row was a no-op once a card was registered. The early return treated "same backend,
+     same profile" as nothing-to-do without noticing the row carries *no* profile, and the stage came from the
+     resolved summary rather than from the row. The one row whose purpose is reaching create/import-on-card
+     did nothing. Now an empty row always opens setup; test added.
+  2. Forgetting a card left its PIN in the biometric secret store, which is address-scoped — a stored PIN for
+     a card the phone no longer knows. `RutokenBiometricPinStore.forget()` drops the secret *and* the
+     offer decision; unlike `decline()` it records no answer, so re-connecting that card offers biometrics
+     afresh instead of inheriting one from a registration that no longer exists.
+  The lesson is the same one from 13.6: a bulk change needs a review pass by a different method than the one
+  that made it. Here the method was "walk each new call path by hand and ask what it does in the *second*
+  card's world", which is exactly the case none of the existing tests exercised.
+- Next / open: **14.5** — the physical two-card dogfood is the remaining exit criterion and needs the owner's
+  hardware: switch between cards, sign with each, and confirm a registered-but-unselected card still cannot
+  sign for the other's address. That last row is the one that re-opens `docs/device-test-matrix.md`.
+- Refs: `a4b0eab`, `1866115`, `1d8a025`, `1bc6594`, `7ed9dae`, `8883c40`; `lib/src/key_storage/rutoken_provisioning.dart`,
+  `lib/src/key_storage/custody_backend.dart`, `lib/src/key_storage/rutoken_method_channel_adapter.dart`,
+  `lib/src/key_storage/phone_secure_vault.dart`, `lib/src/wallet_flow_controller.dart`,
+  `lib/src/wallet_flow_screen_tabs.dart`, `lib/src/key_storage/rutoken_biometric_pin_store.dart`,
+  `test/rutoken_provisioning_test.dart`, `test/phone_secure_vault_test.dart`,
+  `docs/device-test-matrix.md` (the 14.5 two-card gate)
+
+---
+
+## 2026-08-19 — Phase 13 chunk 13.6 (done): localization finished + RU/EN switch — branch claude/wonderful-rubin-eBDKZ — done
+- Plan: finish the ARB migration (onboarding/card screens, then the controllers), then unpin Russian and add the
+  language switch. Controller approach was the owner's call — **variant A**: inject a message source, matching
+  the repo's DI convention.
+- Done: **13.6d** onboarding, card create/import/backup, PIN setup, seed backup, biometrics, the locked screen
+  and the per-operation auth sheet. **13.6e** both `ChangeNotifier`s plus the switch. **13.6f** Связи —
+  the pairing panel, request card, session cards, transaction preview, AirGap step cards, QR frame counter.
+  No Russian string literal remains anywhere in `wallet_flow_screen*.dart`.
+- **Variant A, concretely:** the message source is `AppLocalizations` itself, not a parallel table. Injecting the
+  generated bundle (optional ctor arg → default `lookupAppLocalizations(Locale('ru'))` → re-pointed by the screen
+  in `didChangeDependencies`) keeps one source of truth for every string. A hand-written `WalletFlowMessages`
+  interface would have duplicated ~50 strings and let the two drift.
+- **Deliberate limitation, written down rather than hidden:** strings the controller already produced and stored
+  (`errorMessage`, a diagnostic result) keep the wording they were created with. Retranslating them would mean
+  re-running the operation. The next action speaks the new language.
+- **Found while translating — the third time this pattern has paid off.** Awkward-to-translate copy is almost
+  always copy that was awkward to *read*: "CKM_ECDSA вернул сырую подпись длиной N байта", "Rutoken backend
+  недоступен в этой сборке", "Текущий transaction service не поддерживает Phase 6 hardened flow", "Multipart UR
+  нужно полностью отсканировать камерой", "Симулируем транзакцию через RPC…", "Анимированный BC-UR: 3/7",
+  "Calldata: 68 байт; selector 0x1234", "Gas limit: 21000 (оценён RPC + 20%)", and `Backend` / `Locked` /
+  `Biometrics enabled` sitting in English on a Russian lock screen. All rewritten.
+- **Reversal, stated:** 13.6b decided protocol diagnostics stay untranslated. Translating the rest showed that
+  was the wrong line — a person verifying a transfer against MetaMask reads the calldata and gas rows too. They
+  are now localized, keeping the values and the standard terms (nonce, gwei, selector) and dropping the jargon
+  around them.
+- **Vendor name out of the UI** (handoff decision #2): the backend catalogue's `label`/`description` are now
+  plainly internal identifiers, and the UI derives what it shows from `WalletBackendDescriptor.kind`. That
+  single change covers the wallet switcher, the locked screen and the details sheet at once.
+- **Incidental fix:** `MobileWalletDemoApp` had to become stateful to hold the language choice, which revealed it
+  was constructing the secure store, RPC transport, blockchain provider, broadcaster and WalletConnect service
+  *inside* `build()`. Now built once in `initState`.
+- **Test churn, and why it is right:** with Russian no longer pinned, `flutter test` runs under the system locale
+  (en) and 18 copy assertions failed. Fixed by pinning `locale: Locale('ru')` at each `MobileWalletDemoApp`
+  construction rather than by re-pinning the app — copy assertions are language-specific and should say so.
+- Next / open: the domain/infrastructure error strings under `qr/`, `key_storage/`, `walletconnect/` and
+  `airgap/` are still inline Russian. They reach the user through the controller's catch-all. Doing them right
+  means an error-code taxonomy, not literal swapping — filed under LATER in the plan, not half-done here.
+  Phase 13 remains open only on the known 13.5 deviation (stacked rather than sequential sheets).
+- Refs: `06bcd3d`, `40482a5`, `6b13c47`; `lib/l10n/*.arb` (~270 keys), `lib/src/app_locale.dart` (new),
+  `lib/src/app.dart`, `lib/src/wallet_flow_controller.dart`, `lib/src/chain_data_controller.dart`,
+  `lib/src/wallet_flow_screen*.dart`, `test/widget_test.dart`, `test/wallet_connect_screen_test.dart`
+
+---
 
 ## 2026-08-18 — Phase 13 chunk 13.6 (in progress): copy into ARB — branch claude/wonderful-rubin-eBDKZ — partial (CI green)
 - Plan: migrate UI copy into ARB so the RU/EN switch can be enabled. The locale stays **pinned to Russian**

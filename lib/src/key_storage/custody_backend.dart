@@ -142,10 +142,24 @@ abstract interface class RutokenNativeAdapter {
 }
 
 class RutokenNativeSession {
-  const RutokenNativeSession({required this.id, required this.openedAtUtc});
+  const RutokenNativeSession({
+    required this.id,
+    required this.openedAtUtc,
+    this.serial,
+    this.label,
+    this.model,
+  });
 
   final String id;
   final DateTime openedAtUtc;
+
+  /// Token identity reported when the session opened. Null when the transport
+  /// does not report it (a test fake, or a platform whose bridge predates it).
+  /// [serial] is what tells two otherwise-identical cards apart in the picker;
+  /// it is public token metadata, not key material.
+  final String? serial;
+  final String? label;
+  final String? model;
 }
 
 /// Hardware backend implementation independent of Flutter platform channels.

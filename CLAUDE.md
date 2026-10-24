@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Flutter demo of a mobile EVM crypto wallet targeting Android, iOS, and Windows x64. It supports the full onboarding/auth shell, an encrypted on-device key vault, read-only blockchain access (Ethereum Mainnet + Sepolia), and end-to-end EIP-1559 signing/sending. Android v1.51 includes a physically validated Rutoken NFC/PKCS#11 read/sign transport and recoverable provisioning, production backend registration, read-only adoption of an already provisioned compatible card, registered-address binding, biometric-gated PIN convenience, cancellable NFC discovery, stable PIN/timeout/NFC-loss errors, and a fail-closed platform-error boundary that never exposes raw vendor diagnostics to Dart. Startup restores only the software-retained public Rutoken profile without NFC; each private operation opens one fresh card/PIN session. The native transport startup mirrors the official demo: the PC/SC bridge attaches from a custom `Application.onCreate` before any Activity callbacks, then PKCS#11 follows the Activity lifecycle and a blocking `C_WaitForSlotEvent` listener drives token presence. The native crypto boundary is intentionally minimal and follows the supplied example: import one raw BIP32 master private key + chain code with `C_CreateObject`, find it, derive a public address key or per-operation EC private child, call raw `CKM_ECDSA`, destroy transient children, and close the session. Existing-card adoption never calls `C_CreateObject`; it persists only address/path and therefore cannot synthesize EIP-4527 account xpub metadata. The adapter does not query derived chain code or xpub. EC-point intake accepts/validates both compressed and uncompressed SEC1 values with or without the PKCS#11 DER OCTET STRING wrapper. UI strings are in Russian; tests assert on those exact strings.
+Flutter demo of a mobile EVM crypto wallet targeting Android, iOS, and Windows x64. It supports the full onboarding/auth shell, an encrypted on-device key vault, read-only blockchain access (Ethereum Mainnet + Sepolia), and end-to-end EIP-1559 signing/sending. Android v1.51 includes a physically validated Rutoken NFC/PKCS#11 read/sign transport and recoverable provisioning, production backend registration, read-only adoption of an already provisioned compatible card, registered-address binding, biometric-gated PIN convenience, cancellable NFC discovery, stable PIN/timeout/NFC-loss errors, and a fail-closed platform-error boundary that never exposes raw vendor diagnostics to Dart. Startup restores only the software-retained public Rutoken profile without NFC; each private operation opens one fresh card/PIN session. The native transport startup mirrors the official demo: the PC/SC bridge attaches from a custom `Application.onCreate` before any Activity callbacks, then PKCS#11 follows the Activity lifecycle and a blocking `C_WaitForSlotEvent` listener drives token presence. The native crypto boundary is intentionally minimal and follows the supplied example: import one raw BIP32 master private key + chain code with `C_CreateObject`, find it, derive a public address key or per-operation EC private child, call raw `CKM_ECDSA`, destroy transient children, and close the session. Existing-card adoption never calls `C_CreateObject`; it persists only address/path and therefore cannot synthesize EIP-4527 account xpub metadata. The adapter does not query derived chain code or xpub. EC-point intake accepts/validates both compressed and uncompressed SEC1 values with or without the PKCS#11 DER OCTET STRING wrapper. UI copy lives in ARB files (`lib/l10n/app_ru.arb` is primary, `app_en.arb` mirrors it) with an in-app RU/EN switch; widget tests pin `Locale('ru')` and assert on the exact Russian strings.
 
-`docs/development-plan.md` is the canonical roadmap and source of truth for scope and phase status. Phases 0–7 are complete (Phase 7 = the simulated external-device **custody** foundation; no real NFC/SDK). Phase 9 makes this a wallet-side WalletConnect receiver and is device-validated on Android through a confirmed Sepolia broadcast; v1.37 adds EIP-5792 capability discovery plus live simulation/gas/fee preflight. Phase 12 is complete in v1.38: the app is a MetaMask-compatible EIP-4527 QR signer for Mainnet/Sepolia transactions, with account export, multipart camera scan, decoded transaction preview, per-operation auth, and signature QR. v1.39 hardens dense live-camera QR recognition with full-frame analysis, high requested Android resolution, and Android auto-zoom. The earlier custom AirGap codec and outbound signer direction are removed.
+`docs/development-plan.md` is the canonical roadmap and source of truth for scope and phase status. Phases 0–7 are complete (Phase 7 = the simulated external-device **custody** foundation; the simulation itself was removed in v1.53 once the real Rutoken backend existed). Phase 9 makes this a wallet-side WalletConnect receiver and is device-validated on Android through a confirmed Sepolia broadcast; v1.37 adds EIP-5792 capability discovery plus live simulation/gas/fee preflight. Phase 12 is complete in v1.38: the app is a MetaMask-compatible EIP-4527 QR signer for Mainnet/Sepolia transactions, with account export, multipart camera scan, decoded transaction preview, per-operation auth, and signature QR. v1.39 hardens dense live-camera QR recognition with full-frame analysis, high requested Android resolution, and Android auto-zoom. The earlier custom AirGap codec and outbound signer direction are removed. Phase 13 (v1.52–v1.54) is the Nocturne redesign: dark-only theme, four tabs (Кошелёк / Активность / Связи / Настройки), separate iOS/Android interaction patterns, onboarding variant B («Кошелёк за минуту»), and full RU/EN localization. Phase 14 (v1.55) lets the Rutoken backend hold several registered card profiles with one selected; every operation still binds to the selected card's address, and the two-card physical dogfood (14.5) is pending.
 
 The current north star is a single-account EVM wallet whose next milestone is a real, non-exporting Rutoken
 custody backend for Android/iOS. Phase 10 requires a custody-contract redesign before native integration: a
@@ -27,8 +27,10 @@ profile, rejects a card whose address differs from that profile, and can release
 after system biometric authentication. v1.50 makes the Android NFC wait cancellable, maps stable sanitized native
 errors, detects a removed token before later operations, and preserves the primary operation failure if teardown
 also fails. The Android physical signing matrix passed on v1.51 (2026-08-17), including WalletConnect,
-AirGap, invalid PIN, cancellation, timeout, and different-card rejection. Mid-operation NFC loss still displays
-a generic error; physical crash/log-output review and the Swift/iOS implementation remain open. The exact
+AirGap, invalid PIN, cancellation, timeout, and different-card rejection. Mid-operation NFC loss displayed a
+generic error on v1.51; v1.55 classifies it by asking the slot-event listener whether the card is still present,
+but that fix has not been re-run on hardware. Physical crash/log-output review and the Swift/iOS implementation
+remain open. The exact
 `wtpkcs11ecp.xcframework` was received and retained privately, but its archive has no redistribution grant;
 do not commit it or expose it through public CI artifacts. See the NOW / NEXT / LATER section and Phase 10
 Definition of Done in `docs/development-plan.md`.
@@ -48,7 +50,7 @@ The next agent should be able to tell what was planned, what was done, and what'
 
 ## Commands
 
-Toolchain is pinned in `.github/workflows/ci.yml`: **Flutter 3.41.7**, Dart SDK `^3.11.0`, Java 17.
+Toolchain: the **latest Flutter stable**, deliberately unpinned (owner decision 2026-10-24) — `ci.yml` uses `channel: stable` and `.fvmrc` says `stable`; Dart SDK `^3.11.0` is only a floor; Java 17.
 
 ```bash
 flutter pub get                                  # install dependencies
@@ -69,6 +71,12 @@ flutter build windows --release                  # Windows x64
 
 CI (`ci.yml`) runs `validate` (format check → analyze → test) and only then builds all three platforms. **`dart format` is an enforced gate** — unformatted code fails CI. Run `dart format .` before committing.
 
+Releases: bump the version, add the CHANGELOG section, then either push tag `v<version>` or run `ci.yml` manually on `main` with `release` ticked — the `release` job publishes the APK as a GitHub Release (GitLab releases on its own tags).
+
+The project's primary home is now the internal GitLab (`prototypes/mobile-wallet-demo`); `.gitlab-ci.yml` runs
+blocking SAST (semgrep + osv from `mko/ci-security`), the same format/analyze/test gate, an Android APK build, docs
+Pages, and tag releases. The GitHub repository and its `ci.yml` (Android/iOS/Windows) are kept in sync with it.
+
 ## Architecture
 
 Code lives under `lib/src/`, split into layers: `auth/`, `blockchain/`, `key_storage/`, `transactions/`, plus the UI orchestrator `wallet_flow_screen.dart` (its presentational widgets live in `wallet_flow_screen_*.dart` `part` files). `main.dart` → `app.dart` (`MobileWalletDemoApp`) → `WalletFlowScreen`.
@@ -79,10 +87,10 @@ Code lives under `lib/src/`, split into layers: `auth/`, `blockchain/`, `key_sto
 
 ### Key storage: the central abstraction
 
-`KeyStorageBackend` (`key_storage/key_storage_backend.dart`) is the core contract (create/import/unlock/biometrics/lock). Two implementations, selected at runtime via `WalletBackendRegistry` (persists the choice in the secure store):
+`KeyStorageBackend` (`key_storage/key_storage_backend.dart`) is the core contract (create/import/unlock/biometrics/lock). Two backend kinds (`WalletBackendKind.phoneSecureVault` / `externalDevice`), selected at runtime via `WalletBackendRegistry` (persists the choice in the secure store):
 
 - **`PhoneSecureVault`** — the real backend. Implements the **"Phone Secure Vault" model** (see development-plan.md "Core architectural decision"): it deliberately does *not* use a non-exportable secure-enclave key, because the product must show/import a seed phrase. Instead the BIP-39 seed is encrypted at rest with AES-GCM-256 under a random data-encryption key (DEK); the DEK is wrapped by a PIN-derived key (PBKDF2, 600k iterations); the PIN is never persisted, and repeated wrong PINs trigger a temporary unlock lockout. A single EVM address is derived at `m/44'/60'/0'/0/0`. Biometric unlock keeps the DEK in a dedicated `BiometricSecretStore` (`key_storage/biometric_secret_store.dart`) gated by `local_auth`, rather than co-locating a key with the seed ciphertext. `PinUnlockSession` remains an internal primitive, but the controller deliberately requests fresh authorization for every private-key operation and calls `lock()` in `finally`. This releases references; immutable Dart strings cannot be claimed to be securely zeroized.
-- **`ExternalDeviceDemoBackend`** — implements `ExternalDeviceKeyStorageBackend` (adds `isDeviceAvailable()`). It is a *simulation*: it wraps a `PhoneSecureVault` delegate backed by a `PrefixedSecureKeyValueStore`, and layers on mock device lifecycle (online/offline, reconnect, session disconnect) and mock PKCS#11 session/operation contracts (`external_device_pkcs11.dart`). No real NFC.
+- **`RutokenCustodyBackend`** (`key_storage/custody_backend.dart`) — the real hardware backend behind `WalletCustodyBackend`. It holds only public account metadata and opens a transient `CustodySigningSession` per operation through `RutokenNativeAdapter` (Android: `rutoken_method_channel_adapter.dart` → Kotlin `RutokenRuntime`); it never sees `WalletMaterial`. `RutokenProvisioningService` (`key_storage/rutoken_provisioning.dart`) handles import/generate/adopt and stores a list of `RutokenCardProfile`s plus a selected id (Phase 14); `RutokenBiometricPinStore` is the opt-in biometric-gated PIN store. The former `ExternalDeviceDemoBackend` simulation was deleted in v1.53.
 
 ### Blockchain: read-only with fallback + cache
 
@@ -99,11 +107,16 @@ The wallet receives signing requests. WalletConnect uses `WalletConnectV2Request
 ### UI: widget-free controller plus thin screen and part files
 
 `WalletFlowController` owns the state machine, custody/backend instances, dependencies, and domain actions.
-`WalletFlowScreen` listens to it and composes the current stage; it does not own the vault lifecycle. The
+`WalletFlowScreen` listens to it and composes the current stage; it does not own the vault lifecycle.
+`ChainDataController` owns network/snapshot/loading state so several tabs can render it. The
 presentational widgets remain library-private in `wallet_flow_screen_widgets.dart`,
-`wallet_flow_screen_onboarding.dart`, `wallet_flow_screen_unlocked.dart`, and
+`wallet_flow_screen_onboarding.dart`, `wallet_flow_screen_unlocked.dart`, `wallet_flow_screen_tabs.dart`, and
 `wallet_flow_screen_connections.dart`. Part files share imports from `wallet_flow_screen.dart`; add UI imports
 there. New domain collaborators belong in the controller/composition root and should stay injectable for tests.
+The Nocturne design system lives in `lib/src/design/` (`nocturne.dart` tokens, `app_theme.dart`,
+`platform_style.dart` for the iOS/Android/desktop pattern seam, `app_shell.dart` for the four-tab shell). New
+user-visible text goes into both ARB files (`lib/l10n/`), never inline; the persisted language choice is in
+`app_locale.dart`.
 
 ## Conventions & gotchas
 
@@ -112,4 +125,7 @@ there. New domain collaborators belong in the controller/composition root and sh
 - **UI text and many error messages are Russian.** Widget tests locate elements by Russian strings — keep them consistent when editing UI.
 - Keep `docs/development-plan.md` phase status in sync when completing roadmap items (existing `docs:` commits do this).
 - **`dart_defines.json`** (repo root) holds the WalletConnect `WC_PROJECT_ID`; builds/runs pass it via `--dart-define-from-file=dart_defines.json` (helpers: `scripts/run.sh` / `scripts/build.sh`) and the app reads it as `wcProjectId` (`walletconnect/wc_config.dart`). It is **intentionally committed** (public client id; the owner accepts quota use) — don't treat it as a leaked secret or remove it. It is consumed by `ReownWalletConnectService` (chunk 9.2, wired).
-- **Android vault persistence:** `flutter_secure_storage` 10.x is intentionally forced through an override until `reown_core` widens its 9.x constraint. The API Reown uses remains compatible and CI builds every platform. Our store uses crash-safe v9→v10 migration with `resetOnError:false`; Android Auto Backup is disabled because keystore keys cannot safely restore with encrypted preferences.
+- **Android toolchain:** Gradle 9.3.1, AGP 9.1.0, Kotlin 2.4.0. `android/gradle.properties` matches what `flutter create` writes for AGP 9: `android.newDsl=false` is required by the Flutter Gradle plugin itself, and `android.builtInKotlin=false` remains only because `walletconnect_pay` (pulled by `reown_walletkit`, latest 1.1.0) applies `kotlin-android` unconditionally — AGP has no per-module opt-out. The app module is already in built-in-Kotlin form (no `kotlin-android`; Flutter applies KGP to it in this mode). Flip `builtInKotlin` to true once a migrated `walletconnect_pay` ships, and keep KGP `apply false` in `settings.gradle.kts` (it sets the Kotlin version; AGP 9.1 alone embeds 2.2.10, below Flutter's 2.2.20 minimum).
+- **`pubspec.lock` follows the latest stable:** it is resolved with the current Flutter stable; after a new Flutter release `flutter pub get` may re-resolve SDK-pinned packages (`meta`, `test_api`, …) — commit that deliberately, together with the Flutter bump it belongs to.
+- **`package_info_plus` override:** forced to ^10.2.2 because `reown_core`/`walletconnect_pay` cap it `<10` while 9.x applies KGP itself; 10.0.0 only broke win32/min-platform versions, not the Dart API. Drop it when Reown widens the constraint.
+- **Android vault persistence:** `flutter_secure_storage` 10.x (the override that once forced it is gone since `reown_core` 1.5 accepts ^10). Our store uses crash-safe v9→v10 migration with `resetOnError:false`; Android Auto Backup is disabled because keystore keys cannot safely restore with encrypted preferences.
