@@ -811,5 +811,7 @@
   "transferReverted": "The network rejected the transaction.",
   "transferPendingTimeout": "Confirmation is taking long — check the history later.",
   "transferHash": "Transaction hash",
-  "actionContinue": "Continue"
+  "actionContinue": "Continue",
+  "addCardTitle": "New card",
+  "addCardBody": "Connect a card that already holds a key, or write a key to an empty card. The active wallet stays as it is until the card is connected."
 }

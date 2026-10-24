@@ -62,6 +62,7 @@ enum WalletFlowStage {
   rutokenCreate,
   rutokenImport,
   rutokenBackup,
+  addCard,
   biometricPrompt,
   locked,
   unlocked,
@@ -393,25 +394,14 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           // that screen's «Создать кошелёк» writes a fresh seed into the phone
           // vault, and routing here would put that one tap away from a wallet
           // the user already has.
+          // Opens the add-card screen rather than the welcome screen: that
+          // screen's «Создать кошелёк» writes a fresh seed into the phone vault,
+          // which must not be one tap away from a wallet the user already has.
           onConnectAnotherCard: widget.rutokenNativeAdapter == null
               ? null
-              : () => _connectAnotherCard(context),
+              : _controller.openAddCard,
         );
     }
-  }
-
-  /// Registers an additional card from Настройки. Same prompt and same NFC wait
-  /// as connecting the first one; the adopted card becomes the active wallet.
-  Future<void> _connectAnotherCard(BuildContext context) async {
-    final l10n = AppLocalizations.of(context);
-    await _confirmOperation(
-      context,
-      controller: _controller,
-      reason: l10n.cardAdoptPinReason,
-      biometricsOffered: false,
-      run: (pin, _) => _controller.adoptExistingRutoken(pin: pin ?? ''),
-      successBody: () => l10n.cardConnectSuccess,
-    );
   }
 
   Widget _buildOnboarding(BuildContext context) {
@@ -511,13 +501,13 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       case WalletFlowStage.rutokenCreate:
         return _RutokenCreateStage(
           onGenerate: controller.prepareRutokenGeneratedBackup,
-          onBack: controller.goToWelcome,
+          onBack: controller.leaveCardSetup,
         );
       case WalletFlowStage.rutokenImport:
         return _RutokenImportStage(
           controller: controller,
           onSubmit: controller.provisionImportedRutoken,
-          onBack: controller.goToWelcome,
+          onBack: controller.leaveCardSetup,
         );
       case WalletFlowStage.rutokenBackup:
         final backup = controller.rutokenGeneratedBackup;
@@ -528,8 +518,10 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           controller: controller,
           backup: backup,
           onProvision: controller.provisionGeneratedRutoken,
-          onBack: controller.goToWelcome,
+          onBack: controller.leaveCardSetup,
         );
+      case WalletFlowStage.addCard:
+        return _AddCardStage(controller: controller);
       case WalletFlowStage.biometricPrompt:
         return _BiometricPromptStage(
           isAvailable: controller.biometricsAvailable,

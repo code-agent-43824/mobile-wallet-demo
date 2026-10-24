@@ -164,7 +164,7 @@ class _SettingsTab extends StatelessWidget {
 
   /// Null when this build has no card transport (desktop, or a test without an
   /// adapter) — the switcher then offers no way to add one.
-  final Future<void> Function()? onConnectAnotherCard;
+  final VoidCallback? onConnectAnotherCard;
 
   @override
   Widget build(BuildContext context) {

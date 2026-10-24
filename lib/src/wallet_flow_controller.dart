@@ -552,6 +552,13 @@ class WalletFlowController extends ChangeNotifier {
   /// on screen. This mirrors the resolution [loadInitialState] performs, and
   /// drops any held material so nothing survives the switch.
   Future<void> switchActiveWallet(SwitchableWallet wallet) async {
+    // The card backend's empty row adds a card; with a wallet already active it
+    // opens «Новая карта» and leaves the active wallet alone until a card is
+    // connected.
+    if (wallet.isEmptySlot && wallet.isCardStorage && _summary != null) {
+      openAddCard();
+      return;
+    }
     final currentCardProfileId = await selectedCardProfileId();
     if (!wallet.isEmptySlot &&
         wallet.backendId == effectiveBackendId &&
@@ -638,7 +645,45 @@ class WalletFlowController extends ChangeNotifier {
   void goToWelcome() {
     _errorMessage = null;
     _rutokenGeneratedBackup = null;
+    _cardSetupReturnStage = WalletFlowStage.welcome;
     _stage = WalletFlowStage.welcome;
+    _notify();
+  }
+
+  /// Where the card's create/import stages return on «Назад»: the welcome
+  /// screen during onboarding, the add-card screen when that is where they
+  /// were opened from.
+  WalletFlowStage _cardSetupReturnStage = WalletFlowStage.welcome;
+
+  /// Opens «Новая карта» from an existing wallet. Nothing about the active
+  /// wallet changes until a card is actually connected or written.
+  void openAddCard() {
+    if (_rutokenProvisioning == null) return;
+    _errorMessage = null;
+    _rutokenGeneratedBackup = null;
+    _rutokenDiagnosticResult = null;
+    _rutokenProvisioningResult = null;
+    _cardSetupReturnStage = WalletFlowStage.addCard;
+    _stage = WalletFlowStage.addCard;
+    _notify();
+  }
+
+  /// Leaves «Новая карта» for the wallet that was active before.
+  void closeAddCard() {
+    _errorMessage = null;
+    _rutokenGeneratedBackup = null;
+    _cardSetupReturnStage = WalletFlowStage.welcome;
+    _stage = _summary == null
+        ? WalletFlowStage.welcome
+        : WalletFlowStage.unlocked;
+    _notify();
+  }
+
+  /// «Назад» from the card's create, import or backup stage.
+  void leaveCardSetup() {
+    _errorMessage = null;
+    _rutokenGeneratedBackup = null;
+    _stage = _cardSetupReturnStage;
     _notify();
   }
 
@@ -730,6 +775,7 @@ class WalletFlowController extends ChangeNotifier {
         _material = null;
         _lastUnlockAuthMethod = WalletAuthMethod.externalDevice;
         _stage = WalletFlowStage.unlocked;
+        _cardSetupReturnStage = WalletFlowStage.welcome;
         _rutokenProvisioningResult = _messages.cardAdoptSuccess(
           account.address,
         );
@@ -776,6 +822,7 @@ class WalletFlowController extends ChangeNotifier {
         _lastUnlockAuthMethod = WalletAuthMethod.externalDevice;
         _rutokenGeneratedBackup = null;
         _stage = WalletFlowStage.unlocked;
+        _cardSetupReturnStage = WalletFlowStage.welcome;
         await _queueRutokenBiometricOffer(pin);
       },
       onCancel: _rutokenNativeAdapter?.cancelPendingOperation,

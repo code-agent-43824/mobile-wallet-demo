@@ -142,6 +142,48 @@ class _FailingBroadcaster implements TransactionBroadcaster {
   }
 }
 
+/// A card that already holds the supported key: adoption reads its public
+/// account and nothing else.
+class _ReadyCardAdapter implements RutokenNativeAdapter {
+  static const String address = '0x2222222222222222222222222222222222222222';
+
+  @override
+  Future<void> cancelPendingOperation() async {}
+
+  @override
+  Future<void> closeSession(RutokenNativeSession session) async {}
+
+  @override
+  Future<WalletAccountDescriptor> importWallet({
+    required RutokenNativeSession session,
+    required Uint8List masterPrivateKey,
+    required Uint8List chainCode,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<RutokenNativeSession> openSession({required String pin}) async =>
+      RutokenNativeSession(
+        id: 'ready',
+        openedAtUtc: DateTime.utc(2026, 10, 24),
+      );
+
+  @override
+  Future<WalletAccountDescriptor?> readAccountDescriptor(
+    RutokenNativeSession session,
+  ) async => const WalletAccountDescriptor(
+    backendId: 'rutoken_nfc',
+    address: address,
+    derivationPath: "m/44'/60'/0'/0/0",
+  );
+
+  @override
+  Future<RawEcdsaSignature> signDigest({
+    required RutokenNativeSession session,
+    required String derivationPath,
+    required Uint8List digest,
+  }) => throw UnimplementedError();
+}
+
 class _UnusedRutokenAdapter implements RutokenNativeAdapter {
   @override
   Future<void> cancelPendingOperation() async {}
@@ -260,6 +302,80 @@ void main() {
     // the card action is correctly absent. The Rutoken test below asserts it
     // appears when an adapter is present.
     expect(find.text('У меня есть карта'), findsNothing);
+  });
+
+  testWidgets('another card is added from its own screen, one sheet deep', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        locale: const Locale('ru'),
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _FakeBlockchainProvider(),
+        rutokenNativeAdapter: _ReadyCardAdapter(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Создать кошелёк'));
+    await tester.pumpAndSettle();
+    final setupFields = find.byType(TextField);
+    await tester.enterText(setupFields.at(0), '1234');
+    await tester.enterText(setupFields.at(1), '1234');
+    await tester.tap(find.text('Создать кошелёк'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Я сохранил seed-фразу'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Пока без биометрии'));
+    await tester.pumpAndSettle();
+
+    Future<void> openAddCard() async {
+      // The tab label; the app bar repeats it once Настройки is open.
+      await tester.tap(find.text('Настройки').last);
+      await tester.pumpAndSettle();
+      final switcher = find.text('Переключить кошелёк');
+      await tester.ensureVisible(switcher);
+      await tester.tap(switcher);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Подключить ещё карту'));
+      await tester.pumpAndSettle();
+    }
+
+    await openAddCard();
+    // Only the card's three ways in — never phone-wallet creation, which the
+    // welcome screen would have put one tap away from the wallet in use.
+    expect(find.text('Новая карта'), findsOneWidget);
+    expect(find.text('Подключить готовую карту'), findsOneWidget);
+    expect(find.text('Создать на карте'), findsOneWidget);
+    expect(find.text('Импортировать на карту'), findsOneWidget);
+    expect(find.text('Создать кошелёк'), findsNothing);
+
+    // «Назад» returns to the wallet that was active.
+    await tester.tap(find.text('Назад'));
+    await tester.pumpAndSettle();
+    expect(find.text('Новая карта'), findsNothing);
+    expect(find.text('Переключить кошелёк'), findsOneWidget);
+
+    await openAddCard();
+    await tester.tap(find.text('Подключить готовую карту'));
+    await tester.pumpAndSettle();
+    await _enterOperationPin(tester, '1234');
+    await tester.tap(find.text('Подтвердить'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining(_ReadyCardAdapter.address), findsWidgets);
+    await tester.tap(find.text('Продолжить'));
+    await tester.pumpAndSettle();
+
+    // The connected card is now the active wallet.
+    expect(find.text('Новая карта'), findsNothing);
+    await tester.tap(find.text('Настройки').last);
+    await tester.pumpAndSettle();
+    expect(find.text(_ReadyCardAdapter.address), findsOneWidget);
   });
 
   testWidgets('requires complete backup before Rutoken provisioning', (

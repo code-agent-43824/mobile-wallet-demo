@@ -100,38 +100,84 @@ class _WelcomeStage extends StatelessWidget {
           const SizedBox(height: 8),
           Text(l10n.cardSectionBody),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              FilledButton.icon(
-                onPressed: onRutokenCreate,
-                icon: const Icon(Icons.add_card),
-                label: Text(l10n.cardCreate),
-              ),
-              OutlinedButton.icon(
-                onPressed: onRutokenImport,
-                icon: const Icon(Icons.download),
-                label: Text(l10n.cardImport),
-              ),
-              OutlinedButton.icon(
-                onPressed: onRutokenAdopt == null
-                    ? null
-                    : () => _confirmOperation(
-                        context,
-                        controller: controller,
-                        reason: l10n.cardAdoptPinReason,
-                        biometricsOffered: false,
-                        run: (pin, _) => onRutokenAdopt!(pin: pin ?? ''),
-                        successBody: () =>
-                            controller.rutokenProvisioningResult ??
-                            l10n.cardConnectSuccess,
-                      ),
-                icon: const Icon(Icons.credit_card),
-                label: Text(l10n.cardAdopt),
-              ),
-            ],
+          _CardActions(
+            controller: controller,
+            onCreate: onRutokenCreate,
+            onImport: onRutokenImport,
+            onAdopt: onRutokenAdopt,
+            onDiagnostic: onRutokenDiagnostic,
+            diagnosticResult: rutokenDiagnosticResult,
+            provisioningResult: rutokenProvisioningResult,
           ),
+        ],
+      ],
+    );
+  }
+}
+
+/// The card's own actions: write a new key, import a seed, connect a card that
+/// already holds one, or check that a card answers. Shared by onboarding and
+/// the add-card screen, so both offer the same three ways in.
+class _CardActions extends StatelessWidget {
+  const _CardActions({
+    required this.controller,
+    required this.onCreate,
+    required this.onImport,
+    required this.onAdopt,
+    required this.onDiagnostic,
+    required this.diagnosticResult,
+    required this.provisioningResult,
+  });
+
+  final WalletFlowController controller;
+  final VoidCallback? onCreate;
+  final VoidCallback? onImport;
+  final Future<void> Function({required String pin})? onAdopt;
+  final Future<void> Function(String pin)? onDiagnostic;
+  final String? diagnosticResult;
+  final String? provisioningResult;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final adopt = onAdopt;
+    final diagnostic = onDiagnostic;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            FilledButton.icon(
+              onPressed: onCreate,
+              icon: const Icon(Icons.add_card),
+              label: Text(l10n.cardCreate),
+            ),
+            OutlinedButton.icon(
+              onPressed: onImport,
+              icon: const Icon(Icons.download),
+              label: Text(l10n.cardImport),
+            ),
+            OutlinedButton.icon(
+              onPressed: adopt == null
+                  ? null
+                  : () => _confirmOperation(
+                      context,
+                      controller: controller,
+                      reason: l10n.cardAdoptPinReason,
+                      biometricsOffered: false,
+                      run: (pin, _) => adopt(pin: pin ?? ''),
+                      successBody: () =>
+                          controller.rutokenProvisioningResult ??
+                          l10n.cardConnectSuccess,
+                    ),
+              icon: const Icon(Icons.credit_card),
+              label: Text(l10n.cardAdopt),
+            ),
+          ],
+        ),
+        if (diagnostic != null) ...[
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: () => _confirmOperation(
@@ -139,21 +185,61 @@ class _WelcomeStage extends StatelessWidget {
               controller: controller,
               reason: l10n.cardCheckPinReason,
               biometricsOffered: false,
-              run: (pin, _) => onRutokenDiagnostic!(pin ?? ''),
+              run: (pin, _) => diagnostic(pin ?? ''),
               successBody: () => controller.rutokenDiagnosticResult ?? '',
             ),
             icon: const Icon(Icons.nfc),
             label: Text(l10n.cardCheck),
           ),
-          if (rutokenDiagnosticResult case final result?) ...[
-            const SizedBox(height: 12),
-            Text(result),
-          ],
-          if (rutokenProvisioningResult case final result?) ...[
-            const SizedBox(height: 12),
-            Text(result),
-          ],
         ],
+        if (diagnosticResult case final result?) ...[
+          const SizedBox(height: 12),
+          Text(result),
+        ],
+        if (provisioningResult case final result?) ...[
+          const SizedBox(height: 12),
+          Text(result),
+        ],
+      ],
+    );
+  }
+}
+
+/// «Новая карта»: adds a card to a phone that already holds a wallet.
+///
+/// Offers only the card's three ways in — never phone-vault creation, which
+/// the welcome screen would have put one tap away from a wallet in use. The
+/// active wallet stays as it is until a card is actually connected.
+class _AddCardStage extends StatelessWidget {
+  const _AddCardStage({required this.controller});
+
+  final WalletFlowController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(l10n.addCardTitle),
+        const SizedBox(height: 12),
+        Text(l10n.addCardBody),
+        const SizedBox(height: 20),
+        _CardActions(
+          controller: controller,
+          onCreate: controller.goToRutokenCreate,
+          onImport: controller.goToRutokenImport,
+          onAdopt: controller.adoptExistingRutoken,
+          onDiagnostic: controller.runRutokenTransportDiagnostic,
+          diagnosticResult: controller.rutokenDiagnosticResult,
+          provisioningResult: controller.rutokenProvisioningResult,
+        ),
+        const SizedBox(height: 20),
+        TextButton.icon(
+          onPressed: controller.closeAddCard,
+          icon: const Icon(Icons.arrow_back),
+          label: Text(l10n.actionBack),
+        ),
       ],
     );
   }
