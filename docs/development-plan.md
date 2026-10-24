@@ -815,7 +815,7 @@ possible, since the owner has a second card.
   карту»); presence-based mid-operation NFC-loss classification
 - `v1.56` — toolchain release: latest Flutter stable (unpinned, 3.47.8 at release), app module in built-in-Kotlin
   form, `package_info_plus` 10 override so only `walletconnect_pay` still applies KGP, obsolete
-  `flutter_secure_storage` override dropped, GitHub release job on `v*` tags
+  `flutter_secure_storage` override dropped, GitHub release job (`v*` tag or manual `release` run on main)
 
 ## Current non-goals and validation limits
 - no iOS hardware-device SDK implementation yet; Android physical signing passed on v1.51, while the v1.55

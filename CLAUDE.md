@@ -71,6 +71,8 @@ flutter build windows --release                  # Windows x64
 
 CI (`ci.yml`) runs `validate` (format check → analyze → test) and only then builds all three platforms. **`dart format` is an enforced gate** — unformatted code fails CI. Run `dart format .` before committing.
 
+Releases: bump the version, add the CHANGELOG section, then either push tag `v<version>` or run `ci.yml` manually on `main` with `release` ticked — the `release` job publishes the APK as a GitHub Release (GitLab releases on its own tags).
+
 The project's primary home is now the internal GitLab (`prototypes/mobile-wallet-demo`); `.gitlab-ci.yml` runs
 blocking SAST (semgrep + osv from `mko/ci-security`), the same format/analyze/test gate, an Android APK build, docs
 Pages, and tag releases. The GitHub repository and its `ci.yml` (Android/iOS/Windows) are kept in sync with it.

@@ -37,7 +37,10 @@ Entry template:
   on `walletconnect_pay` ("does not specify compileSdk" after its `kotlin-android` apply), and without KGP on the
   classpath Flutter rejects AGP 9.1's embedded Kotlin 2.2.10 (< 2.2.20) — so KGP stays `apply false` and the two
   flags stay, now documented as Flutter's own template defaults plus the single upstream blocker. Added a
-  tag-only `release` job to `ci.yml` (gh CLI, job token, env-var inputs, CHANGELOG section as notes, APK asset).
+  `release` job to `ci.yml` (gh CLI, job token, env-var inputs, CHANGELOG section as notes, APK asset) that runs
+  on a `v*` tag (must equal the pubspec version) or on a manual `workflow_dispatch` on main with `release`
+  ticked, where gh creates the tag — this session's git proxy refuses pushes other than the working branch,
+  including tags and branch deletions, so the stale branches must be deleted by the owner.
   Version v1.56.0+67. Local on Flutter 3.47.8: format clean, analyze clean, 221/221 tests,
   `flutter build apk --release` OK.
 - Next / open: flip `android.builtInKotlin=true` when Reown ships a migrated `walletconnect_pay` (consider
