@@ -149,13 +149,21 @@ class _PinEntryPanel extends StatefulWidget {
     required this.onPin,
     required this.onBiometrics,
     required this.onCancel,
+    this.title,
+    this.confirmLabel,
   });
 
   final String reason;
   final bool biometricsOffered;
   final ValueChanged<String> onPin;
   final VoidCallback onBiometrics;
-  final VoidCallback onCancel;
+
+  /// Null where there is nowhere to go back to (the lock screen).
+  final VoidCallback? onCancel;
+
+  /// Defaults to the confirmation wording; the lock screen names itself.
+  final String? title;
+  final String? confirmLabel;
 
   @override
   State<_PinEntryPanel> createState() => _PinEntryPanelState();
@@ -176,6 +184,13 @@ class _PinEntryPanelState extends State<_PinEntryPanel> {
     setState(() => _pin = _pin.substring(0, _pin.length - 1));
   }
 
+  /// Hands the PIN over and forgets it, so a failed attempt starts clean.
+  void _submit() {
+    final pin = _pin;
+    setState(() => _pin = '');
+    widget.onPin(pin);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -186,7 +201,7 @@ class _PinEntryPanelState extends State<_PinEntryPanel> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          l10n.authConfirmTitle,
+          widget.title ?? l10n.authConfirmTitle,
           style: theme.textTheme.titleLarge,
           textAlign: TextAlign.center,
         ),
@@ -204,8 +219,8 @@ class _PinEntryPanelState extends State<_PinEntryPanel> {
         _PinKeypad(style: style, onDigit: _append, onBackspace: _backspace),
         const SizedBox(height: NocturneSpacing.x6),
         OutlinedButton(
-          onPressed: _pin.isEmpty ? null : () => widget.onPin(_pin),
-          child: Text(l10n.authConfirmAction),
+          onPressed: _pin.isEmpty ? null : _submit,
+          child: Text(widget.confirmLabel ?? l10n.authConfirmAction),
         ),
         if (widget.biometricsOffered) ...[
           const SizedBox(height: NocturneSpacing.x3),
@@ -215,8 +230,10 @@ class _PinEntryPanelState extends State<_PinEntryPanel> {
             label: Text(l10n.unlockWithBiometrics),
           ),
         ],
-        const SizedBox(height: NocturneSpacing.x3),
-        TextButton(onPressed: widget.onCancel, child: Text(l10n.actionCancel)),
+        if (widget.onCancel case final VoidCallback cancel) ...[
+          const SizedBox(height: NocturneSpacing.x3),
+          TextButton(onPressed: cancel, child: Text(l10n.actionCancel)),
+        ],
       ],
     );
   }

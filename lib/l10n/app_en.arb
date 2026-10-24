@@ -212,15 +212,11 @@
   "unlockWithBiometrics": "Unlock with biometrics",
   "lockedTitleCard": "The card is locked",
   "lockedTitlePhone": "The wallet is locked",
-  "lockedBodyCard": "The card is bound. Every operation needs its PIN and a tap.",
+  "lockedBodyCard": "Enter the card PIN and hold the card to the phone to open the wallet.",
   "lockedBodyPhone": "The wallet is ready. Enter the PIN to get in.",
   "lockedAddress": "Address",
   "lockedStorage": "Storage",
-  "lockedChipLocked": "Locked",
-  "lockedChipBiometrics": "Biometrics on",
-  "lockedPinCard": "Card PIN",
-  "lockedPinPhone": "Unlock PIN",
-  "lockedUnlockCard": "Connect the card",
+  "lockedUnlockCard": "Unlock with the card",
   "lockedUnlockPhone": "Unlock",
   "authConfirmTitle": "Confirm the operation",
   "authConfirmAction": "Confirm",
@@ -813,5 +809,8 @@
   "transferHash": "Transaction hash",
   "actionContinue": "Continue",
   "addCardTitle": "New card",
-  "addCardBody": "Connect a card that already holds a key, or write a key to an empty card. The active wallet stays as it is until the card is connected."
+  "addCardBody": "Connect a card that already holds a key, or write a key to an empty card. The active wallet stays as it is until the card is connected.",
+  "busyTapCardToUnlock": "Hold the card to the phone to unlock…",
+  "settingsLockOnOpen": "Ask for the PIN when opening",
+  "settingsLockOnOpenBody": "The app opens on the lock screen and locks again after a minute in the background. Each signature still asks on its own."
 }

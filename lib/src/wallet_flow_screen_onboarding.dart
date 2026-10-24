@@ -872,7 +872,7 @@ class _BiometricPromptStage extends StatelessWidget {
   }
 }
 
-class _LockedStage extends StatefulWidget {
+class _LockedStage extends StatelessWidget {
   const _LockedStage({
     required this.summary,
     required this.backendLabel,
@@ -890,82 +890,36 @@ class _LockedStage extends StatefulWidget {
   final Future<void> Function()? onUnlockWithBiometrics;
 
   @override
-  State<_LockedStage> createState() => _LockedStageState();
-}
-
-class _LockedStageState extends State<_LockedStage> {
-  final _pinController = TextEditingController();
-
-  @override
-  void dispose() {
-    _pinController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final summary = widget.summary;
+    final summary = this.summary;
+    final biometrics = onUnlockWithBiometrics;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _SectionTitle(
-          widget.isExternalBackend
-              ? l10n.lockedTitleCard
-              : l10n.lockedTitlePhone,
-        ),
-        const SizedBox(height: 12),
-        Text(
-          widget.isExternalBackend ? l10n.lockedBodyCard : l10n.lockedBodyPhone,
-        ),
         if (summary != null) ...[
-          const SizedBox(height: 20),
           _SummaryTile(label: l10n.lockedAddress, value: summary.address),
           const SizedBox(height: 10),
-          _SummaryTile(label: l10n.lockedStorage, value: widget.backendLabel),
+          _SummaryTile(label: l10n.lockedStorage, value: backendLabel),
+          const SizedBox(height: 20),
         ],
-        const SizedBox(height: 20),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            _StatusChip(label: l10n.lockedChipLocked),
-            if (widget.biometricsEnabled)
-              _StatusChip(label: l10n.lockedChipBiometrics),
-          ],
-        ),
-        const SizedBox(height: 20),
-        TextField(
-          controller: _pinController,
-          obscureText: true,
-          decoration: InputDecoration(
-            labelText: widget.isExternalBackend
-                ? l10n.lockedPinCard
-                : l10n.lockedPinPhone,
-            border: const OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            FilledButton(
-              onPressed: () => widget.onUnlock(_pinController.text.trim()),
-              child: Text(
-                widget.isExternalBackend
-                    ? l10n.lockedUnlockCard
-                    : l10n.lockedUnlockPhone,
-              ),
-            ),
-            if (widget.onUnlockWithBiometrics != null)
-              OutlinedButton.icon(
-                onPressed: widget.onUnlockWithBiometrics,
-                icon: const Icon(Icons.fingerprint),
-                label: Text(l10n.unlockWithBiometrics),
-              ),
-          ],
+        // The same keypad as every signature: the PIN never reaches the system
+        // keyboard. For a card the PIN is the card's, and the tap follows.
+        _PinEntryPanel(
+          title: isExternalBackend
+              ? l10n.lockedTitleCard
+              : l10n.lockedTitlePhone,
+          reason: isExternalBackend
+              ? l10n.lockedBodyCard
+              : l10n.lockedBodyPhone,
+          confirmLabel: isExternalBackend
+              ? l10n.lockedUnlockCard
+              : l10n.lockedUnlockPhone,
+          biometricsOffered: biometrics != null,
+          onPin: onUnlock,
+          onBiometrics: () => biometrics?.call(),
+          onCancel: null,
         ),
       ],
     );

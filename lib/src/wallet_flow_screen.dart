@@ -101,7 +101,8 @@ class WalletFlowScreen extends StatefulWidget {
   State<WalletFlowScreen> createState() => _WalletFlowScreenState();
 }
 
-class _WalletFlowScreenState extends State<WalletFlowScreen> {
+class _WalletFlowScreenState extends State<WalletFlowScreen>
+    with WidgetsBindingObserver {
   late final WalletFlowController _controller;
   late final ChainDataController _chainData;
 
@@ -133,6 +134,23 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       blockchainProvider: widget.blockchainProvider,
     )..addListener(_onChainDataChanged);
     _controller.loadInitialState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// Feeds lock-on-open: the controller decides whether the time away was long
+  /// enough to ask again.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+        _controller.appBackgrounded();
+      case AppLifecycleState.resumed:
+        _controller.appResumed();
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        break;
+    }
   }
 
   /// The controllers produce user-visible strings but hold no `BuildContext`,
@@ -155,8 +173,18 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
     }
   }
 
+  WalletFlowStage? _lastStage;
+
   void _onControllerChanged() {
     if (mounted) {
+      final stage = _controller.stage;
+      // Locking must not leave a sheet (the send form, a wallet list) showing
+      // the wallet over the lock screen.
+      if (stage == WalletFlowStage.locked &&
+          _lastStage != WalletFlowStage.locked) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+      _lastStage = stage;
       // Keep the shared chain data pointed at whatever wallet is active; the
       // controller ignores a repeated address, so this is cheap on every tick.
       _chainData.setAddress(_controller.summary?.address);
@@ -247,6 +275,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _busyEntry?.remove();
     _busyEntry = null;
     _controller.removeListener(_onControllerChanged);
@@ -384,6 +413,8 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           currentBackendId: _controller.effectiveBackendId,
           biometricsEnabled: _controller.biometricsEnabled,
           isHardwareCustody: _controller.activeBackend is WalletCustodyBackend,
+          lockOnOpenEnabled: _controller.lockOnOpenEnabled,
+          onLockOnOpenChanged: _controller.setLockOnOpen,
           onLock: _controller.lockWallet,
           onRefresh: _chainData.refresh,
           onListWallets: _controller.listSwitchableWallets,

@@ -136,6 +136,8 @@ class _SettingsTab extends StatelessWidget {
     required this.currentBackendId,
     required this.biometricsEnabled,
     required this.isHardwareCustody,
+    required this.lockOnOpenEnabled,
+    required this.onLockOnOpenChanged,
     required this.onLock,
     required this.onRefresh,
     required this.onListWallets,
@@ -151,6 +153,8 @@ class _SettingsTab extends StatelessWidget {
   final String currentBackendId;
   final bool biometricsEnabled;
   final bool isHardwareCustody;
+  final bool lockOnOpenEnabled;
+  final Future<void> Function(bool enabled) onLockOnOpenChanged;
   final VoidCallback onLock;
   final Future<void> Function() onRefresh;
   final Future<List<SwitchableWallet>> Function() onListWallets;
@@ -188,6 +192,14 @@ class _SettingsTab extends StatelessWidget {
           label: l10n.settingsBiometrics,
           value: biometricsEnabled ? l10n.settingsOn : l10n.settingsOff,
         ),
+        const SizedBox(height: NocturneSpacing.x3),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: lockOnOpenEnabled,
+          onChanged: onLockOnOpenChanged,
+          title: Text(l10n.settingsLockOnOpen),
+          subtitle: Text(l10n.settingsLockOnOpenBody),
+        ),
         const SizedBox(height: NocturneSpacing.x6),
         OutlinedButton.icon(
           onPressed: () => _showWalletSwitcher(context),
@@ -216,12 +228,13 @@ class _SettingsTab extends StatelessWidget {
               icon: const Icon(Icons.refresh),
               label: Text(l10n.settingsRefreshChain),
             ),
-            if (!isHardwareCustody)
-              OutlinedButton.icon(
-                onPressed: onLock,
-                icon: const Icon(Icons.lock_outline),
-                label: Text(l10n.settingsLockAgain),
-              ),
+            // A card unlocks with its PIN and a tap, so locking is offered for
+            // both kinds of wallet.
+            OutlinedButton.icon(
+              onPressed: onLock,
+              icon: const Icon(Icons.lock_outline),
+              label: Text(l10n.settingsLockAgain),
+            ),
           ],
         ),
       ],

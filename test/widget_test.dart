@@ -378,6 +378,62 @@ void main() {
     expect(find.text(_ReadyCardAdapter.address), findsOneWidget);
   });
 
+  testWidgets('lock-on-open: the next start asks for the PIN on the keypad', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final store = InMemorySecureKeyValueStore();
+
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        locale: const Locale('ru'),
+        store: store,
+        blockchainProvider: _FakeBlockchainProvider(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Создать кошелёк'));
+    await tester.pumpAndSettle();
+    final setupFields = find.byType(TextField);
+    await tester.enterText(setupFields.at(0), '1234');
+    await tester.enterText(setupFields.at(1), '1234');
+    await tester.tap(find.text('Создать кошелёк'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Я сохранил seed-фразу'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Пока без биометрии'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Настройки').last);
+    await tester.pumpAndSettle();
+    final toggle = find.text('Запрашивать PIN при открытии');
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+
+    // A fresh start of the app on the same storage.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        locale: const Locale('ru'),
+        store: store,
+        blockchainProvider: _FakeBlockchainProvider(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Кошелёк заблокирован'), findsOneWidget);
+    expect(find.text('Кошелёк'), findsNothing, reason: 'no tabs behind it');
+    await _enterOperationPin(tester, '1234');
+    await tester.tap(find.text('Разблокировать'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Кошелёк заблокирован'), findsNothing);
+    expect(find.text('Отправить'), findsOneWidget);
+  });
+
   testWidgets('requires complete backup before Rutoken provisioning', (
     WidgetTester tester,
   ) async {
