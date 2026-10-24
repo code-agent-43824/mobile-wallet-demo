@@ -48,6 +48,7 @@ class _WelcomeStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -56,12 +57,9 @@ class _WelcomeStage extends StatelessWidget {
         // rather than opening with a storage-backend question most people
         // cannot answer yet. The backend is chosen by which button is pressed,
         // so there is no separate picker on this screen.
-        const _SectionTitle('Кошелёк за минуту'),
+        _SectionTitle(l10n.welcomeTitle),
         const SizedBox(height: 12),
-        const Text(
-          'Создадим кошелёк на телефоне прямо сейчас. Подключить карту и '
-          'усилить защиту можно в любой момент — мы напомним.',
-        ),
+        Text(l10n.welcomeBody),
         const SizedBox(height: 24),
         FilledButton.icon(
           onPressed: () async {
@@ -69,7 +67,7 @@ class _WelcomeStage extends StatelessWidget {
             onCreatePressed();
           },
           icon: const Icon(Icons.add_circle_outline),
-          label: const Text('Создать кошелёк'),
+          label: Text(l10n.welcomeCreate),
         ),
         const SizedBox(height: 12),
         if (_cardBackendId case final String cardBackendId)
@@ -78,7 +76,7 @@ class _WelcomeStage extends StatelessWidget {
                 ? null
                 : () => onBackendSelected(cardBackendId),
             icon: const Icon(Icons.nfc_outlined),
-            label: const Text('У меня есть карта'),
+            label: Text(l10n.welcomeHaveCard),
           ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
@@ -87,7 +85,7 @@ class _WelcomeStage extends StatelessWidget {
             onImportPressed();
           },
           icon: const Icon(Icons.download_outlined),
-          label: const Text('Импортировать seed-фразу'),
+          label: Text(l10n.welcomeImportSeed),
         ),
         // Progressive disclosure: the card's own actions appear only after the
         // user says they have one. Variant B's first screen stays short.
@@ -95,14 +93,9 @@ class _WelcomeStage extends StatelessWidget {
           const SizedBox(height: 20),
           const Divider(),
           const SizedBox(height: 12),
-          const _SectionTitle('Физический Рутокен'),
+          _SectionTitle(l10n.cardSectionTitle),
           const SizedBox(height: 8),
-          const Text(
-            'Android-контур NFC/PIN/публичного адреса/сырой подписи проверен '
-            'на физическом устройстве. Для нового кошелька сначала сохрани '
-            '24 слова и опциональную passphrase; импорт принимает существующий '
-            'BIP-39 backup. Запись разрешена только на пустой Рутокен.',
-          ),
+          Text(l10n.cardSectionBody),
           const SizedBox(height: 12),
           Wrap(
             spacing: 12,
@@ -111,12 +104,12 @@ class _WelcomeStage extends StatelessWidget {
               FilledButton.icon(
                 onPressed: onRutokenCreate,
                 icon: const Icon(Icons.add_card),
-                label: const Text('Создать на Рутокене'),
+                label: Text(l10n.cardCreate),
               ),
               OutlinedButton.icon(
                 onPressed: onRutokenImport,
                 icon: const Icon(Icons.download),
-                label: const Text('Импортировать в Рутокен'),
+                label: Text(l10n.cardImport),
               ),
               OutlinedButton.icon(
                 onPressed: onRutokenAdopt == null
@@ -124,8 +117,7 @@ class _WelcomeStage extends StatelessWidget {
                     : () async {
                         final auth = await _promptForAuth(
                           context,
-                          reason:
-                              'Введите PIN готового Рутокена. Ключи на карте изменены не будут.',
+                          reason: l10n.cardAdoptPinReason,
                           biometricsOffered: false,
                         );
                         final pin = auth?.pin;
@@ -134,7 +126,7 @@ class _WelcomeStage extends StatelessWidget {
                         }
                       },
                 icon: const Icon(Icons.credit_card),
-                label: const Text('Подключить готовый Рутокен'),
+                label: Text(l10n.cardAdopt),
               ),
             ],
           ),
@@ -143,15 +135,14 @@ class _WelcomeStage extends StatelessWidget {
             onPressed: () async {
               final auth = await _promptForAuth(
                 context,
-                reason:
-                    'Введите PIN Рутокена и удерживайте устройство у NFC до завершения проверки.',
+                reason: l10n.cardCheckPinReason,
                 biometricsOffered: false,
               );
               final pin = auth?.pin;
               if (pin != null) await onRutokenDiagnostic!(pin);
             },
             icon: const Icon(Icons.nfc),
-            label: const Text('Проверить настоящий Рутокен'),
+            label: Text(l10n.cardCheck),
           ),
           if (rutokenDiagnosticResult case final result?) ...[
             const SizedBox(height: 12),
@@ -191,8 +182,9 @@ class _RutokenCreateStageState extends State<_RutokenCreateStage> {
 
   void _handleGenerate() {
     if (_passphraseController.text != _confirmController.text) {
+      final message = AppLocalizations.of(context).passphraseMismatch;
       setState(() {
-        _localError = 'Passphrase и подтверждение не совпадают.';
+        _localError = message;
       });
       return;
     }
@@ -201,32 +193,29 @@ class _RutokenCreateStageState extends State<_RutokenCreateStage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle('Новый кошелёк на Рутокене'),
+        _SectionTitle(l10n.cardCreateTitle),
         const SizedBox(height: 12),
-        const Text(
-          'Приложение создаст 24 слова в памяти телефона. Passphrase '
-          'необязательна, но если задать её, она становится обязательной '
-          'частью backup: без неё те же 24 слова восстановят другой адрес.',
-        ),
+        Text(l10n.cardCreateBody),
         const SizedBox(height: 20),
         TextField(
           controller: _passphraseController,
           obscureText: true,
-          decoration: const InputDecoration(
-            labelText: 'BIP-39 passphrase (необязательно)',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: l10n.passphraseOptional,
+            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _confirmController,
           obscureText: true,
-          decoration: const InputDecoration(
-            labelText: 'Подтверждение passphrase',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: l10n.passphraseConfirm,
+            border: const OutlineInputBorder(),
           ),
         ),
         if (_localError case final message?) ...[
@@ -243,9 +232,9 @@ class _RutokenCreateStageState extends State<_RutokenCreateStage> {
           children: [
             FilledButton(
               onPressed: _handleGenerate,
-              child: const Text('Создать резервную фразу'),
+              child: Text(l10n.cardCreateAction),
             ),
-            TextButton(onPressed: widget.onBack, child: const Text('Назад')),
+            TextButton(onPressed: widget.onBack, child: Text(l10n.actionBack)),
           ],
         ),
       ],
@@ -283,6 +272,7 @@ class _RutokenImportStageState extends State<_RutokenImportStage> {
   }
 
   Future<void> _handleSubmit() async {
+    final l10n = AppLocalizations.of(context);
     final words = _mnemonicController.text
         .trim()
         .split(RegExp(r'\s+'))
@@ -290,14 +280,13 @@ class _RutokenImportStageState extends State<_RutokenImportStage> {
         .length;
     if (!const <int>{12, 15, 18, 21, 24}.contains(words)) {
       setState(() {
-        _localError =
-            'BIP-39 seed-фраза должна содержать 12/15/18/21/24 слова.';
+        _localError = l10n.seedWordCountError;
       });
       return;
     }
     if (_passphraseController.text != _confirmController.text) {
       setState(() {
-        _localError = 'Passphrase и подтверждение не совпадают.';
+        _localError = l10n.passphraseMismatch;
       });
       return;
     }
@@ -306,8 +295,7 @@ class _RutokenImportStageState extends State<_RutokenImportStage> {
     });
     final auth = await _promptForAuth(
       context,
-      reason:
-          'Введите текущий PIN Рутокена и удерживайте пустую карту у NFC до завершения записи.',
+      reason: l10n.cardWritePinReason,
       biometricsOffered: false,
     );
     final pin = auth?.pin;
@@ -321,41 +309,38 @@ class _RutokenImportStageState extends State<_RutokenImportStage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle('Импорт BIP-39 backup в Рутокен'),
+        _SectionTitle(l10n.cardImportTitle),
         const SizedBox(height: 12),
-        const Text(
-          'Master key и chain code вычисляются программно и передаются '
-          'Рутокену только во время этой операции. Passphrase нигде не '
-          'сохраняется. Рутокен с существующим BIP-32 ключом будет отклонён.',
-        ),
+        Text(l10n.cardImportBody),
         const SizedBox(height: 20),
         TextField(
           controller: _mnemonicController,
           maxLines: 4,
-          decoration: const InputDecoration(
-            labelText: 'Seed-фраза',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: l10n.seedPhraseLabel,
+            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _passphraseController,
           obscureText: true,
-          decoration: const InputDecoration(
-            labelText: 'BIP-39 passphrase (необязательно)',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: l10n.passphraseOptional,
+            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _confirmController,
           obscureText: true,
-          decoration: const InputDecoration(
-            labelText: 'Подтверждение passphrase',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: l10n.passphraseConfirm,
+            border: const OutlineInputBorder(),
           ),
         ),
         if (_localError case final message?) ...[
@@ -372,9 +357,9 @@ class _RutokenImportStageState extends State<_RutokenImportStage> {
           children: [
             FilledButton(
               onPressed: _handleSubmit,
-              child: const Text('Импортировать в Рутокен'),
+              child: Text(l10n.cardImport),
             ),
-            TextButton(onPressed: widget.onBack, child: const Text('Назад')),
+            TextButton(onPressed: widget.onBack, child: Text(l10n.actionBack)),
           ],
         ),
       ],
@@ -404,8 +389,7 @@ class _RutokenBackupStageState extends State<_RutokenBackupStage> {
   Future<void> _handleProvision() async {
     final auth = await _promptForAuth(
       context,
-      reason:
-          'Введите текущий PIN Рутокена и удерживайте пустую карту у NFC до завершения записи.',
+      reason: AppLocalizations.of(context).cardWritePinReason,
       biometricsOffered: false,
     );
     final pin = auth?.pin;
@@ -414,22 +398,20 @@ class _RutokenBackupStageState extends State<_RutokenBackupStage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final hasPassphrase = widget.backup.passphrase.isNotEmpty;
     final canContinue = _mnemonicSaved && (!hasPassphrase || _passphraseSaved);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle('Сохрани backup до записи на Рутокен'),
+        _SectionTitle(l10n.cardBackupTitle),
         const SizedBox(height: 12),
-        const Text(
-          'Эти данные больше не будут показаны приложением. Сохрани их '
-          'офлайн; потеря Рутокена без полного backup означает потерю средств.',
-        ),
+        Text(l10n.cardBackupBody),
         const SizedBox(height: 20),
         SelectableText(widget.backup.mnemonic),
         if (hasPassphrase) ...[
           const SizedBox(height: 16),
-          const Text('BIP-39 passphrase:'),
+          Text(l10n.cardBackupPassphraseLabel),
           SelectableText(widget.backup.passphrase),
         ],
         const SizedBox(height: 16),
@@ -441,7 +423,7 @@ class _RutokenBackupStageState extends State<_RutokenBackupStage> {
               _mnemonicSaved = value ?? false;
             });
           },
-          title: const Text('Я сохранил все 24 слова офлайн'),
+          title: Text(l10n.cardBackupSavedWords),
           controlAffinity: ListTileControlAffinity.leading,
         ),
         if (hasPassphrase)
@@ -453,7 +435,7 @@ class _RutokenBackupStageState extends State<_RutokenBackupStage> {
                 _passphraseSaved = value ?? false;
               });
             },
-            title: const Text('Я отдельно сохранил passphrase'),
+            title: Text(l10n.cardBackupSavedPassphrase),
             controlAffinity: ListTileControlAffinity.leading,
           ),
         const SizedBox(height: 12),
@@ -463,9 +445,12 @@ class _RutokenBackupStageState extends State<_RutokenBackupStage> {
           children: [
             FilledButton(
               onPressed: canContinue ? _handleProvision : null,
-              child: const Text('Записать ключ на Рутокен'),
+              child: Text(l10n.cardBackupWrite),
             ),
-            TextButton(onPressed: widget.onBack, child: const Text('Отмена')),
+            TextButton(
+              onPressed: widget.onBack,
+              child: Text(l10n.actionCancel),
+            ),
           ],
         ),
       ],
@@ -505,19 +490,20 @@ class _PinSetupStageState extends State<_PinSetupStage> {
   }
 
   Future<void> _handleSubmit() async {
+    final l10n = AppLocalizations.of(context);
     final pin = _pinController.text.trim();
     final confirmPin = _confirmPinController.text.trim();
 
     if (pin.length < 4) {
       setState(() {
-        _localError = 'PIN должен быть не короче 4 символов.';
+        _localError = l10n.pinTooShort;
       });
       return;
     }
 
     if (pin != confirmPin) {
       setState(() {
-        _localError = 'PIN и подтверждение не совпадают.';
+        _localError = l10n.pinMismatch;
       });
       return;
     }
@@ -530,6 +516,7 @@ class _PinSetupStageState extends State<_PinSetupStage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -540,18 +527,18 @@ class _PinSetupStageState extends State<_PinSetupStage> {
         TextField(
           controller: _pinController,
           obscureText: true,
-          decoration: const InputDecoration(
-            labelText: 'PIN',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: l10n.pinLabel,
+            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _confirmPinController,
           obscureText: true,
-          decoration: const InputDecoration(
-            labelText: 'Подтверждение PIN',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: l10n.pinConfirmLabel,
+            border: const OutlineInputBorder(),
           ),
         ),
         if (_localError case final String message) ...[
@@ -570,7 +557,7 @@ class _PinSetupStageState extends State<_PinSetupStage> {
               onPressed: _handleSubmit,
               child: Text(widget.actionLabel),
             ),
-            TextButton(onPressed: widget.onBack, child: const Text('Назад')),
+            TextButton(onPressed: widget.onBack, child: Text(l10n.actionBack)),
           ],
         ),
       ],
@@ -604,6 +591,7 @@ class _ImportWalletStageState extends State<_ImportWalletStage> {
   }
 
   Future<void> _handleSubmit() async {
+    final l10n = AppLocalizations.of(context);
     final mnemonic = _mnemonicController.text.trim();
     final pin = _pinController.text.trim();
     final confirmPin = _confirmPinController.text.trim();
@@ -611,22 +599,21 @@ class _ImportWalletStageState extends State<_ImportWalletStage> {
     if (mnemonic.split(RegExp(r'\s+')).where((word) => word.isNotEmpty).length <
         12) {
       setState(() {
-        _localError =
-            'Похоже, seed-фраза неполная. Ожидаю как минимум 12 слов.';
+        _localError = l10n.seedTooShortError;
       });
       return;
     }
 
     if (pin.length < 4) {
       setState(() {
-        _localError = 'PIN должен быть не короче 4 символов.';
+        _localError = l10n.pinTooShort;
       });
       return;
     }
 
     if (pin != confirmPin) {
       setState(() {
-        _localError = 'PIN и подтверждение не совпадают.';
+        _localError = l10n.pinMismatch;
       });
       return;
     }
@@ -639,40 +626,38 @@ class _ImportWalletStageState extends State<_ImportWalletStage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle('Импорт существующего кошелька'),
+        _SectionTitle(l10n.importWalletTitle),
         const SizedBox(height: 12),
-        const Text(
-          'Вставьте свою seed-фразу, затем задайте PIN — им будет зашифрован '
-          'кошелёк на этом телефоне.',
-        ),
+        Text(l10n.importWalletBody),
         const SizedBox(height: 20),
         TextField(
           controller: _mnemonicController,
           maxLines: 3,
-          decoration: const InputDecoration(
-            labelText: 'Seed-фраза',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: l10n.seedPhraseLabel,
+            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _pinController,
           obscureText: true,
-          decoration: const InputDecoration(
-            labelText: 'PIN',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: l10n.pinLabel,
+            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _confirmPinController,
           obscureText: true,
-          decoration: const InputDecoration(
-            labelText: 'Подтверждение PIN',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: l10n.pinConfirmLabel,
+            border: const OutlineInputBorder(),
           ),
         ),
         if (_localError case final String message) ...[
@@ -689,9 +674,9 @@ class _ImportWalletStageState extends State<_ImportWalletStage> {
           children: [
             FilledButton(
               onPressed: _handleSubmit,
-              child: const Text('Импортировать кошелёк'),
+              child: Text(l10n.importWalletAction),
             ),
-            TextButton(onPressed: widget.onBack, child: const Text('Назад')),
+            TextButton(onPressed: widget.onBack, child: Text(l10n.actionBack)),
           ],
         ),
       ],
@@ -708,15 +693,14 @@ class _SeedPhraseStage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle('Сохраните seed-фразу'),
+        _SectionTitle(l10n.seedStageTitle),
         const SizedBox(height: 12),
-        const Text(
-          'Это единственный момент, когда приложение показывает seed в открытом виде. Сохрани её офлайн и не отправляй в мессенджеры или облака.',
-        ),
+        Text(l10n.seedStageBody),
         const SizedBox(height: 20),
         Container(
           width: double.infinity,
@@ -731,10 +715,7 @@ class _SeedPhraseStage extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        FilledButton(
-          onPressed: onContinue,
-          child: const Text('Я сохранил seed-фразу'),
-        ),
+        FilledButton(onPressed: onContinue, child: Text(l10n.seedStageAction)),
       ],
     );
   }
@@ -755,16 +736,17 @@ class _BiometricPromptStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final description = isWindowsSimulation
-        ? 'На Windows здесь используется аккуратная имитация biometric unlock для demo-сценария. На мобильных платформах будет использоваться реальная системная биометрия.'
+        ? l10n.biometricsBodySimulated
         : isAvailable
-        ? 'По продуктовой модели биометрия включается только после задания PIN и остаётся удобным способом разблокировки. Здесь уже используется реальная системная биометрия, если устройство её поддерживает.'
-        : 'На этом устройстве биометрия недоступна, поэтому продолжаем без неё. PIN остаётся обязательным способом разблокировки.';
+        ? l10n.biometricsBodyAvailable
+        : l10n.biometricsBodyUnavailable;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle('Биометрия после PIN'),
+        _SectionTitle(l10n.biometricsTitle),
         const SizedBox(height: 12),
         Text(description),
         const SizedBox(height: 20),
@@ -777,14 +759,11 @@ class _BiometricPromptStage extends StatelessWidget {
               icon: const Icon(Icons.fingerprint),
               label: Text(
                 isWindowsSimulation
-                    ? 'Включить биометрию (имитация)'
-                    : 'Включить биометрию',
+                    ? l10n.biometricsEnableSimulated
+                    : l10n.biometricsEnable,
               ),
             ),
-            OutlinedButton(
-              onPressed: onSkip,
-              child: const Text('Пока без биометрии'),
-            ),
+            OutlinedButton(onPressed: onSkip, child: Text(l10n.biometricsSkip)),
           ],
         ),
       ],
@@ -824,6 +803,7 @@ class _LockedStageState extends State<_LockedStage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final summary = widget.summary;
 
     return Column(
@@ -831,29 +811,27 @@ class _LockedStageState extends State<_LockedStage> {
       children: [
         _SectionTitle(
           widget.isExternalBackend
-              ? 'Внешнее устройство заблокировано'
-              : 'Кошелёк заблокирован',
+              ? l10n.lockedTitleCard
+              : l10n.lockedTitlePhone,
         ),
         const SizedBox(height: 12),
         Text(
-          widget.isExternalBackend
-              ? 'Demo device уже привязан. Дальше операции идут через PIN устройства и отдельный external-signer runtime path.'
-              : 'Инициализация завершена. Дальше в кошелёк входим через PIN. Это и есть нужный locked-state shell для следующего продуктового слоя.',
+          widget.isExternalBackend ? l10n.lockedBodyCard : l10n.lockedBodyPhone,
         ),
         if (summary != null) ...[
           const SizedBox(height: 20),
-          _SummaryTile(label: 'Адрес', value: summary.address),
+          _SummaryTile(label: l10n.lockedAddress, value: summary.address),
           const SizedBox(height: 10),
-          _SummaryTile(label: 'Backend', value: widget.backendLabel),
+          _SummaryTile(label: l10n.lockedStorage, value: widget.backendLabel),
         ],
         const SizedBox(height: 20),
         Wrap(
           spacing: 10,
           runSpacing: 10,
           children: [
-            const _StatusChip(label: 'Locked'),
+            _StatusChip(label: l10n.lockedChipLocked),
             if (widget.biometricsEnabled)
-              const _StatusChip(label: 'Biometrics enabled'),
+              _StatusChip(label: l10n.lockedChipBiometrics),
           ],
         ),
         const SizedBox(height: 20),
@@ -862,8 +840,8 @@ class _LockedStageState extends State<_LockedStage> {
           obscureText: true,
           decoration: InputDecoration(
             labelText: widget.isExternalBackend
-                ? 'PIN устройства'
-                : 'PIN для разблокировки',
+                ? l10n.lockedPinCard
+                : l10n.lockedPinPhone,
             border: const OutlineInputBorder(),
           ),
         ),
@@ -876,15 +854,15 @@ class _LockedStageState extends State<_LockedStage> {
               onPressed: () => widget.onUnlock(_pinController.text.trim()),
               child: Text(
                 widget.isExternalBackend
-                    ? 'Подключить устройство'
-                    : 'Разблокировать',
+                    ? l10n.lockedUnlockCard
+                    : l10n.lockedUnlockPhone,
               ),
             ),
             if (widget.onUnlockWithBiometrics != null)
               OutlinedButton.icon(
                 onPressed: widget.onUnlockWithBiometrics,
                 icon: const Icon(Icons.fingerprint),
-                label: const Text('Разблокировать биометрией'),
+                label: Text(l10n.unlockWithBiometrics),
               ),
           ],
         ),
@@ -964,6 +942,7 @@ class _OperationAuthSheetState extends State<_OperationAuthSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final style = PlatformStyle.of(context);
+    final l10n = AppLocalizations.of(context);
 
     return Padding(
       padding: EdgeInsets.only(
@@ -977,7 +956,7 @@ class _OperationAuthSheetState extends State<_OperationAuthSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Подтвердите операцию',
+            l10n.authConfirmTitle,
             style: theme.textTheme.titleLarge,
             textAlign: TextAlign.center,
           ),
@@ -996,20 +975,20 @@ class _OperationAuthSheetState extends State<_OperationAuthSheet> {
           const SizedBox(height: NocturneSpacing.x6),
           OutlinedButton(
             onPressed: _pin.isEmpty ? null : _confirmPin,
-            child: const Text('Подтвердить'),
+            child: Text(l10n.authConfirmAction),
           ),
           if (widget.biometricsOffered) ...[
             const SizedBox(height: NocturneSpacing.x3),
             TextButton.icon(
               onPressed: _confirmBiometrics,
               icon: const Icon(Icons.fingerprint, size: 20),
-              label: const Text('Разблокировать биометрией'),
+              label: Text(l10n.unlockWithBiometrics),
             ),
           ],
           const SizedBox(height: NocturneSpacing.x3),
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Отмена'),
+            child: Text(l10n.actionCancel),
           ),
         ],
       ),

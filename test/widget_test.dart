@@ -237,6 +237,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
       ),
@@ -245,7 +249,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Wallet Demo'), findsOneWidget);
-    expect(find.text('v1.53.0+64'), findsOneWidget);
+    expect(find.text('v1.55.0+66'), findsOneWidget);
     // Onboarding variant B: no storage picker on the first screen — the
     // backend follows from which action is taken.
     expect(find.text('Кошелёк за минуту'), findsOneWidget);
@@ -266,6 +270,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
         rutokenNativeAdapter: _UnusedRutokenAdapter(),
@@ -277,10 +285,10 @@ void main() {
     await tester.tap(find.text('У меня есть карта'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Создать на Рутокене'), findsOneWidget);
-    expect(find.text('Импортировать в Рутокен'), findsOneWidget);
-    expect(find.text('Подключить готовый Рутокен'), findsOneWidget);
-    await tester.tap(find.text('Создать на Рутокене'));
+    expect(find.text('Создать на карте'), findsOneWidget);
+    expect(find.text('Импортировать на карту'), findsOneWidget);
+    expect(find.text('Подключить готовую карту'), findsOneWidget);
+    await tester.tap(find.text('Создать на карте'));
     await tester.pumpAndSettle();
 
     final fields = find.byType(TextField);
@@ -289,11 +297,11 @@ void main() {
     await tester.tap(find.text('Создать резервную фразу'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Сохрани backup до записи на Рутокен'), findsOneWidget);
+    expect(find.text('Сохраните резервную фразу до записи'), findsOneWidget);
     expect(find.text('Я сохранил все 24 слова офлайн'), findsOneWidget);
     expect(find.text('Я отдельно сохранил passphrase'), findsOneWidget);
     FilledButton provisionButton() => tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Записать ключ на Рутокен'),
+      find.widgetWithText(FilledButton, 'Записать ключ на карту'),
     );
     expect(provisionButton().onPressed, isNull);
 
@@ -311,6 +319,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
       ),
@@ -340,6 +352,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
       ),
@@ -391,6 +407,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _NetworkBalanceBlockchainProvider(),
       ),
@@ -415,7 +435,7 @@ void main() {
     expect(find.text('ETH'), findsWidgets);
     await tester.tap(find.text('Ethereum Mainnet'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Ethereum Sepolia').last);
+    await tester.tap(find.text('Тестовая сеть Sepolia').last);
     await tester.pumpAndSettle();
 
     expect(find.text('SepoliaETH'), findsWidgets);
@@ -448,6 +468,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: provider,
       ),
@@ -472,7 +496,7 @@ void main() {
     // Completer.
     await tester.tap(find.text('Ethereum Mainnet'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Ethereum Sepolia').last);
+    await tester.tap(find.text('Тестовая сеть Sepolia').last);
     await tester.pumpAndSettle();
     expect(find.text('SepoliaETH'), findsWidgets);
 
@@ -503,6 +527,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
         nonceProvider: _FakeNonceProvider(),
@@ -563,6 +591,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
         nonceProvider: _FakeNonceProvider(),
@@ -623,6 +655,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
         nonceProvider: _FakeNonceProvider(),
@@ -696,6 +732,10 @@ void main() {
 
     await tester.pumpWidget(
       MobileWalletDemoApp(
+        // Copy assertions are language-specific: pin the locale so a change
+        // of system language (or of the default) cannot silently break them.
+        locale: const Locale('ru'),
+
         store: InMemorySecureKeyValueStore(),
         blockchainProvider: _FakeBlockchainProvider(),
         nonceProvider: _FakeNonceProvider(),

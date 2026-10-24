@@ -8,6 +8,8 @@ import 'package:mobile_wallet_demo/src/auth/wallet_operation_auth.dart';
 import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
 import 'package:mobile_wallet_demo/src/key_storage/custody_backend.dart';
+import 'package:mobile_wallet_demo/src/key_storage/key_storage_backend.dart';
+import 'package:mobile_wallet_demo/src/key_storage/rutoken_biometric_pin_store.dart';
 import 'package:mobile_wallet_demo/src/key_storage/rutoken_method_channel_adapter.dart';
 import 'package:mobile_wallet_demo/src/key_storage/rutoken_provisioning.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
@@ -174,26 +176,297 @@ void main() {
       expect(await service.loadPublicAccount(), isNull);
       expect(account.address, adapter.account?.address);
       final publicProfile = await store.read('rutoken.public_account.v1');
-      expect(publicProfile, contains('"schema":2'));
+      expect(publicProfile, contains('"schema":3'));
       expect(publicProfile, isNot(contains('1234')));
     },
   );
 
-  test('loads the existing schema-1 public profile', () async {
+  test(
+    'migrates a legacy single-profile record and keeps it selected',
+    () async {
+      for (final schema in <int>[1, 2]) {
+        final store = InMemorySecureKeyValueStore();
+        await store.write(
+          'rutoken.public_account.v1',
+          jsonEncode(_legacyRecord(schema: schema)),
+        );
+        final service = RutokenProvisioningService(
+          adapter: _ProvisioningAdapter(),
+          store: store,
+        );
+
+        expect(await service.loadAccountDescriptor(), isNotNull);
+        expect(await service.loadPublicAccount(), isNotNull);
+        final profiles = await service.loadProfiles();
+        expect(profiles, hasLength(1), reason: 'schema $schema');
+        expect(profiles.single.id, _legacyAddress.toLowerCase());
+        expect(profiles.single.serial, isNull);
+        expect((await service.loadSelectedProfile())?.id, profiles.single.id);
+      }
+    },
+  );
+
+  test(
+    'a legacy half-written record migrates unusable, not selected',
+    () async {
+      final store = InMemorySecureKeyValueStore();
+      await store.write(
+        'rutoken.public_account.v1',
+        jsonEncode(_legacyRecord(schema: 2, state: 'pending')),
+      );
+      final service = RutokenProvisioningService(
+        adapter: _ProvisioningAdapter(),
+        store: store,
+      );
+
+      expect(await service.loadProfiles(), isEmpty);
+      expect(await service.loadSelectedProfile(), isNull);
+      expect(await service.loadAccountDescriptor(), isNull);
+    },
+  );
+
+  test('records the token serial reported when the session opened', () async {
     final store = InMemorySecureKeyValueStore();
     final service = RutokenProvisioningService(
-      adapter: _ProvisioningAdapter(),
+      adapter: _ProvisioningAdapter(serial: 'RT-0001', tokenLabel: 'Blue'),
       store: store,
     );
-    await service.provision(mnemonic: _mnemonic, passphrase: '', pin: '1234');
-    final json =
-        jsonDecode((await store.read('rutoken.public_account.v1'))!)
-            as Map<String, dynamic>;
-    json['schema'] = 1;
-    await store.write('rutoken.public_account.v1', jsonEncode(json));
 
-    expect(await service.loadAccountDescriptor(), isNotNull);
-    expect(await service.loadPublicAccount(), isNotNull);
+    await service.provision(mnemonic: _mnemonic, passphrase: '', pin: '1234');
+
+    final profile = await service.loadSelectedProfile();
+    expect(profile?.serial, 'RT-0001');
+    expect(profile?.label, 'Blue');
+  });
+
+  test('adopting a registered card adds a serial it did not have', () async {
+    final store = InMemorySecureKeyValueStore();
+    await store.write(
+      'rutoken.public_account.v1',
+      jsonEncode(_legacyRecord(schema: 2)),
+    );
+    final adapter = _ProvisioningAdapter(serial: 'RT-0002')
+      ..account = const WalletAccountDescriptor(
+        backendId: 'rutoken_nfc',
+        address: _legacyAddress,
+        derivationPath: "m/44'/60'/0'/0/0",
+      );
+    final service = RutokenProvisioningService(adapter: adapter, store: store);
+
+    await service.adoptExisting(pin: '1234');
+
+    final profile = await service.loadSelectedProfile();
+    expect(profile?.serial, 'RT-0002');
+    expect(
+      profile?.publicAccount,
+      isNotNull,
+      reason: 'recording the serial must not drop the retained xpub',
+    );
+  });
+
+  test('adopts a second card instead of refusing it', () async {
+    final store = InMemorySecureKeyValueStore();
+    final adapter = _ProvisioningAdapter(serial: 'RT-A');
+    final service = RutokenProvisioningService(adapter: adapter, store: store);
+    await service.provision(mnemonic: _mnemonic, passphrase: '', pin: '1234');
+    final first = (await service.loadSelectedProfile())!;
+
+    // A second physical card carrying a different key.
+    final second = _ProvisioningAdapter(serial: 'RT-B')
+      ..account = const WalletAccountDescriptor(
+        backendId: 'rutoken_nfc',
+        address: _legacyAddress,
+        derivationPath: "m/44'/60'/0'/0/0",
+      );
+    final withSecondCard = RutokenProvisioningService(
+      adapter: second,
+      store: store,
+    );
+    await withSecondCard.adoptExisting(pin: '1234');
+
+    final profiles = await withSecondCard.loadProfiles();
+    expect(profiles.map((profile) => profile.id), <String>[
+      first.id,
+      _legacyAddress.toLowerCase(),
+    ]);
+    expect(
+      (await withSecondCard.loadSelectedProfile())?.id,
+      _legacyAddress.toLowerCase(),
+      reason: 'connecting a card is deliberate, so it becomes the active one',
+    );
+    expect(
+      profiles.first.publicAccount,
+      isNotNull,
+      reason: 'registering another card must not disturb the first',
+    );
+    expect(profiles.last.serial, 'RT-B');
+  });
+
+  test('the selected profile still binds each operation to one card', () async {
+    final store = InMemorySecureKeyValueStore();
+    final adapter = _ProvisioningAdapter();
+    final service = RutokenProvisioningService(adapter: adapter, store: store);
+    await service.provision(mnemonic: _mnemonic, passphrase: '', pin: '1234');
+    final provisioned = (await service.loadSelectedProfile())!;
+
+    final other = _ProvisioningAdapter()
+      ..account = const WalletAccountDescriptor(
+        backendId: 'rutoken_nfc',
+        address: _legacyAddress,
+        derivationPath: "m/44'/60'/0'/0/0",
+      );
+    await RutokenProvisioningService(
+      adapter: other,
+      store: store,
+    ).adoptExisting(pin: '1234');
+    // Back to the first card; the second one is registered but not selected.
+    await service.selectProfile(provisioned.id);
+
+    final backend = RutokenCustodyBackend(
+      adapter: other,
+      accountLoader: service.loadAccountDescriptor,
+      publicAccountLoader: service.loadPublicAccount,
+    );
+
+    await expectLater(
+      backend.openSigningSession(pin: '1234'),
+      throwsA(isA<VaultFailure>()),
+      reason: 'a registered but unselected card must not sign for the other',
+    );
+  });
+
+  test('switches between two registered cards and forgets one', () async {
+    final store = InMemorySecureKeyValueStore();
+    final cardA = _ProvisioningAdapter(serial: 'RT-A');
+    final controller = WalletFlowController(
+      store: store,
+      biometricAuthGateway: const SimulatedBiometricAuthGateway(),
+      rutokenNativeAdapter: cardA,
+    );
+    await controller.loadInitialState();
+    await controller.provisionImportedRutoken(
+      mnemonic: _mnemonic,
+      passphrase: '',
+      pin: '1234',
+    );
+    final addressA = controller.summary!.address;
+
+    // A second card, registered from Настройки while the first is active.
+    cardA.account = const WalletAccountDescriptor(
+      backendId: 'rutoken_nfc',
+      address: _legacyAddress,
+      derivationPath: "m/44'/60'/0'/0/0",
+    );
+    await controller.adoptExistingRutoken(pin: '1234');
+
+    expect(controller.errorMessage, isNull);
+    expect(controller.summary?.address, _legacyAddress);
+
+    final wallets = await controller.listSwitchableWallets();
+    final cards = wallets.where((wallet) => wallet.isCard).toList();
+    expect(cards, hasLength(2));
+    expect(
+      cards.map((card) => card.address),
+      containsAll(<String>[addressA, _legacyAddress]),
+    );
+    expect(
+      await controller.selectedCardProfileId(),
+      _legacyAddress.toLowerCase(),
+    );
+
+    // Back to the first card: the dashboard must follow, not keep the other
+    // card's address on screen.
+    final first = cards.firstWhere((card) => card.address == addressA);
+    await controller.switchActiveWallet(first);
+
+    expect(controller.summary?.address, addressA);
+    expect(await controller.selectedCardProfileId(), first.cardProfileId);
+
+    // Forgetting the active card falls back to the other registered one.
+    await controller.forgetCard(first.cardProfileId!);
+
+    expect(controller.errorMessage, isNull);
+    expect(controller.summary?.address, _legacyAddress);
+    expect(
+      (await controller.listSwitchableWallets())
+          .where((wallet) => wallet.isCard)
+          .length,
+      1,
+    );
+    controller.dispose();
+  });
+
+  test('the new-card row opens setup even when a card is active', () async {
+    final adapter = _ProvisioningAdapter();
+    final controller = WalletFlowController(
+      store: InMemorySecureKeyValueStore(),
+      biometricAuthGateway: const SimulatedBiometricAuthGateway(),
+      rutokenNativeAdapter: adapter,
+    );
+    await controller.loadInitialState();
+    await controller.provisionImportedRutoken(
+      mnemonic: _mnemonic,
+      passphrase: '',
+      pin: '1234',
+    );
+    expect(controller.stage, WalletFlowStage.unlocked);
+
+    final newCardRow = (await controller.listSwitchableWallets()).firstWhere(
+      (wallet) => wallet.isCardStorage && wallet.isEmptySlot,
+    );
+    await controller.switchActiveWallet(newCardRow);
+
+    expect(
+      controller.stage,
+      WalletFlowStage.welcome,
+      reason: 'the row exists to set up another card, not to re-pick this one',
+    );
+    controller.dispose();
+  });
+
+  test('forgetting a card takes its biometric PIN with it', () async {
+    final store = InMemorySecureKeyValueStore();
+    final adapter = _ProvisioningAdapter();
+    final controller = WalletFlowController(
+      store: store,
+      biometricAuthGateway: const SimulatedBiometricAuthGateway(),
+      rutokenNativeAdapter: adapter,
+    );
+    await controller.loadInitialState();
+    await controller.provisionImportedRutoken(
+      mnemonic: _mnemonic,
+      passphrase: '',
+      pin: '1234',
+    );
+    await controller.completeRutokenBiometricOffer(true);
+    expect(controller.biometricsEnabled, isTrue);
+    final card = (await controller.listSwitchableWallets()).firstWhere(
+      (wallet) => wallet.isCard,
+    );
+
+    await controller.forgetCard(card.cardProfileId!);
+    controller.dispose();
+
+    // Re-adopting the same card must find no leftover PIN and no remembered
+    // answer to the biometric offer.
+    final pinStore = RutokenBiometricPinStore(
+      store: store,
+      biometricAuth: const SimulatedBiometricAuthGateway(),
+    );
+    expect(await pinStore.isEnabled(card.address!), isFalse);
+    expect(await pinStore.shouldOffer(card.address!), isTrue);
+  });
+
+  test('selecting an unregistered card is refused', () async {
+    final service = RutokenProvisioningService(
+      adapter: _ProvisioningAdapter(),
+      store: InMemorySecureKeyValueStore(),
+    );
+
+    await expectLater(
+      service.selectProfile('0xdead'),
+      throwsA(isA<RutokenNativeException>()),
+    );
   });
 
   test(
@@ -421,6 +694,28 @@ void main() {
   });
 }
 
+const _legacyAddress = '0x1234567890AbcdEF1234567890aBcdef12345678';
+
+/// A record exactly as v1.47–v1.53 wrote it: one profile inline, no id, no
+/// serial. Hand-built rather than round-tripped through the current writer,
+/// which no longer produces this shape.
+Map<String, dynamic> _legacyRecord({
+  required int schema,
+  String state = 'active',
+}) => <String, dynamic>{
+  'schema': schema,
+  'state': state,
+  'backendId': 'rutoken_nfc',
+  'address': _legacyAddress,
+  'derivationPath': "m/44'/60'/0'/0/0",
+  'accountPath': "m/44'/60'/0'",
+  'accountDepth': 3,
+  'compressedPublicKey': base64Encode(Uint8List(33)),
+  'chainCode': base64Encode(Uint8List(32)),
+  'sourceFingerprint': 111,
+  'parentFingerprint': 222,
+};
+
 class _StaticNonceProvider implements NonceProvider {
   @override
   Future<LoadedNonce> loadNextNonce({
@@ -472,10 +767,17 @@ class _ReceiptTransport implements JsonRpcTransport {
 }
 
 class _ProvisioningAdapter implements RutokenNativeAdapter {
-  _ProvisioningAdapter({this.failImport = false, this.failClose = false});
+  _ProvisioningAdapter({
+    this.failImport = false,
+    this.failClose = false,
+    this.serial = 'SERIAL-A',
+    this.tokenLabel = 'Card A',
+  });
 
   final bool failImport;
   final bool failClose;
+  final String? serial;
+  final String? tokenLabel;
   int openCount = 0;
   int closeCount = 0;
   Uint8List? masterCopy;
@@ -495,6 +797,8 @@ class _ProvisioningAdapter implements RutokenNativeAdapter {
     return RutokenNativeSession(
       id: 'provision-$openCount',
       openedAtUtc: DateTime.utc(2026, 7, 23),
+      serial: serial,
+      label: tokenLabel,
     );
   }
 

@@ -29,7 +29,7 @@ Current factual status of the project:
 milestone is an optional Rutoken custody backend for Android/iOS whose signing keys stay non-exporting after
 recoverable provisioning and which supports the same own-send, WalletConnect, and EIP-4527 AirGap flows.
 
-- **NOW — v1.53.0+64:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
+- **NOW — v1.55.0+66:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
   MetaMask-compatible EIP-4527 AirGap, per-operation authentication, hardened QR scanning, and the
   Rutoken custody/signature foundation, physically validated Android read/sign/provisioning, and the registered
   production backend are built. A compatible pre-provisioned card can be adopted read-only without rewriting its
@@ -41,12 +41,17 @@ recoverable provisioning and which supports the same own-send, WalletConnect, an
   Rutoken-backed WalletConnect `personal_sign`/EIP-712/transaction, EIP-4527 AirGap export + live-camera scan +
   signature return, different-card rejection (a second card is now available), and invalid-PIN handling all pass,
   with both Sepolia broadcasts verified on-chain (`0xe22d7a84…47e5`, `0x9ff1e06b…5a6e`). Two items remain:
-  (1) an **open defect** — removing the card mid-operation reports the generic native error instead of the
-  specified NFC-loss message (teardown itself is correct); (2) the physical crash/log-output review, which needs
-  adb capture. The exact iOS vendor framework has been received and retained privately; Swift integration and
-  physical iOS validation remain, with redistribution/build-delivery terms still unresolved.
-- **LATER:** optional lock-on-open privacy, broader device/platform integration tests, and only then additional
-  chains/accounts if product scope changes. They are not Phase 10 prerequisites.
+  (1) the NFC-loss classification defect — removing the card mid-operation reported the generic native error
+  instead of the specified message. **A fix shipped in v1.55.0+66 and needs the negative-path rerun**: the
+  native layer no longer pattern-matches the vendor diagnostic but asks the slot-event listener whether the
+  card is still present, which is the fact the user needs whatever the library called it; (2) the physical
+  crash/log-output review, which needs adb capture. The exact iOS vendor framework has been received and
+  retained privately; Swift integration and physical iOS validation remain, with redistribution/build-delivery
+  terms still unresolved.
+- **LATER:** optional lock-on-open privacy, broader device/platform integration tests, localizing the
+  domain-layer error strings (`qr/`, `key_storage/`, `walletconnect/`, `airgap/`) by giving them error codes
+  rather than translating literals, and only then additional chains/accounts if product scope changes. They are
+  not Phase 10 prerequisites.
 
 History is preserved in the phase sections and `docs/worklog.md`; the operational source of truth is the
 NOW / NEXT / LATER summary above plus the Phase 10 exit criteria below.
@@ -633,7 +638,22 @@ icons; no pure black or white; elevation is a hairline edge plus ambient darknes
   wizard with progress and the design's copy, dropping the protocol vocabulary. Known deviation: form → PIN →
   tap → result are still stacked sheets rather than sequential — functionally fine (the tap overlay is above
   every route) but not yet the design's shape.
-- **13.6** — Настройки + the «Подробности» developer sheet + the RU/EN language switch.
+- **13.6 — DONE (CI green)** — full RU/EN localization and the language switch. Every user-visible string in
+  `wallet_flow_screen*.dart` now comes from `lib/l10n/app_ru.arb` / `app_en.arb` (~270 keys). The two
+  `ChangeNotifier`s hold no `BuildContext`, so the bundle is **injected** like every other collaborator —
+  optional constructor argument, defaulting to Russian, re-pointed by the screen in `didChangeDependencies`
+  (the owner chose this over a parallel message table). The Russian pin is gone: the app honours a stored
+  choice, then the system locale, then Russian, and Настройки carries the picker (Как в системе / Русский /
+  English), persisted in the app's key/value store. Translating each screen kept surfacing developer register
+  in the product — "CKM_ECDSA вернул сырую подпись", "Rutoken backend недоступен в этой сборке", "Симулируем
+  транзакцию через RPC…", "Анимированный BC-UR: 3/7", `Backend` / `Locked` / `Biometrics enabled` on the lock
+  screen — all rewritten for the person holding the phone. The vendor name left the UI entirely: the backend
+  catalogue's label is now an internal identifier and the UI derives what it shows from the backend *kind*.
+  `MobileWalletDemoApp` became stateful to hold the choice, which also stopped it re-creating the store, the
+  RPC transport and the blockchain provider on every rebuild.
+  **Not done:** the domain/infrastructure error strings under `qr/`, `key_storage/`, `walletconnect/` and
+  `airgap/` are still inline Russian. They reach the user through the controller's catch-all, and doing them
+  properly means giving them error codes rather than swapping literals — see NOW / NEXT / LATER.
 - **13.7 — DONE (CI green)** — onboarding variant B: «Кошелёк за минуту» replaces the storage-backend question,
   three actions choose the backend implicitly, and the card's actions are disclosed only after the user says
   they have one. Backend ids resolve from the catalogue by kind. Copy stranded by the simulation's removal
@@ -656,8 +676,8 @@ icons; no pure black or white; elevation is a hairline edge plus ambient darknes
 Goal: let the wallet hold **several registered cards**, each with its own address, and switch between them the
 way it switches storage backends today. Requested by the owner 2026-08-18 while dogfooding the redesign.
 
-Status: 📋 Planned. Not attempted yet — see the architectural note below for why this is a phase and not a
-patch.
+Status: 🟡 In progress — 14.1–14.4 are built and CI green; 14.5 (physical two-card dogfood) is the remaining
+exit criterion and needs the owner's hardware.
 
 ### Why it is not a quick change
 Today "which wallet" and "which backend" are the same question: the switcher selects a **backend id**, and the
@@ -675,17 +695,42 @@ model) in the open-session result — but Dart never reads it. So identifying ca
 work, only plumbing.
 
 ### Chunks
-- **14.1** — model: a keyed set of card profiles (address, derivation path, serial, label) plus a "selected
-  card" pointer, replacing the single-profile store. Migration for the one profile existing installs already
-  hold.
-- **14.2** — surface the serial: read `tokenSerial` through the adapter into the public profile, so a card can
-  be told apart from another by more than its address.
-- **14.3** — provisioning: allow adopting/creating an *additional* card instead of rejecting it, keeping the
-  per-card address binding intact (the check becomes "matches the selected profile", never "matches any").
-- **14.4** — switcher: list wallets rather than backends — the phone vault plus each registered card, showing
-  address and serial — and make `switchActiveWallet` select a profile.
+- **14.1 — DONE (CI green)** — model: the profile store holds a list of card profiles plus a `selectedId`
+  instead of one inline record, and the loaders the custody backend calls resolve the selected one. Schemas 1
+  and 2 migrate on read, so an install that registered a card before v1.55 keeps it, still selected, without
+  touching the token. A profile is keyed by its lowercased address — two cards holding the same key are the
+  same wallet, and unlike the serial an address exists for profiles registered before serials were read. Two
+  properties preserved deliberately: `pending` still means "half-written, not usable" (excluded from listings,
+  never selectable), and re-provisioning the selected card clears the selection until the write completes. An
+  unknown schema now throws rather than reading as absent, so a downgrade cannot truncate a newer format.
+- **14.2 — DONE (CI green)** — serial: `RutokenRuntime` always returned `tokenSerial`/`tokenLabel`/`tokenModel`
+  from `openSession` and Dart discarded them; they now reach `RutokenNativeSession` and are recorded on the
+  profile. Missing or blank values read as null rather than failing the session — token identity is
+  descriptive, not load-bearing. Adopting an already-registered card records its serial without disturbing the
+  retained account xpub.
+- **14.3 — DONE (CI green)** — provisioning: adopting a card the phone does not know adds a profile instead of
+  throwing «На телефоне уже зарегистрирован другой Рутокен»; a card it does know keeps everything it has. The
+  adopted card becomes the selected one. The binding is unchanged and now has its own test: each operation
+  still binds to exactly one card, because `_verifyRegisteredAccount` compares against the *selected* profile.
+  That is deliberate — auto-switching to whichever card was tapped would let a transfer previewed against one
+  wallet's balance and nonce complete as another's.
+- **14.4 — DONE (CI green)** — switcher: Настройки lists the phone vault plus each registered card with its
+  address and serial, ticking the selected profile rather than the backend. Adds «Забыть карту» (drops only
+  the phone's record; the card keeps its key) with a fallback to another card → the phone vault → onboarding,
+  and «Подключить ещё карту», which runs the same PIN prompt and NFC wait as the first one.
+  **Found and fixed here, outside the chunk's scope but not worth leaving:**
+  `PhoneSecureVault.createWallet`/`importWallet` silently replaced an existing wallet's seed. Onboarding never
+  reached them in that state, but the switcher's empty-slot row leads to the welcome screen, which put a
+  fresh-seed button a few taps from a wallet in use. Both now refuse when a wallet exists.
 - **14.5** — physical dogfood on two cards: switch, sign with each, and confirm a card still cannot sign for
   the other's address.
+
+### Not covered by 14.1–14.4
+- Creating or importing a key onto a *second* card is only reachable through the switcher's empty-slot row,
+  which opens the welcome screen. «Подключить ещё карту» deliberately goes straight to adoption instead, since
+  routing to that screen puts phone-vault creation one tap away. A dedicated "add card" screen offering all
+  three actions is the tidy answer and is not built yet.
+- Card profiles have no user-assigned names (owner's call: serial + address is enough).
 
 ### Constraint
 The registered-address binding is a security property with physical evidence behind it (Phase 10, v1.51). Any
