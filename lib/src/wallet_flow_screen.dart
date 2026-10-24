@@ -22,11 +22,13 @@ import 'design/app_shell.dart';
 import 'design/nocturne.dart';
 import 'design/platform_style.dart';
 import 'error_text.dart';
+import 'errors/app_error.dart';
 import 'key_storage/backend_registry.dart';
 import 'key_storage/custody_backend.dart';
 import 'key_storage/key_storage_backend.dart';
 import 'key_storage/phone_secure_vault.dart';
 import 'key_storage/rutoken_biometric_pin_store.dart';
+import 'key_storage/rutoken_method_channel_adapter.dart';
 import 'key_storage/rutoken_provisioning.dart';
 import 'key_storage/secure_key_value_store.dart';
 import 'qr/qr_scanner.dart';
@@ -49,6 +51,7 @@ part 'wallet_flow_screen_onboarding.dart';
 part 'wallet_flow_screen_unlocked.dart';
 part 'wallet_flow_screen_tabs.dart';
 part 'wallet_flow_screen_connections.dart';
+part 'wallet_flow_screen_confirm.dart';
 
 enum WalletFlowStage {
   loading,
@@ -171,7 +174,9 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
 
   void _syncBusyOverlay() {
     final message = _controller.busyMessage;
-    if (message == null) {
+    // A confirmation sheet shows the operation's progress in its own step;
+    // the overlay on top of it would hide that step and its cancel action.
+    if (message == null || _controller.isInlineConfirmationActive) {
       _busyEntry?.remove();
       _busyEntry = null;
       return;
@@ -195,7 +200,10 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
   }
 
   void _scheduleRutokenBiometricOffer() {
+    // Waits for any confirmation sheet to close, so the offer follows the
+    // operation's result instead of covering it.
     if (_rutokenBiometricDialogOpen ||
+        _controller.isInlineConfirmationActive ||
         !_controller.hasPendingRutokenBiometricOffer) {
       return;
     }
@@ -355,31 +363,12 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
     switch (tab) {
       case AppTab.wallet:
         return _WalletTab(
+          controller: _controller,
           chainData: _chainData,
           address: _controller.summary?.address ?? '—',
           transactionService: widget.transactionService,
           trackingTransport: widget.trackingTransport,
           canUnlockWithBiometrics: _controller.canUnlockWithBiometrics,
-          onAuthorizeAndSubmit:
-              ({
-                required snapshot,
-                required fromAddress,
-                required toAddress,
-                required amountText,
-                required asset,
-                required tracker,
-                pin,
-                useBiometrics = false,
-              }) => _controller.authorizeAndSubmitTransfer(
-                snapshot: snapshot,
-                fromAddress: fromAddress,
-                toAddress: toAddress,
-                amountText: amountText,
-                asset: asset,
-                tracker: tracker,
-                pin: pin,
-                useBiometrics: useBiometrics,
-              ),
           onScan: () => _onTabSelected(AppTab.connections),
         );
       case AppTab.connections:
@@ -414,14 +403,15 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
   /// Registers an additional card from Настройки. Same prompt and same NFC wait
   /// as connecting the first one; the adopted card becomes the active wallet.
   Future<void> _connectAnotherCard(BuildContext context) async {
-    final auth = await _promptForAuth(
+    final l10n = AppLocalizations.of(context);
+    await _confirmOperation(
       context,
-      reason: AppLocalizations.of(context).cardAdoptPinReason,
+      controller: _controller,
+      reason: l10n.cardAdoptPinReason,
       biometricsOffered: false,
+      run: (pin, _) => _controller.adoptExistingRutoken(pin: pin ?? ''),
+      successBody: () => l10n.cardConnectSuccess,
     );
-    final pin = auth?.pin;
-    if (pin == null) return;
-    await _controller.adoptExistingRutoken(pin: pin);
   }
 
   Widget _buildOnboarding(BuildContext context) {
@@ -476,6 +466,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
         return const Center(child: CircularProgressIndicator());
       case WalletFlowStage.welcome:
         return _WelcomeStage(
+          controller: controller,
           backendEntries: controller.backendEntries,
           isRutokenSelected: controller.isRutokenSelected,
           onBackendSelected: controller.selectBackend,
@@ -524,6 +515,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
         );
       case WalletFlowStage.rutokenImport:
         return _RutokenImportStage(
+          controller: controller,
           onSubmit: controller.provisionImportedRutoken,
           onBack: controller.goToWelcome,
         );
@@ -533,6 +525,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           return const SizedBox.shrink();
         }
         return _RutokenBackupStage(
+          controller: controller,
           backup: backup,
           onProvision: controller.provisionGeneratedRutoken,
           onBack: controller.goToWelcome,
@@ -563,6 +556,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
         return const SizedBox.shrink();
       case WalletFlowStage.connections:
         return _ConnectionsStage(
+          controller: controller,
           isAvailable: controller.isWalletConnectAvailable,
           sessions: controller.walletConnectSessions,
           pendingProposal: controller.pendingProposal,

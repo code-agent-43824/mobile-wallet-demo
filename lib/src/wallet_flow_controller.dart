@@ -455,7 +455,9 @@ class WalletFlowController extends ChangeNotifier {
         try {
           final account = await adapter.readAccountDescriptor(session);
           if (account == null) {
-            throw StateError(_messages.errorCardNoWallet);
+            throw const RutokenNativeException.coded(
+              AppErrorCode.cardNoCompatibleWallet,
+            );
           }
           final digest = Uint8List.fromList(List<int>.generate(32, (i) => i));
           final signature = await adapter.signDigest(
@@ -1454,6 +1456,32 @@ class WalletFlowController extends ChangeNotifier {
       _notify();
       return null;
     }
+  }
+
+  /// Drops the current error, e.g. once a confirmation sheet has shown it in
+  /// its own result step.
+  void clearError() {
+    if (_errorMessage == null) return;
+    _errorMessage = null;
+    _notify();
+  }
+
+  int _inlineConfirmations = 0;
+
+  /// True while a confirmation sheet draws the operation's progress itself;
+  /// the root busy overlay and the card-PIN biometric offer then stay out of
+  /// its way rather than stacking on top of it.
+  bool get isInlineConfirmationActive => _inlineConfirmations > 0;
+
+  void beginInlineConfirmation() {
+    _inlineConfirmations++;
+    _notify();
+  }
+
+  void endInlineConfirmation() {
+    if (_inlineConfirmations == 0) return;
+    _inlineConfirmations--;
+    _notify();
   }
 
   /// Opens the Connections screen (from the unlocked dashboard).

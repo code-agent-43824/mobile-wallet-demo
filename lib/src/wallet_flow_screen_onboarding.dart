@@ -2,6 +2,7 @@ part of 'wallet_flow_screen.dart';
 
 class _WelcomeStage extends StatelessWidget {
   const _WelcomeStage({
+    required this.controller,
     required this.backendEntries,
     required this.isRutokenSelected,
     required this.onBackendSelected,
@@ -15,6 +16,8 @@ class _WelcomeStage extends StatelessWidget {
     required this.rutokenProvisioningResult,
   });
 
+  /// Drives the card operations' confirmation sheet.
+  final WalletFlowController controller;
   final List<WalletBackendCatalogEntry> backendEntries;
   final bool isRutokenSelected;
   final Future<void> Function(String backendId) onBackendSelected;
@@ -114,17 +117,16 @@ class _WelcomeStage extends StatelessWidget {
               OutlinedButton.icon(
                 onPressed: onRutokenAdopt == null
                     ? null
-                    : () async {
-                        final auth = await _promptForAuth(
-                          context,
-                          reason: l10n.cardAdoptPinReason,
-                          biometricsOffered: false,
-                        );
-                        final pin = auth?.pin;
-                        if (pin != null) {
-                          await onRutokenAdopt!(pin: pin);
-                        }
-                      },
+                    : () => _confirmOperation(
+                        context,
+                        controller: controller,
+                        reason: l10n.cardAdoptPinReason,
+                        biometricsOffered: false,
+                        run: (pin, _) => onRutokenAdopt!(pin: pin ?? ''),
+                        successBody: () =>
+                            controller.rutokenProvisioningResult ??
+                            l10n.cardConnectSuccess,
+                      ),
                 icon: const Icon(Icons.credit_card),
                 label: Text(l10n.cardAdopt),
               ),
@@ -132,15 +134,14 @@ class _WelcomeStage extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
-            onPressed: () async {
-              final auth = await _promptForAuth(
-                context,
-                reason: l10n.cardCheckPinReason,
-                biometricsOffered: false,
-              );
-              final pin = auth?.pin;
-              if (pin != null) await onRutokenDiagnostic!(pin);
-            },
+            onPressed: () => _confirmOperation(
+              context,
+              controller: controller,
+              reason: l10n.cardCheckPinReason,
+              biometricsOffered: false,
+              run: (pin, _) => onRutokenDiagnostic!(pin ?? ''),
+              successBody: () => controller.rutokenDiagnosticResult ?? '',
+            ),
             icon: const Icon(Icons.nfc),
             label: Text(l10n.cardCheck),
           ),
@@ -243,7 +244,13 @@ class _RutokenCreateStageState extends State<_RutokenCreateStage> {
 }
 
 class _RutokenImportStage extends StatefulWidget {
-  const _RutokenImportStage({required this.onSubmit, required this.onBack});
+  const _RutokenImportStage({
+    required this.controller,
+    required this.onSubmit,
+    required this.onBack,
+  });
+
+  final WalletFlowController controller;
 
   final Future<void> Function({
     required String mnemonic,
@@ -293,17 +300,19 @@ class _RutokenImportStageState extends State<_RutokenImportStage> {
     setState(() {
       _localError = null;
     });
-    final auth = await _promptForAuth(
+    await _confirmOperation(
       context,
+      controller: widget.controller,
       reason: l10n.cardWritePinReason,
       biometricsOffered: false,
-    );
-    final pin = auth?.pin;
-    if (pin == null) return;
-    await widget.onSubmit(
-      mnemonic: _mnemonicController.text,
-      passphrase: _passphraseController.text,
-      pin: pin,
+      run: (pin, _) => widget.onSubmit(
+        mnemonic: _mnemonicController.text,
+        passphrase: _passphraseController.text,
+        pin: pin ?? '',
+      ),
+      successBody: () =>
+          widget.controller.rutokenProvisioningResult ??
+          l10n.cardConnectSuccess,
     );
   }
 
@@ -369,11 +378,13 @@ class _RutokenImportStageState extends State<_RutokenImportStage> {
 
 class _RutokenBackupStage extends StatefulWidget {
   const _RutokenBackupStage({
+    required this.controller,
     required this.backup,
     required this.onProvision,
     required this.onBack,
   });
 
+  final WalletFlowController controller;
   final RutokenGeneratedBackup backup;
   final Future<void> Function({required String pin}) onProvision;
   final VoidCallback onBack;
@@ -387,13 +398,17 @@ class _RutokenBackupStageState extends State<_RutokenBackupStage> {
   bool _passphraseSaved = false;
 
   Future<void> _handleProvision() async {
-    final auth = await _promptForAuth(
+    final l10n = AppLocalizations.of(context);
+    await _confirmOperation(
       context,
-      reason: AppLocalizations.of(context).cardWritePinReason,
+      controller: widget.controller,
+      reason: l10n.cardWritePinReason,
       biometricsOffered: false,
+      run: (pin, _) => widget.onProvision(pin: pin ?? ''),
+      successBody: () =>
+          widget.controller.rutokenProvisioningResult ??
+          l10n.cardConnectSuccess,
     );
-    final pin = auth?.pin;
-    if (pin != null) await widget.onProvision(pin: pin);
   }
 
   @override
@@ -867,131 +882,6 @@ class _LockedStageState extends State<_LockedStage> {
           ],
         ),
       ],
-    );
-  }
-}
-
-/// Per-operation auth prompt. Every private-key operation (send, approve a
-/// WalletConnect request, sign an AirGap payload) collects a credential through
-/// this modal — no session reuse. It pops itself (returning the credential)
-/// BEFORE the caller runs the backend op, so a `pumpAndSettle` after invoking
-/// the controller doesn't spin on an open sheet over the busy overlay.
-Future<({String? pin, bool useBiometrics})?> _promptForAuth(
-  BuildContext context, {
-  required String reason,
-  required bool biometricsOffered,
-}) {
-  return showModalBottomSheet<({String? pin, bool useBiometrics})>(
-    context: context,
-    isScrollControlled: true,
-    builder: (context) => _OperationAuthSheet(
-      reason: reason,
-      biometricsOffered: biometricsOffered,
-    ),
-  );
-}
-
-class _OperationAuthSheet extends StatefulWidget {
-  const _OperationAuthSheet({
-    required this.reason,
-    required this.biometricsOffered,
-  });
-
-  final String reason;
-  final bool biometricsOffered;
-
-  @override
-  State<_OperationAuthSheet> createState() => _OperationAuthSheetState();
-}
-
-class _OperationAuthSheetState extends State<_OperationAuthSheet> {
-  /// Digits entered so far. The redesign replaces the text field with a keypad,
-  /// so the PIN never reaches the system keyboard (and its clipboard, autofill
-  /// and prediction paths).
-  String _pin = '';
-
-  static const int _maxPinLength = 12;
-
-  void _append(String digit) {
-    if (_pin.length >= _maxPinLength) {
-      return;
-    }
-    setState(() => _pin += digit);
-  }
-
-  void _backspace() {
-    if (_pin.isEmpty) {
-      return;
-    }
-    setState(() => _pin = _pin.substring(0, _pin.length - 1));
-  }
-
-  void _confirmPin() {
-    if (_pin.isEmpty) {
-      return;
-    }
-    // Pop with the credential BEFORE the caller runs the backend op.
-    Navigator.of(context).pop((pin: _pin, useBiometrics: false));
-  }
-
-  void _confirmBiometrics() {
-    Navigator.of(context).pop((pin: null, useBiometrics: true));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final style = PlatformStyle.of(context);
-    final l10n = AppLocalizations.of(context);
-
-    return Padding(
-      padding: EdgeInsets.only(
-        left: NocturneSpacing.gutter,
-        right: NocturneSpacing.gutter,
-        top: NocturneSpacing.x8,
-        bottom: NocturneSpacing.x8 + MediaQuery.viewInsetsOf(context).bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            l10n.authConfirmTitle,
-            style: theme.textTheme.titleLarge,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: NocturneSpacing.x3),
-          Text(
-            widget.reason,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: NocturneColors.textMuted,
-            ),
-          ),
-          const SizedBox(height: NocturneSpacing.x8),
-          _PinDots(length: _pin.length),
-          const SizedBox(height: NocturneSpacing.x8),
-          _PinKeypad(style: style, onDigit: _append, onBackspace: _backspace),
-          const SizedBox(height: NocturneSpacing.x6),
-          OutlinedButton(
-            onPressed: _pin.isEmpty ? null : _confirmPin,
-            child: Text(l10n.authConfirmAction),
-          ),
-          if (widget.biometricsOffered) ...[
-            const SizedBox(height: NocturneSpacing.x3),
-            TextButton.icon(
-              onPressed: _confirmBiometrics,
-              icon: const Icon(Icons.fingerprint, size: 20),
-              label: Text(l10n.unlockWithBiometrics),
-            ),
-          ],
-          const SizedBox(height: NocturneSpacing.x3),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(l10n.actionCancel),
-          ),
-        ],
-      ),
     );
   }
 }

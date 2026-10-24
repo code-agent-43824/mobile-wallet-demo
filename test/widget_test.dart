@@ -393,10 +393,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Подтвердите операцию'), findsNothing);
+    // The review step replaces the form inside the same sheet.
+    expect(find.text('Проверьте перевод'), findsOneWidget);
     // Renamed from the developer-ish "Итоговый debit" while localizing.
     expect(find.text('Спишется всего'), findsOneWidget);
     expect(find.text('Получатель'), findsOneWidget);
-    expect(find.textContaining('Preview is valid'), findsOneWidget);
+    expect(find.text('Подписать и отправить'), findsOneWidget);
   });
 
   testWidgets('uses funded balance after switching networks', (
@@ -456,7 +458,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Недостаточно'), findsNothing);
-    expect(find.textContaining('Preview is valid'), findsOneWidget);
+    expect(find.text('Проверьте перевод'), findsOneWidget);
   });
 
   testWidgets('ignores a late snapshot from the previous network', (
@@ -567,10 +569,7 @@ void main() {
     );
     await tester.enterText(sendFields.at(1), '0.1');
 
-    final sendButton = find.text('Подписать и отправить');
-    await tester.ensureVisible(sendButton);
-    await tester.tap(sendButton);
-    await tester.pumpAndSettle();
+    await _reviewAndSign(tester);
 
     // The per-op auth sheet offers the biometric fast-path; use it to sign.
     expect(find.text('Подтвердите операцию'), findsOneWidget);
@@ -627,10 +626,7 @@ void main() {
     );
     await tester.enterText(sendFields.at(1), '0.1');
 
-    final sendButton = find.text('Подписать и отправить');
-    await tester.ensureVisible(sendButton);
-    await tester.tap(sendButton);
-    await tester.pumpAndSettle();
+    await _reviewAndSign(tester);
 
     // Sending is a private-key op: confirm the per-op auth sheet with the PIN.
     expect(find.text('Подтвердите операцию'), findsOneWidget);
@@ -639,12 +635,21 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
+    // The result is the last step of the same sheet: pending → confirmed.
     expect(find.text('Успешная отправка'), findsOneWidget);
+    expect(find.text('Сеть подтвердила перевод.'), findsOneWidget);
     expect(find.textContaining('0xsubmittedhash'), findsOneWidget);
-    expect(find.textContaining('broadcast.fake'), findsOneWidget);
-    expect(find.textContaining('Loaded nonce'), findsOneWidget);
-    expect(find.textContaining('Статус: Confirmed'), findsOneWidget);
+    // Nonce, endpoint and block are developer detail behind «Подробности».
+    expect(find.textContaining('broadcast.fake'), findsNothing);
+    await tester.tap(find.text('Подробности'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('RPC: broadcast.fake'), findsOneWidget);
+    expect(find.textContaining('Nonce: '), findsOneWidget);
     expect(find.textContaining('Block: 16'), findsOneWidget);
+
+    await tester.tap(find.text('Готово'));
+    await tester.pumpAndSettle();
+    expect(find.text('Успешная отправка'), findsNothing);
   });
 
   testWidgets('keeps tracking async after successful submission', (
@@ -691,10 +696,7 @@ void main() {
     );
     await tester.enterText(sendFields.at(1), '0.1');
 
-    final sendButton = find.text('Подписать и отправить');
-    await tester.ensureVisible(sendButton);
-    await tester.tap(sendButton);
-    await tester.pumpAndSettle();
+    await _reviewAndSign(tester);
 
     // Confirm the per-op auth sheet; the unlock+submit then completes while
     // receipt tracking stays pending (delayed transport).
@@ -715,13 +717,14 @@ void main() {
       find.textContaining('Перевод отправлен'),
       findsOneWidget,
     );
-    expect(find.text('Подписать и отправить'), findsOneWidget);
+    // Tracking does not hold the sheet: the way out is already offered.
+    expect(find.text('Готово'), findsOneWidget);
 
     // Advance past the 4s delayed transport so the receipt resolves.
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Статус: Confirmed'), findsOneWidget);
+    expect(find.text('Сеть подтвердила перевод.'), findsOneWidget);
   });
 
   testWidgets('shows failure state when broadcast is rejected', (
@@ -768,10 +771,7 @@ void main() {
     );
     await tester.enterText(sendFields.at(1), '0.1');
 
-    final sendButton = find.text('Подписать и отправить');
-    await tester.ensureVisible(sendButton);
-    await tester.tap(sendButton);
-    await tester.pumpAndSettle();
+    await _reviewAndSign(tester);
 
     // Confirm the per-op auth sheet; the broadcast then fails downstream.
     expect(find.text('Подтвердите операцию'), findsOneWidget);
@@ -780,8 +780,13 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
+    expect(find.text('Перевод не отправлен'), findsOneWidget);
     expect(find.textContaining('execution reverted'), findsOneWidget);
     expect(find.text('Успешная отправка'), findsNothing);
+    // Shown in the sheet, not repeated in the page banner behind it.
+    await tester.tap(find.text('Закрыть'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('execution reverted'), findsNothing);
   });
 }
 
@@ -792,6 +797,19 @@ Future<void> _enterOperationPin(WidgetTester tester, String pin) async {
     await tester.tap(find.byKey(ValueKey<String>('pin-key-$digit')));
     await tester.pump();
   }
+}
+
+/// Moves the send sheet from the filled form to the PIN step: the review step
+/// comes first, and only it offers signing.
+Future<void> _reviewAndSign(WidgetTester tester) async {
+  final review = find.text('Проверить перевод');
+  await tester.ensureVisible(review);
+  await tester.tap(review);
+  await tester.pumpAndSettle();
+  final sign = find.text('Подписать и отправить');
+  await tester.ensureVisible(sign);
+  await tester.tap(sign);
+  await tester.pumpAndSettle();
 }
 
 /// Opens the transfer sheet. The redesign moved the form off the wallet screen,

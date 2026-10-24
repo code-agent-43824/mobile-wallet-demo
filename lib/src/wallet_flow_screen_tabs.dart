@@ -517,21 +517,22 @@ class _OfflineCacheBanner extends StatelessWidget {
 /// with the loading, empty and offline-cache states the design models.
 class _WalletTab extends StatefulWidget {
   const _WalletTab({
+    required this.controller,
     required this.chainData,
     required this.address,
     required this.transactionService,
     required this.trackingTransport,
     required this.canUnlockWithBiometrics,
-    required this.onAuthorizeAndSubmit,
     required this.onScan,
   });
 
+  /// Runs the send and drives the send sheet's signing step.
+  final WalletFlowController controller;
   final ChainDataController chainData;
   final String address;
   final TransactionService transactionService;
   final JsonRpcTransport trackingTransport;
   final bool canUnlockWithBiometrics;
-  final AuthorizeAndSubmitTransfer onAuthorizeAndSubmit;
 
   /// Opens the surface where scanning happens (the Связи tab), so the design's
   /// third quick action leads somewhere real instead of being a dead button.
@@ -613,13 +614,20 @@ class _WalletTabState extends State<_WalletTab> {
     WalletChainSnapshot snapshot,
     EvmNetworkConfig config,
   ) {
-    final l10n = AppLocalizations.of(context);
     final style = PlatformStyle.of(context);
+    final controller = widget.controller;
+    // The sheet draws the signing step itself, so the root busy overlay stays
+    // out of the way for as long as it is open.
+    controller.beginInlineConfirmation();
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: NocturneColors.surface,
       shape: RoundedRectangleBorder(borderRadius: style.sheetBorderRadius),
       isScrollControlled: true,
+      // Dismissal goes through the sheet's own close action and back gesture,
+      // which it withholds while a signature is in flight.
+      isDismissible: false,
+      enableDrag: false,
       builder: (sheetContext) => Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
@@ -630,35 +638,19 @@ class _WalletTabState extends State<_WalletTab> {
           ),
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(NocturneSpacing.gutter),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // The sheet keeps showing the send result after the operation,
-                // so it needs its own way out — the back gesture alone is not
-                // an affordance.
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: IconButton(
-                    onPressed: () => Navigator.of(sheetContext).pop(),
-                    icon: const Icon(Icons.close),
-                    tooltip: l10n.actionClose,
-                  ),
-                ),
-                _TransferPreparationSection(
-                  snapshot: snapshot,
-                  fromAddress: widget.address,
-                  networkConfig: config,
-                  transactionService: widget.transactionService,
-                  trackingTransport: widget.trackingTransport,
-                  canUnlockWithBiometrics: widget.canUnlockWithBiometrics,
-                  onAuthorizeAndSubmit: widget.onAuthorizeAndSubmit,
-                ),
-              ],
+            child: _TransferPreparationSection(
+              controller: controller,
+              snapshot: snapshot,
+              fromAddress: widget.address,
+              networkConfig: config,
+              transactionService: widget.transactionService,
+              trackingTransport: widget.trackingTransport,
+              canUnlockWithBiometrics: widget.canUnlockWithBiometrics,
             ),
           ),
         ),
       ),
-    );
+    ).whenComplete(controller.endInlineConfirmation);
   }
 
   void _showNetworkSheet(BuildContext context) {

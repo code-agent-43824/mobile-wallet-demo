@@ -108,11 +108,8 @@
   "transferAvailable": "Available: {amount} {symbol}",
   "transferPreviewAction": "Check the transfer",
   "transferSignAndSend": "Sign and send",
-  "transferSending": "Sending…",
   "transferPickAssetFirst": "Pick an asset to send first.",
   "transferNeedsKey": "Signing and sending a transfer needs private-key access.",
-  "transferSendState": "Send status",
-  "transferStatus": "Status",
   "transferSuccess": "Sent successfully",
   "transferRecipient": "Recipient",
   "transferTotalDebit": "Total debited",
@@ -135,13 +132,10 @@
       }
     }
   },
-  "transferInProgress": "Preparing the transfer and sending it to the network.",
   "transferBroadcast": "Transfer sent. Waiting for network confirmation…",
   "transferBroadcastAfterRetry": "Transfer sent on attempt {count}. Waiting for network confirmation…",
   "transferReplacedBody": "The network required a higher fee, so the transfer was resent with a fee {multiplier}× higher.",
-  "transferTrackingIdle": "Tracking has not started yet.",
   "transferTrackingFailed": "Could not track the transfer: {error}",
-  "transferStatusLine": "Status: {status}",
   "@transferBroadcastAfterRetry": {
     "placeholders": {
       "count": {
@@ -159,13 +153,6 @@
   "@transferTrackingFailed": {
     "placeholders": {
       "error": {
-        "type": "String"
-      }
-    }
-  },
-  "@transferStatusLine": {
-    "placeholders": {
-      "status": {
         "type": "String"
       }
     }
@@ -276,7 +263,6 @@
       }
     }
   },
-  "errorCardNoWallet": "The card holds no compatible wallet.",
   "errorCardUnsupportedBuild": "Card support is not available in this build.",
   "errorUseCardCreateFlow": "Use the card's own creation flow.",
   "errorUseCardImportFlow": "Use the card's own import flow.",
@@ -808,5 +794,22 @@
   "historyUnknown": "Unknown",
   "createPhoneWalletTitle": "Wallet on this phone",
   "createPhoneWalletBody": "First set a PIN — it encrypts the wallet. Then the app creates a seed phrase and shows it once so you can write down a backup.",
-  "createPhoneWalletAction": "Create wallet"
+  "createPhoneWalletAction": "Create wallet",
+  "actionDone": "Done",
+  "confirmSuccessTitle": "Done",
+  "confirmFailureTitle": "That did not work",
+  "wcApproveSuccess": "The app has the response.",
+  "airgapExportSuccess": "The account QR is ready — show it to MetaMask.",
+  "airgapSignSuccess": "The signature is ready — show the QR to MetaMask.",
+  "cardConnectSuccess": "The card is connected and is now the active wallet.",
+  "tapCardSignBody": "Hold the card to the back of the phone until the signature is done. The key never leaves the card.",
+  "transferReview": "Review the transfer",
+  "transferEdit": "Edit",
+  "transferNetworkFee": "Network fee (estimate)",
+  "transferNotSent": "The transfer was not sent",
+  "transferConfirmed": "The network confirmed the transfer.",
+  "transferReverted": "The network rejected the transaction.",
+  "transferPendingTimeout": "Confirmation is taking long — check the history later.",
+  "transferHash": "Transaction hash",
+  "actionContinue": "Continue"
 }

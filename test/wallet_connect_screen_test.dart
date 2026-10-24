@@ -109,6 +109,18 @@ Future<void> _createUnlock(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// Reads the active wallet's address from the «Получить» sheet.
+Future<String> _readWalletAddress(WidgetTester tester) async {
+  await tester.tap(find.text('Получить'));
+  await tester.pumpAndSettle();
+  final address = tester
+      .widget<SelectableText>(find.byType(SelectableText).last)
+      .data!;
+  await tester.tap(find.text('Закрыть'));
+  await tester.pumpAndSettle();
+  return address;
+}
+
 Future<void> _openConnections(WidgetTester tester) async {
   // The redesign reaches Connections through the shell's «Связи» tab; the old
   // dashboard entry button is gone.
@@ -308,6 +320,63 @@ void main() {
     expect(service.respondedResults.single.result, isNull);
   });
 
+  testWidgets(
+    'connections screen: approving a request walks PIN → result in one sheet',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final service = FakeWalletConnectService();
+      await tester.pumpWidget(
+        MobileWalletDemoApp(
+          locale: const Locale('ru'),
+          store: InMemorySecureKeyValueStore(),
+          blockchainProvider: _FakeBlockchainProvider(),
+          walletConnectService: service,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _createUnlock(tester);
+      final address = await _readWalletAddress(tester);
+      await _openConnections(tester);
+
+      service.simulateRequest(
+        topic: 'topic-1',
+        method: 'personal_sign',
+        params: <Object?>['0x68656c6c6f', address],
+      );
+      await tester.pumpAndSettle();
+
+      final approve = find.text('Одобрить и подписать');
+      await tester.ensureVisible(approve);
+      await tester.tap(approve);
+      await tester.pumpAndSettle();
+
+      // A wrong PIN fails inside the sheet and offers a retry there, rather
+      // than closing it and raising the page banner.
+      await _enterOperationPin(tester, '0000');
+      await tester.tap(find.text('Подтвердить'));
+      await tester.pumpAndSettle();
+      expect(find.text('Не получилось'), findsOneWidget);
+      expect(find.text('Неверный PIN.'), findsOneWidget);
+      expect(service.respondedResults, isEmpty);
+
+      await tester.tap(find.text('Повторить'));
+      await tester.pumpAndSettle();
+      await _enterOperationPin(tester, '1234');
+      await tester.tap(find.text('Подтвердить'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ответ отправлен приложению.'), findsOneWidget);
+      await tester.tap(find.text('Продолжить'));
+      await tester.pumpAndSettle();
+
+      expect(service.respondedErrors, isEmpty);
+      expect(service.respondedResults, hasLength(1));
+      expect(find.text('Неверный PIN.'), findsNothing);
+    },
+  );
+
   testWidgets('connections screen: failed simulation blocks signing', (
     WidgetTester tester,
   ) async {
@@ -434,6 +503,16 @@ void main() {
     await _enterOperationPin(tester, '1234');
     await tester.tap(find.text('Подтвердить'));
     await tester.pumpAndSettle();
+
+    // PIN → signing → result happen in one sheet; its last step says what to
+    // do next and hands back to the wizard.
+    expect(
+      find.text('Подпись готова — покажите QR в MetaMask.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Продолжить'));
+    await tester.pumpAndSettle();
+    expect(find.text('Подтвердите операцию'), findsNothing);
 
     // The step number moved into a badge, so the title is the title alone.
     expect(find.text('Верните подпись в MetaMask'), findsOneWidget);
