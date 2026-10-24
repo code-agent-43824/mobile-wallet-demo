@@ -5,7 +5,9 @@ This file is the canonical development plan for the project. Use it as the sourc
 ## Status snapshot
 
 Current factual status of the project:
-- ✅ CI foundation is in place and stable on Android, iOS Simulator, and Windows x64
+- ✅ CI foundation covers Android, iOS Simulator/Device, and Windows x64 on GitHub Actions, plus the GitLab
+  pipeline (blocking SAST, tests, Android APK, Pages, tag releases). The GitHub Android job was red from the
+  AGP 9.1 toolchain move until `android.newDsl=false` (2026-10-24)
 - ✅ Phase 0 is effectively completed
 - ✅ Phase 1 is implemented as a user-facing flow
 - ✅ Phase 2 is implemented, including real biometric integration on Android/iOS and a Windows demo simulation path
@@ -19,9 +21,14 @@ Current factual status of the project:
 - 🟡 Phase 10 is **in progress**: library-independent custody/EVM assembly, physically validated Android
   read/sign/provisioning and production-backend wiring are implemented. The full Android signing matrix
   (WalletConnect, EIP-4527 AirGap, different-card rejection, invalid PIN, cancel/timeout) passed owner dogfood on
-  v1.51.0+62; one open defect (NFC-loss error categorization), the physical log/crash review, and iOS remain
+  v1.51.0+62; the NFC-loss categorization fix shipped in v1.55.0+66 awaits its hardware rerun, and the physical
+  log/crash review and iOS remain
 - ✅ Phase 11 is complete: read-only app open plus fresh authentication for every private-key operation
 - ✅ Phase 12 is complete: MetaMask-compatible EIP-4527 / BC-UR AirGap signer
+- 🟡 Phase 13 (Nocturne redesign + RU/EN localization) is functionally complete through v1.54.0+65; the only
+  known deviation is 13.5's stacked rather than sequential confirmation sheets
+- 🟡 Phase 14 (multiple registered cards) is built and CI green in v1.55.0+66 (14.1–14.4); 14.5, the physical
+  two-card dogfood, is the remaining exit criterion
 
 ## Direction
 
@@ -414,7 +421,8 @@ binding, and biometric-gated PIN convenience. v1.50 adds cancellable Android NFC
 categories, pre-operation card-presence checks, and teardown error precedence. v1.51 prevents unknown raw native
 diagnostics from crossing the platform channel or reaching Dart error text. Android physical WalletConnect,
 AirGap, wrong-PIN, cancellation, timeout, and different-card checks passed on 2026-08-17. Mid-operation NFC-loss
-categorization and real crash/log-output inspection remain open; iOS implementation and physical validation remain.
+categorization is fixed in code in v1.55 (presence-based, not vendor-text-based) and awaits its hardware rerun;
+real crash/log-output inspection, iOS implementation and physical validation remain.
 
 > **Reference:** `docs/nfc-pkcs11-integration-notes.md` contains the vendor mechanisms, native-stack setup,
 > Ethereum corrections, and physical-device questions. The existing demo adapter is a test double, not an
@@ -490,11 +498,13 @@ Small, reviewable steps; each chunk records plan and result in `docs/worklog.md`
   session. A declined offer is remembered for that account, and neither public profile nor logs contain the PIN.
   Owner v1.49 dogfood passed ready-card adoption, biometric opt-in/release, and a Sepolia send. The second-card
   rejection was physically confirmed on 2026-08-17; the registered card still worked afterwards.
-- **10.6 — ANDROID CODE HARDENING IN v1.51; NFC-LOSS UX AND LOG REVIEW OPEN; iOS PENDING:** Android provides cancellable NFC discovery,
+- **10.6 — ANDROID CODE HARDENING IN v1.51; NFC-LOSS FIX IN v1.55 AWAITS RERUN; LOG REVIEW OPEN; iOS PENDING:** Android provides cancellable NFC discovery,
   stable sanitized PIN/timeout/NFC-loss errors, card-presence checks, primary-failure-preserving teardown, and
   fixed generic platform errors that do not surface raw vendor diagnostics. Physical cancellation, timeout,
-  and invalid-PIN handling passed; mid-operation card removal still reports the generic error rather than the
-  specific NFC-loss message. The physical crash/log-output review has not been performed.
+  and invalid-PIN handling passed; on v1.51 mid-operation card removal reported the generic error rather than the
+  specific NFC-loss message. v1.55 classifies a failed operation by asking the slot-event listener whether the
+  card is still present; that fix has not been physically re-run. The physical crash/log-output review has not
+  been performed.
   Port the proven shared contracts to the vendor iOS stack and run the same physical-device matrix. The public
   Rutoken SDK release 15.05.2026 contains signed generic `rtpkcs11ecp.xcframework` and `RtPcsc.xcframework`,
   but header inspection confirms that it does **not** expose the wallet-only BIP32 mechanisms. The compatible
@@ -796,14 +806,22 @@ possible, since the owner has a second card.
   controller/native-adapter lifecycle regressions
 - `v1.51` — fail closed on unknown Rutoken native failures: the Android channel emits a fixed generic message and
   Dart ignores raw vendor message/details; source and adapter regressions pin the no-diagnostic-leak boundary
+- `v1.52` — Phase 13.1 Nocturne foundation: dark theme tokens, platform-style seam, bundled Inter, ARB scaffolding,
+  build strip
+- `v1.53` — Phase 13.2–13.5 four-tab shell and redesigned flows; the simulated external-device backend is removed
+- `v1.54` — Phase 13.6–13.7: full RU/EN localization with the language switch, onboarding variant B
+- `v1.55` — Phase 14.1–14.4 multiple registered cards (profile list + selection, token serial, switcher, «Забыть
+  карту»); presence-based mid-operation NFC-loss classification
 
 ## Current non-goals and validation limits
-- no iOS hardware-device SDK implementation yet; Android physical signing passed on v1.51, while
-  mid-operation NFC-loss error categorization and physical crash/log-output inspection remain open
+- no iOS hardware-device SDK implementation yet; Android physical signing passed on v1.51, while the v1.55
+  mid-operation NFC-loss fix awaits its hardware rerun and physical crash/log-output inspection remains open
 - no additional chains beyond Ethereum Mainnet and Sepolia in the initial AirGap UI
 - no multi-chain support beyond Ethereum Mainnet and Sepolia yet
-- **single-account by design** (audit decision): one EVM address derived at `m/44'/60'/0'/0/0`; HD-account discovery / multiple accounts are out of scope — Phase 9 WalletConnect sessions expose this one account (`eip155:*:<address>`)
-- **localization**: UI strings are intentionally inlined Russian and asserted by widget tests; no ARB/`intl` extraction is planned for the demo
+- **single-account by design** (audit decision): one EVM address per wallet, derived at `m/44'/60'/0'/0/0`
+  (Phase 14 lets several cards each be such a wallet); HD-account discovery / multiple accounts are out of scope — Phase 9 WalletConnect sessions expose this one account (`eip155:*:<address>`)
+- **localization**: RU + EN via ARB since Phase 13.6 (Russian primary; widget tests pin `Locale('ru')`); domain-layer
+  error strings under `qr/`, `key_storage/`, `walletconnect/`, `airgap/` are still inline Russian (see LATER)
 - **test fidelity**: deterministic tests use in-memory fakes; secure storage, public RPC, Reown relay, camera,
   and future NFC behavior cross native/device boundaries and require the maintained manual device matrix in
   addition to CI. WalletConnect and AirGap have owner dogfood evidence, but are not fully automated end-to-end

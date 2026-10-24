@@ -18,6 +18,33 @@ Entry template:
 
 ---
 
+## 2026-10-24 — Merge v1.54/v1.55 into main + fix the red GitHub Android build — branch claude/friendly-hawking-hpbpbv — done
+- Plan: (1) `claude/wonderful-rubin-eBDKZ` carried 16 commits never merged to `main` — Phase 13.6 completion
+  (v1.54.0+65), Phase 14.1–14.4 multiple cards and the NFC-loss classification fix (v1.55.0+66) — while `main`
+  moved on with the GitLab migration, the AGP 9.1 toolchain and SAST. Merge it and resolve the conflicts.
+  (2) GitHub `ci.yml` has been red since the toolchain move: only the Android APK job fails. Reproduce, fix,
+  verify. (3) Reconcile docs that drifted (CLAUDE.md still described v1.51 and the deleted simulation).
+- Done: merged with `--no-ff`; only `docs/development-plan.md` (NOW/NEXT text) and this worklog conflicted —
+  kept the branch's NFC-loss fix wording plus `main`'s 2026-10-03 iOS framework facts, and both log entries.
+  No code conflicts. Locally on Flutter 3.41.7: format clean, `flutter analyze` clean, `flutter test` 221/221.
+  Android root cause reproduced locally with the exact CI error: AGP 9 enables `android.newDsl` by default and
+  legacy `org.jetbrains.kotlin.android` (kept by `android.builtInKotlin=false`, see the plugin list in
+  `gradle.properties`) cannot apply on it. Added `android.newDsl=false` — AGP's documented temporary bypass;
+  `flutter build apk --release` then succeeds. The GitLab builder (newer Flutter) likely passed because its
+  Flutter tool handles this itself; not verifiable from here. Docs: plan status (Phases 13/14, CI line, 10.6,
+  version history v1.52–v1.55, non-goals), device matrix NFC-loss row, README «Сейчас», CLAUDE.md
+  (overview, key-storage backends, UI/l10n map, GitLab CI, Android toolchain and lockfile gotchas).
+  Confirmed `feat/metamask-airgap-qr` and `fix/walletconnect-capabilities-preview` are fully contained in
+  `main` (a shallow clone had made them look unmerged); they can be deleted.
+- Next / open: owner decision — which Flutter is canonical: `ci.yml`/`.fvmrc` pin 3.41.7, but `pubspec.lock`
+  was last resolved by ≥3.44 on the GitLab builder, so `pub get` on 3.41.7 re-resolves ~11 packages. Drop
+  `newDsl=false`/`builtInKotlin=false` once package_info_plus, shared_preferences_android, url_launcher_android
+  and walletconnect_pay support built-in Kotlin. Hardware: NFC-loss rerun (v1.55), Phase 14.5 two-card
+  dogfood, crash/log review; iOS remains.
+- Refs: merge of `origin/claude/wonderful-rubin-eBDKZ` (`1e54fc7`), `android/gradle.properties`,
+  `android/settings.gradle.kts`, `CLAUDE.md`, `README.md`, `docs/development-plan.md`,
+  `docs/device-test-matrix.md`, `CHANGELOG.md`
+
 ## 2026-10-03 — Reconcile Rutoken status with recorded evidence — branch docs/reconcile-rutoken-status-2026-10-03 — done
 - Plan: compare the current Phase 10 roadmap, physical matrix, and agent handoff with the already-recorded
   2026-08-17 owner dogfood and the 2026-07-29 private iOS vendor-input audit. Correct only stale status claims;

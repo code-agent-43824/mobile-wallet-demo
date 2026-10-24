@@ -72,7 +72,7 @@ Add exact token model, firmware, SDK version, device/OS, and issue/evidence link
 | WalletConnect transaction | PASS v1.51 | BLOCKED | Preflight then tap+PIN/biometric; response/broadcast succeeds once. |
 | WalletConnect personal/EIP-712 | PASS v1.51 | BLOCKED | Valid signatures; displayed request matches signed payload. |
 | EIP-4527 AirGap transaction | PASS v1.51 | BLOCKED | Public account export and request signature require no secret export; descriptor-only adopted cards cannot export xpub. |
-| Cancel, wrong PIN, timeout, NFC loss, SDK error | PARTIAL v1.51 | BLOCKED | Physical cancel, timeout, and one invalid-PIN attempt passed on 2026-08-17; the next valid operation passed. Card removal mid-operation tears down correctly but reports a generic error instead of `rutoken_nfc_lost`; blocked-PIN and arbitrary SDK-error paths have automated coverage only, not physical evidence. |
+| Cancel, wrong PIN, timeout, NFC loss, SDK error | PARTIAL v1.51 | BLOCKED | Physical cancel, timeout, and one invalid-PIN attempt passed on 2026-08-17; the next valid operation passed. Card removal mid-operation tears down correctly but reported a generic error instead of `rutoken_nfc_lost` on v1.51; the v1.55 presence-based fix needs a hardware RETEST; blocked-PIN and arbitrary SDK-error paths have automated coverage only, not physical evidence. |
 | Secret-containment review | PARTIAL v1.51 | BLOCKED | Static source/tests confirm public-profile separation, mutable provisioning-buffer clearing, no native secret logging, and fixed generic platform errors that discard raw vendor diagnostics; physical crash/log-output review remains. |
 
 Phase 10 is complete only when the corresponding Definition of Done in `docs/development-plan.md` and every
