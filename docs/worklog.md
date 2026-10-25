@@ -54,8 +54,10 @@ Entry template:
   - v1.58.0+69: CHANGELOG, plan (NOW, tech-debt and watch items, release line), README, CLAUDE.md gotchas,
     device matrix "v1.58 checks" (NOT RUN). Local: format clean, analyze clean, `flutter test` 233/233,
     debug APK builds.
-- Next / open: run `android-launch-check.yml` on x86_64 against this branch and record it; the owner checks the
-  iOS simulator launch on the Xcode 27 SDK and an arm64 phone still offering cards; when the vendor libraries
+  - Remote: `android-launch-check.yml` x86_64 / API 34 / debug on `c3e7785` ([run 8](https://github.com/code-agent-43824/mobile-wallet-demo/actions/runs/40208514724))
+    — «RESULT: app stayed alive 20s», no `UnsatisfiedLinkError`; `ci.yml` on the branch ([run 205](https://github.com/code-agent-43824/mobile-wallet-demo/actions/runs/40208521144))
+    green on every platform (it only builds iOS, so the launch fix is not exercised there).
+- Next / open: the owner checks the iOS simulator launch on the Xcode 27 SDK and an arm64 phone still offering cards; when the vendor libraries
   for x86_64/armeabi-v7a arrive, drop both ABI gates. Hardware RETEST rows (v1.55 NFC-loss fix) still wait for
   a card session.
 
