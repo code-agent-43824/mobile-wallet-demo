@@ -7,8 +7,12 @@ segments to be 16 KB (0x4000) aligned, or the app crashes at dlopen — often
 NOT reproduce this, but parsing the ELF program headers catches it without any
 device. Also prints which plugin .so are bundled (per ABI), useful for triage.
 
+16 KB pages exist only on 64-bit devices, so 32-bit libs (armeabi-v7a) are
+listed but never fail the check: they always load with 4 KB pages.
+
 Usage:  python3 scripts/check_apk_alignment.py <path-to.apk>
-Exit:   3 if any PT_LOAD segment is aligned to less than 16 KB; 0 otherwise.
+Exit:   3 if any 64-bit lib has a PT_LOAD segment aligned to less than 16 KB;
+        0 otherwise.
 """
 
 import struct
@@ -24,7 +28,7 @@ ELF_MAGIC = bytes([0x7F, 0x45, 0x4C, 0x46])
 
 
 def load_segment_aligns(data: bytes):
-    """Return the list of PT_LOAD p_align values, or None if not an ELF."""
+    """Return (is64, PT_LOAD p_align values), or None if not an ELF."""
     if data[:4] != ELF_MAGIC:
         return None
     ei_class = data[4]  # 1 = 32-bit, 2 = 64-bit
@@ -50,7 +54,7 @@ def load_segment_aligns(data: bytes):
         fmt = endian + ("Q" if is64 else "I")
         p_align = struct.unpack_from(fmt, data, base + align_off)[0]
         aligns.append(p_align)
-    return aligns
+    return is64, aligns
 
 
 def main() -> int:
@@ -67,18 +71,20 @@ def main() -> int:
         if not sos:
             print("  (no bundled native libs)")
         for name in sos:
-            aligns = load_segment_aligns(z.read(name))
-            if aligns is None:
+            parsed = load_segment_aligns(z.read(name))
+            if parsed is None:
                 print(f"  {name}: not an ELF file?")
                 continue
+            is64, aligns = parsed
             min_align = min(aligns) if aligns else 0
-            ok = min_align >= SIXTEEN_KB
-            print(
-                f"  {name}: LOAD align min=0x{min_align:x} "
-                f"{'OK' if ok else '<< NOT 16 KB-ALIGNED'}"
-            )
-            if not ok:
+            if not is64:
+                verdict = "n/a (32-bit, 4 KB pages)"
+            elif min_align >= SIXTEEN_KB:
+                verdict = "OK"
+            else:
+                verdict = "<< NOT 16 KB-ALIGNED"
                 bad.append((name, min_align))
+            print(f"  {name}: LOAD align min=0x{min_align:x} {verdict}")
     print("====")
     if bad:
         print("16 KB ALIGNMENT PROBLEM — these libs can crash on a 16 KB-page")
@@ -86,7 +92,7 @@ def main() -> int:
         for name, a in bad:
             print(f"  {name}  (align 0x{a:x})")
         return 3
-    print("All bundled native libs are >= 16 KB aligned.")
+    print("All bundled 64-bit native libs are >= 16 KB aligned.")
     return 0
 
 
