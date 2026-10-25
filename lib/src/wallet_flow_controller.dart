@@ -62,7 +62,9 @@ class WalletFlowController extends ChangeNotifier {
     QrScanner qrScanner = const UnavailableQrScanner(),
     RutokenNativeAdapter? rutokenNativeAdapter,
     AppLocalizations? messages,
+    DateTime Function()? now,
   }) : _messages = messages ?? lookupAppLocalizations(const Locale('ru')),
+       _now = now ?? DateTime.now,
        _store = store,
        _walletConnectService = walletConnectService,
        _walletConnectPreflight = walletConnectPreflight,
@@ -74,9 +76,14 @@ class WalletFlowController extends ChangeNotifier {
        _transactionBroadcaster =
            transactionBroadcaster ?? PublicRpcTransactionBroadcaster(),
        _nonceProvider = nonceProvider ?? PublicRpcNonceProvider() {
+    // The system biometric dialog reads its sentence from the active language
+    // at the moment it opens, not from the language at construction.
+    String promptText(BiometricPrompt prompt) =>
+        biometricPromptText(_messages, prompt);
     _vault = PhoneSecureVault(
       store: store,
       biometricAuth: biometricAuthGateway,
+      biometricPromptText: promptText,
     );
     _rutokenProvisioning = rutokenNativeAdapter == null
         ? null
@@ -89,6 +96,7 @@ class WalletFlowController extends ChangeNotifier {
         : RutokenBiometricPinStore(
             store: store,
             biometricAuth: biometricAuthGateway,
+            biometricPromptText: promptText,
           );
     _rutokenBackend =
         rutokenNativeAdapter == null || _rutokenProvisioning == null
@@ -183,6 +191,7 @@ class WalletFlowController extends ChangeNotifier {
   late final PhoneSecureVault _vault;
   late final WalletBackendRegistry _backendRegistry;
   final SecureKeyValueStore _store;
+  final DateTime Function() _now;
   final WalletConnectService _walletConnectService;
   final WalletConnectTransactionPreflight _walletConnectPreflight;
   final QrScanner _qrScanner;
@@ -406,9 +415,11 @@ class WalletFlowController extends ChangeNotifier {
       }
       final biometricsEnabled = await backend.isBiometricUnlockEnabled();
       final biometricsAvailable = await backend.isBiometricUnlockAvailable();
+      final lockOnOpen = await _store.read(_lockOnOpenStorageKey) == '1';
       if (_disposed) {
         return;
       }
+      _lockOnOpen = lockOnOpen;
       _selectedBackendId = selectedBackendId;
       _summary = summary;
       _biometricsEnabled = biometricsEnabled;
@@ -417,9 +428,12 @@ class WalletFlowController extends ChangeNotifier {
       // (WalletFlowStage.unlocked, whose semantics are now "read-only
       // dashboard"): no PIN/biometric/PBKDF2 just to view it. The private key is
       // only touched per-operation. _material stays null — the dashboard renders
-      // from _summary. (locked is retained for a future "lock app on open".)
+      // from _summary. With lock-on-open turned on it opens on the locked
+      // screen instead.
       _stage = summary == null
           ? WalletFlowStage.welcome
+          : lockOnOpen
+          ? WalletFlowStage.locked
           : WalletFlowStage.unlocked;
       _notify();
     } on VaultFailure catch (error) {
@@ -428,7 +442,7 @@ class WalletFlowController extends ChangeNotifier {
       if (_disposed) {
         return;
       }
-      _errorMessage = error.message;
+      _errorMessage = describeError(_messages, error);
       _stage = WalletFlowStage.welcome;
       _notify();
     }
@@ -449,7 +463,9 @@ class WalletFlowController extends ChangeNotifier {
         try {
           final account = await adapter.readAccountDescriptor(session);
           if (account == null) {
-            throw StateError(_messages.errorCardNoWallet);
+            throw const RutokenNativeException.coded(
+              AppErrorCode.cardNoCompatibleWallet,
+            );
           }
           final digest = Uint8List.fromList(List<int>.generate(32, (i) => i));
           final signature = await adapter.signDigest(
@@ -544,6 +560,13 @@ class WalletFlowController extends ChangeNotifier {
   /// on screen. This mirrors the resolution [loadInitialState] performs, and
   /// drops any held material so nothing survives the switch.
   Future<void> switchActiveWallet(SwitchableWallet wallet) async {
+    // The card backend's empty row adds a card; with a wallet already active it
+    // opens «Новая карта» and leaves the active wallet alone until a card is
+    // connected.
+    if (wallet.isEmptySlot && wallet.isCardStorage && _summary != null) {
+      openAddCard();
+      return;
+    }
     final currentCardProfileId = await selectedCardProfileId();
     if (!wallet.isEmptySlot &&
         wallet.backendId == effectiveBackendId &&
@@ -630,7 +653,45 @@ class WalletFlowController extends ChangeNotifier {
   void goToWelcome() {
     _errorMessage = null;
     _rutokenGeneratedBackup = null;
+    _cardSetupReturnStage = WalletFlowStage.welcome;
     _stage = WalletFlowStage.welcome;
+    _notify();
+  }
+
+  /// Where the card's create/import stages return on «Назад»: the welcome
+  /// screen during onboarding, the add-card screen when that is where they
+  /// were opened from.
+  WalletFlowStage _cardSetupReturnStage = WalletFlowStage.welcome;
+
+  /// Opens «Новая карта» from an existing wallet. Nothing about the active
+  /// wallet changes until a card is actually connected or written.
+  void openAddCard() {
+    if (_rutokenProvisioning == null) return;
+    _errorMessage = null;
+    _rutokenGeneratedBackup = null;
+    _rutokenDiagnosticResult = null;
+    _rutokenProvisioningResult = null;
+    _cardSetupReturnStage = WalletFlowStage.addCard;
+    _stage = WalletFlowStage.addCard;
+    _notify();
+  }
+
+  /// Leaves «Новая карта» for the wallet that was active before.
+  void closeAddCard() {
+    _errorMessage = null;
+    _rutokenGeneratedBackup = null;
+    _cardSetupReturnStage = WalletFlowStage.welcome;
+    _stage = _summary == null
+        ? WalletFlowStage.welcome
+        : WalletFlowStage.unlocked;
+    _notify();
+  }
+
+  /// «Назад» from the card's create, import or backup stage.
+  void leaveCardSetup() {
+    _errorMessage = null;
+    _rutokenGeneratedBackup = null;
+    _stage = _cardSetupReturnStage;
     _notify();
   }
 
@@ -722,6 +783,7 @@ class WalletFlowController extends ChangeNotifier {
         _material = null;
         _lastUnlockAuthMethod = WalletAuthMethod.externalDevice;
         _stage = WalletFlowStage.unlocked;
+        _cardSetupReturnStage = WalletFlowStage.welcome;
         _rutokenProvisioningResult = _messages.cardAdoptSuccess(
           account.address,
         );
@@ -768,6 +830,7 @@ class WalletFlowController extends ChangeNotifier {
         _lastUnlockAuthMethod = WalletAuthMethod.externalDevice;
         _rutokenGeneratedBackup = null;
         _stage = WalletFlowStage.unlocked;
+        _cardSetupReturnStage = WalletFlowStage.welcome;
         await _queueRutokenBiometricOffer(pin);
       },
       onCancel: _rutokenNativeAdapter?.cancelPendingOperation,
@@ -885,17 +948,38 @@ class WalletFlowController extends ChangeNotifier {
     });
   }
 
-  /// Retained for a FUTURE "lock app on open" toggle: the default flow no longer
-  /// routes through a [WalletFlowStage.locked] screen (the dashboard is
-  /// read-only and each key op authenticates on demand). Kept so the locked
-  /// shell can be re-enabled without re-deriving this logic.
+  /// Opens the locked screen (lock-on-open, or «Заблокировать снова»).
+  ///
+  /// The dashboard is read-only, so this proves who is holding the phone and
+  /// keeps nothing: the phone vault's key is derived once and dropped, and a
+  /// card is opened and closed without signing. The card path needs the tap,
+  /// with the same cancel as any other card wait.
   Future<void> unlockWallet(String pin) async {
+    final backend = activeBackend;
+    if (backend is RutokenCustodyBackend) {
+      await _runBusy(
+        _messages.busyTapCardToUnlock,
+        () async {
+          final session = await backend.openSigningSession(pin: pin);
+          await session.close();
+          _lastUnlockAuthMethod = WalletAuthMethod.externalDevice;
+          _stage = WalletFlowStage.unlocked;
+        },
+        awaitingCard: true,
+        onCancel: _rutokenNativeAdapter?.cancelPendingOperation,
+      );
+      return;
+    }
     await _runBusy(_messages.busyUnlockingWallet, () async {
-      final backend = activeBackend;
       if (backend is! KeyStorageBackend) {
         throw VaultFailure(_messages.errorCardUnlocksPerSignature);
       }
-      _material = await backend.unlock(pin: pin);
+      try {
+        await backend.unlock(pin: pin);
+      } finally {
+        backend.lock();
+        _material = null;
+      }
       _lastUnlockAuthMethod = WalletAuthMethod.pin;
       _stage = WalletFlowStage.unlocked;
     });
@@ -933,15 +1017,24 @@ class WalletFlowController extends ChangeNotifier {
     });
   }
 
-  /// Retained for a FUTURE "lock app on open" toggle (see [unlockWallet]); the
-  /// default flow no longer enters a locked screen to unlock the whole app.
+  /// The biometric way through the locked screen. For a card this releases
+  /// the stored card PIN — proof enough of who is holding the phone — and
+  /// drops it at once, so no NFC tap is needed.
   Future<void> unlockWithBiometrics() async {
     await _runGuarded(() async {
       final backend = activeBackend;
-      if (backend is! KeyStorageBackend) {
+      if (backend is RutokenCustodyBackend) {
+        await backend.retrievePinWithBiometrics();
+      } else if (backend is KeyStorageBackend) {
+        try {
+          await backend.unlockWithBiometrics();
+        } finally {
+          backend.lock();
+          _material = null;
+        }
+      } else {
         throw const BiometricUnavailableFailure();
       }
-      _material = await backend.unlockWithBiometrics();
       _lastUnlockAuthMethod = WalletAuthMethod.biometric;
       _stage = WalletFlowStage.unlocked;
     });
@@ -1060,7 +1153,7 @@ class WalletFlowController extends ChangeNotifier {
       }
       await _walletConnectService.respondError(
         request: request,
-        message: _messages.wcRejectedByUser,
+        message: DappErrorText.userRejected,
       );
       _removePendingRequest(request);
     });
@@ -1126,7 +1219,7 @@ class WalletFlowController extends ChangeNotifier {
           pendingRequest?.topic != request.topic) {
         return;
       }
-      _pendingRequestPreviewError = error.toString();
+      _pendingRequestPreviewError = describeError(_messages, error);
     } finally {
       if (pendingRequest?.id == request.id &&
           pendingRequest?.topic == request.topic) {
@@ -1444,10 +1537,36 @@ class WalletFlowController extends ChangeNotifier {
       _notify();
       return result;
     } on QrScannerException catch (error) {
-      _errorMessage = error.message;
+      _errorMessage = describeError(_messages, error);
       _notify();
       return null;
     }
+  }
+
+  /// Drops the current error, e.g. once a confirmation sheet has shown it in
+  /// its own result step.
+  void clearError() {
+    if (_errorMessage == null) return;
+    _errorMessage = null;
+    _notify();
+  }
+
+  int _inlineConfirmations = 0;
+
+  /// True while a confirmation sheet draws the operation's progress itself;
+  /// the root busy overlay and the card-PIN biometric offer then stay out of
+  /// its way rather than stacking on top of it.
+  bool get isInlineConfirmationActive => _inlineConfirmations > 0;
+
+  void beginInlineConfirmation() {
+    _inlineConfirmations++;
+    _notify();
+  }
+
+  void endInlineConfirmation() {
+    if (_inlineConfirmations == 0) return;
+    _inlineConfirmations--;
+    _notify();
   }
 
   /// Opens the Connections screen (from the unlocked dashboard).
@@ -1464,15 +1583,64 @@ class WalletFlowController extends ChangeNotifier {
     _notify();
   }
 
-  /// Retained for a FUTURE "lock app on open" toggle (see [unlockWallet]); the
-  /// default flow stays on the read-only dashboard rather than entering a locked
-  /// screen.
+  /// Puts the app behind the locked screen (lock-on-open, «Заблокировать
+  /// снова»). Pending WalletConnect requests stay queued for after unlock.
   void lockWallet() {
     activeBackend.lock();
     _material = null;
     _pendingBiometricPin = null;
+    _backgroundedAt = null;
     _stage = WalletFlowStage.locked;
     _notify();
+  }
+
+  static const String _lockOnOpenStorageKey = 'wallet.lock_on_open.v1';
+
+  /// How long the app may sit in the background before lock-on-open asks
+  /// again. A grace period rather than zero, because the file picker, the
+  /// system biometric dialog and NFC hand-offs all background the app briefly
+  /// in the middle of a task.
+  static const Duration lockOnOpenGrace = Duration(minutes: 1);
+
+  bool _lockOnOpen = false;
+  DateTime? _backgroundedAt;
+
+  /// Off by default: the dashboard is read-only and every key operation
+  /// already asks for its own authorization. On, it is a privacy screen.
+  bool get lockOnOpenEnabled => _lockOnOpen;
+
+  Future<void> setLockOnOpen(bool enabled) async {
+    await _runGuarded(() async {
+      if (enabled) {
+        await _store.write(_lockOnOpenStorageKey, '1');
+      } else {
+        await _store.delete(_lockOnOpenStorageKey);
+      }
+      _lockOnOpen = enabled;
+    });
+  }
+
+  /// The app went to the background (paused or hidden).
+  void appBackgrounded() {
+    if (_stage == WalletFlowStage.unlocked ||
+        _stage == WalletFlowStage.connections) {
+      _backgroundedAt ??= _now();
+    }
+  }
+
+  /// The app is in front again: lock when lock-on-open is on and it was away
+  /// for at least [lockOnOpenGrace] — but never under an operation in flight.
+  void appResumed() {
+    final since = _backgroundedAt;
+    _backgroundedAt = null;
+    if (!_lockOnOpen || since == null || _summary == null) return;
+    if (_busyMessage != null) return;
+    if (_stage != WalletFlowStage.unlocked &&
+        _stage != WalletFlowStage.connections) {
+      return;
+    }
+    if (_now().difference(since) < lockOnOpenGrace) return;
+    lockWallet();
   }
 
   /// Runs a long action behind a progress overlay: sets [busyMessage] (UI shows
@@ -1520,27 +1688,12 @@ class WalletFlowController extends ChangeNotifier {
       await action();
       _errorMessage = null;
       _notify();
-    } on VaultFailure catch (error) {
-      _errorMessage = error.message;
-      _notify();
-    } on WalletConnectServiceException catch (error) {
-      _errorMessage = error.message;
-      _notify();
-    } on Eip4527Exception catch (error) {
-      _errorMessage = error.message;
-      _notify();
-    } on Eip4527SignException catch (error) {
-      _errorMessage = error.message;
-      _notify();
-    } on UrQrException catch (error) {
-      _errorMessage = error.message;
-      _notify();
     } catch (error) {
-      // Catch-all: any other failure (e.g. an unexpected WalletConnect SDK /
-      // relay error while signing or responding to a request) must surface,
-      // not vanish — otherwise an action like "approve request" looks like the
-      // button does nothing. The message carries the cause for diagnosis.
-      _errorMessage = _messages.errorOperationFailed('$error');
+      // Every failure must surface, not vanish — otherwise an action like
+      // "approve request" looks like the button does nothing. Coded domain
+      // failures read in the active language; anything unexpected keeps its
+      // cause visible for diagnosis.
+      _errorMessage = describeError(_messages, error);
       _notify();
     }
   }

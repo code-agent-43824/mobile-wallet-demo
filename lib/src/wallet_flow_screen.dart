@@ -21,11 +21,14 @@ import 'chain_data_controller.dart';
 import 'design/app_shell.dart';
 import 'design/nocturne.dart';
 import 'design/platform_style.dart';
+import 'error_text.dart';
+import 'errors/app_error.dart';
 import 'key_storage/backend_registry.dart';
 import 'key_storage/custody_backend.dart';
 import 'key_storage/key_storage_backend.dart';
 import 'key_storage/phone_secure_vault.dart';
 import 'key_storage/rutoken_biometric_pin_store.dart';
+import 'key_storage/rutoken_method_channel_adapter.dart';
 import 'key_storage/rutoken_provisioning.dart';
 import 'key_storage/secure_key_value_store.dart';
 import 'qr/qr_scanner.dart';
@@ -48,6 +51,7 @@ part 'wallet_flow_screen_onboarding.dart';
 part 'wallet_flow_screen_unlocked.dart';
 part 'wallet_flow_screen_tabs.dart';
 part 'wallet_flow_screen_connections.dart';
+part 'wallet_flow_screen_confirm.dart';
 
 enum WalletFlowStage {
   loading,
@@ -58,6 +62,7 @@ enum WalletFlowStage {
   rutokenCreate,
   rutokenImport,
   rutokenBackup,
+  addCard,
   biometricPrompt,
   locked,
   unlocked,
@@ -96,7 +101,8 @@ class WalletFlowScreen extends StatefulWidget {
   State<WalletFlowScreen> createState() => _WalletFlowScreenState();
 }
 
-class _WalletFlowScreenState extends State<WalletFlowScreen> {
+class _WalletFlowScreenState extends State<WalletFlowScreen>
+    with WidgetsBindingObserver {
   late final WalletFlowController _controller;
   late final ChainDataController _chainData;
 
@@ -128,6 +134,23 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       blockchainProvider: widget.blockchainProvider,
     )..addListener(_onChainDataChanged);
     _controller.loadInitialState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// Feeds lock-on-open: the controller decides whether the time away was long
+  /// enough to ask again.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+        _controller.appBackgrounded();
+      case AppLifecycleState.resumed:
+        _controller.appResumed();
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        break;
+    }
   }
 
   /// The controllers produce user-visible strings but hold no `BuildContext`,
@@ -150,8 +173,18 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
     }
   }
 
+  WalletFlowStage? _lastStage;
+
   void _onControllerChanged() {
     if (mounted) {
+      final stage = _controller.stage;
+      // Locking must not leave a sheet (the send form, a wallet list) showing
+      // the wallet over the lock screen.
+      if (stage == WalletFlowStage.locked &&
+          _lastStage != WalletFlowStage.locked) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+      _lastStage = stage;
       // Keep the shared chain data pointed at whatever wallet is active; the
       // controller ignores a repeated address, so this is cheap on every tick.
       _chainData.setAddress(_controller.summary?.address);
@@ -170,7 +203,9 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
 
   void _syncBusyOverlay() {
     final message = _controller.busyMessage;
-    if (message == null) {
+    // A confirmation sheet shows the operation's progress in its own step;
+    // the overlay on top of it would hide that step and its cancel action.
+    if (message == null || _controller.isInlineConfirmationActive) {
       _busyEntry?.remove();
       _busyEntry = null;
       return;
@@ -194,7 +229,10 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
   }
 
   void _scheduleRutokenBiometricOffer() {
+    // Waits for any confirmation sheet to close, so the offer follows the
+    // operation's result instead of covering it.
     if (_rutokenBiometricDialogOpen ||
+        _controller.isInlineConfirmationActive ||
         !_controller.hasPendingRutokenBiometricOffer) {
       return;
     }
@@ -237,6 +275,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _busyEntry?.remove();
     _busyEntry = null;
     _controller.removeListener(_onControllerChanged);
@@ -354,31 +393,12 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
     switch (tab) {
       case AppTab.wallet:
         return _WalletTab(
+          controller: _controller,
           chainData: _chainData,
           address: _controller.summary?.address ?? '—',
           transactionService: widget.transactionService,
           trackingTransport: widget.trackingTransport,
           canUnlockWithBiometrics: _controller.canUnlockWithBiometrics,
-          onAuthorizeAndSubmit:
-              ({
-                required snapshot,
-                required fromAddress,
-                required toAddress,
-                required amountText,
-                required asset,
-                required tracker,
-                pin,
-                useBiometrics = false,
-              }) => _controller.authorizeAndSubmitTransfer(
-                snapshot: snapshot,
-                fromAddress: fromAddress,
-                toAddress: toAddress,
-                amountText: amountText,
-                asset: asset,
-                tracker: tracker,
-                pin: pin,
-                useBiometrics: useBiometrics,
-              ),
           onScan: () => _onTabSelected(AppTab.connections),
         );
       case AppTab.connections:
@@ -393,6 +413,8 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           currentBackendId: _controller.effectiveBackendId,
           biometricsEnabled: _controller.biometricsEnabled,
           isHardwareCustody: _controller.activeBackend is WalletCustodyBackend,
+          lockOnOpenEnabled: _controller.lockOnOpenEnabled,
+          onLockOnOpenChanged: _controller.setLockOnOpen,
           onLock: _controller.lockWallet,
           onRefresh: _chainData.refresh,
           onListWallets: _controller.listSwitchableWallets,
@@ -403,24 +425,14 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           // that screen's «Создать кошелёк» writes a fresh seed into the phone
           // vault, and routing here would put that one tap away from a wallet
           // the user already has.
+          // Opens the add-card screen rather than the welcome screen: that
+          // screen's «Создать кошелёк» writes a fresh seed into the phone vault,
+          // which must not be one tap away from a wallet the user already has.
           onConnectAnotherCard: widget.rutokenNativeAdapter == null
               ? null
-              : () => _connectAnotherCard(context),
+              : _controller.openAddCard,
         );
     }
-  }
-
-  /// Registers an additional card from Настройки. Same prompt and same NFC wait
-  /// as connecting the first one; the adopted card becomes the active wallet.
-  Future<void> _connectAnotherCard(BuildContext context) async {
-    final auth = await _promptForAuth(
-      context,
-      reason: AppLocalizations.of(context).cardAdoptPinReason,
-      biometricsOffered: false,
-    );
-    final pin = auth?.pin;
-    if (pin == null) return;
-    await _controller.adoptExistingRutoken(pin: pin);
   }
 
   Widget _buildOnboarding(BuildContext context) {
@@ -475,6 +487,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
         return const Center(child: CircularProgressIndicator());
       case WalletFlowStage.welcome:
         return _WelcomeStage(
+          controller: controller,
           backendEntries: controller.backendEntries,
           isRutokenSelected: controller.isRutokenSelected,
           onBackendSelected: controller.selectBackend,
@@ -498,13 +511,11 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       case WalletFlowStage.createWallet:
         // The card has its own provisioning stages, so this one is always the
         // phone wallet.
+        final l10n = AppLocalizations.of(context);
         return _PinSetupStage(
-          title: 'Кошелёк на этом телефоне',
-          description:
-              'Сначала задайте PIN — им будет зашифрован кошелёк. Потом '
-              'приложение создаст seed-фразу и покажет её один раз, чтобы вы '
-              'сохранили резервную копию.',
-          actionLabel: 'Создать кошелёк',
+          title: l10n.createPhoneWalletTitle,
+          description: l10n.createPhoneWalletBody,
+          actionLabel: l10n.createPhoneWalletAction,
           onSubmit: controller.createWallet,
           onBack: controller.goToWelcome,
         );
@@ -521,12 +532,13 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
       case WalletFlowStage.rutokenCreate:
         return _RutokenCreateStage(
           onGenerate: controller.prepareRutokenGeneratedBackup,
-          onBack: controller.goToWelcome,
+          onBack: controller.leaveCardSetup,
         );
       case WalletFlowStage.rutokenImport:
         return _RutokenImportStage(
+          controller: controller,
           onSubmit: controller.provisionImportedRutoken,
-          onBack: controller.goToWelcome,
+          onBack: controller.leaveCardSetup,
         );
       case WalletFlowStage.rutokenBackup:
         final backup = controller.rutokenGeneratedBackup;
@@ -534,10 +546,13 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
           return const SizedBox.shrink();
         }
         return _RutokenBackupStage(
+          controller: controller,
           backup: backup,
           onProvision: controller.provisionGeneratedRutoken,
-          onBack: controller.goToWelcome,
+          onBack: controller.leaveCardSetup,
         );
+      case WalletFlowStage.addCard:
+        return _AddCardStage(controller: controller);
       case WalletFlowStage.biometricPrompt:
         return _BiometricPromptStage(
           isAvailable: controller.biometricsAvailable,
@@ -564,6 +579,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen> {
         return const SizedBox.shrink();
       case WalletFlowStage.connections:
         return _ConnectionsStage(
+          controller: controller,
           isAvailable: controller.isWalletConnectAvailable,
           sessions: controller.walletConnectSessions,
           pendingProposal: controller.pendingProposal,

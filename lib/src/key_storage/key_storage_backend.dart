@@ -1,3 +1,5 @@
+import '../errors/app_error.dart';
+
 class StoredWalletSummary {
   const StoredWalletSummary({
     required this.address,
@@ -22,10 +24,29 @@ class WalletMaterial {
   final String privateKeyHex;
 }
 
-class VaultFailure implements Exception {
-  const VaultFailure(this.message);
+class VaultFailure implements Exception, CodedError {
+  /// A failure whose text comes from outside the app (or is already localized
+  /// by the caller); shown as is.
+  const VaultFailure(String message)
+    : _message = message,
+      errorCode = null,
+      errorArgs = const <String, Object>{};
 
-  final String message;
+  const VaultFailure.coded(
+    AppErrorCode this.errorCode, [
+    this.errorArgs = const <String, Object>{},
+  ]) : _message = null;
+
+  final String? _message;
+
+  @override
+  final AppErrorCode? errorCode;
+
+  @override
+  final Map<String, Object> errorArgs;
+
+  @override
+  String get message => _message ?? debugDescribeError(errorCode!, errorArgs);
 
   @override
   String toString() => 'VaultFailure: $message';
@@ -33,45 +54,49 @@ class VaultFailure implements Exception {
 
 class WalletNotInitializedFailure extends VaultFailure {
   const WalletNotInitializedFailure()
-    : super('Wallet vault is not initialized yet.');
+    : super.coded(AppErrorCode.walletNotInitialized);
 }
 
 class InvalidPinFailure extends VaultFailure {
-  const InvalidPinFailure() : super('Invalid PIN or corrupted wallet payload.');
+  const InvalidPinFailure() : super.coded(AppErrorCode.invalidPin);
 }
 
 class InvalidMnemonicFailure extends VaultFailure {
-  const InvalidMnemonicFailure()
-    : super('Seed phrase is invalid or unsupported.');
+  const InvalidMnemonicFailure() : super.coded(AppErrorCode.invalidMnemonic);
 }
 
 class BiometricUnavailableFailure extends VaultFailure {
   const BiometricUnavailableFailure()
-    : super('Biometric unlock is unavailable on this device.');
+    : super.coded(AppErrorCode.biometricUnavailable);
 }
 
 class BiometricNotEnabledFailure extends VaultFailure {
   const BiometricNotEnabledFailure()
-    : super('Biometric unlock is not enabled for this wallet.');
+    : super.coded(AppErrorCode.biometricNotEnabled);
 }
 
 class BiometricCancelledFailure extends VaultFailure {
   const BiometricCancelledFailure()
-    : super('Biometric authentication was cancelled.');
+    : super.coded(AppErrorCode.biometricCancelled);
 }
 
 class VaultLockedOutFailure extends VaultFailure {
-  const VaultLockedOutFailure(super.message);
+  VaultLockedOutFailure(this.remaining)
+    : super.coded(AppErrorCode.vaultLockedOut, <String, Object>{
+        'remaining': remaining,
+      });
+
+  /// How long until the next unlock attempt is accepted.
+  final Duration remaining;
 }
 
 class CorruptVaultPayloadFailure extends VaultFailure {
-  const CorruptVaultPayloadFailure()
-    : super('Stored wallet payload is corrupt or unreadable.');
+  const CorruptVaultPayloadFailure() : super.coded(AppErrorCode.vaultCorrupt);
 }
 
 class UnsupportedVaultSchemaFailure extends VaultFailure {
   const UnsupportedVaultSchemaFailure(this.schemaVersion)
-    : super('Stored wallet uses an unsupported schema version.');
+    : super.coded(AppErrorCode.vaultSchemaUnsupported);
 
   final int schemaVersion;
 }

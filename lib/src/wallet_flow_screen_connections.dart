@@ -7,6 +7,7 @@ part of 'wallet_flow_screen.dart';
 /// real `reown_walletkit` impl (9.2) lands.
 class _ConnectionsStage extends StatefulWidget {
   const _ConnectionsStage({
+    required this.controller,
     required this.isAvailable,
     required this.sessions,
     required this.pendingProposal,
@@ -38,6 +39,8 @@ class _ConnectionsStage extends StatefulWidget {
     required this.onBack,
   });
 
+  /// Read by the confirmation sheet for the operation's live progress.
+  final WalletFlowController controller;
   final bool isAvailable;
   final List<WalletConnectSession> sessions;
   final WalletConnectSessionProposal? pendingProposal;
@@ -106,18 +109,15 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
       await widget.onApproveRequest();
       return;
     }
-    final credential = await _promptForAuth(
+    // Cancelling the sheet keeps the request shown; nothing was signed.
+    await _confirmOperation(
       context,
+      controller: widget.controller,
       reason: l10n.wcApproveNeedsKey,
       biometricsOffered: _biometricsOffered,
-    );
-    if (credential == null) {
-      // User dismissed the auth sheet — abort silently, keep the request shown.
-      return;
-    }
-    await widget.onApproveRequest(
-      pin: credential.pin,
-      useBiometrics: credential.useBiometrics,
+      run: (pin, useBiometrics) =>
+          widget.onApproveRequest(pin: pin, useBiometrics: useBiometrics),
+      successBody: () => l10n.wcApproveSuccess,
     );
   }
 
@@ -135,32 +135,30 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
   }
 
   Future<void> _prepareAirGapAccountExport() async {
-    final credential = await _promptForAuth(
+    final l10n = AppLocalizations.of(context);
+    await _confirmOperation(
       context,
-      reason: AppLocalizations.of(context).wcExportPinReason,
+      controller: widget.controller,
+      reason: l10n.wcExportPinReason,
       biometricsOffered: _biometricsOffered,
-    );
-    if (credential == null) {
-      return;
-    }
-    await widget.onPrepareAirGapAccountExport(
-      pin: credential.pin,
-      useBiometrics: credential.useBiometrics,
+      run: (pin, useBiometrics) => widget.onPrepareAirGapAccountExport(
+        pin: pin,
+        useBiometrics: useBiometrics,
+      ),
+      successBody: () => l10n.airgapExportSuccess,
     );
   }
 
   Future<void> _signAirGap() async {
-    final credential = await _promptForAuth(
+    final l10n = AppLocalizations.of(context);
+    await _confirmOperation(
       context,
-      reason: AppLocalizations.of(context).wcSignPinReason,
+      controller: widget.controller,
+      reason: l10n.wcSignPinReason,
       biometricsOffered: _biometricsOffered,
-    );
-    if (credential == null) {
-      return;
-    }
-    await widget.onSignAirGapRequest(
-      pin: credential.pin,
-      useBiometrics: credential.useBiometrics,
+      run: (pin, useBiometrics) =>
+          widget.onSignAirGapRequest(pin: pin, useBiometrics: useBiometrics),
+      successBody: () => l10n.airgapSignSuccess,
     );
   }
 

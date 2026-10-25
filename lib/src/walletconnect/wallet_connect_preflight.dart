@@ -4,11 +4,30 @@ import '../blockchain/blockchain_provider.dart';
 import '../blockchain/network_config.dart';
 import 'wallet_connect_service.dart';
 import 'wallet_connect_v2.dart';
+import '../errors/app_error.dart';
 
-class WalletConnectPreflightFailure implements Exception {
-  const WalletConnectPreflightFailure(this.message);
+class WalletConnectPreflightFailure implements Exception, CodedError {
+  /// A failure whose text comes from outside the app; shown as is.
+  const WalletConnectPreflightFailure(String message)
+    : _message = message,
+      errorCode = null,
+      errorArgs = const <String, Object>{};
 
-  final String message;
+  const WalletConnectPreflightFailure.coded(
+    AppErrorCode this.errorCode, [
+    this.errorArgs = const <String, Object>{},
+  ]) : _message = null;
+
+  final String? _message;
+
+  @override
+  final AppErrorCode? errorCode;
+
+  @override
+  final Map<String, Object> errorArgs;
+
+  @override
+  String get message => _message ?? debugDescribeError(errorCode!, errorArgs);
 
   @override
   String toString() => message;
@@ -79,6 +98,11 @@ abstract interface class WalletConnectTransactionPreflight {
   });
 }
 
+/// [WalletConnectTransactionPreview.providerLabel] when the preview comes from
+/// the dApp's own request fields rather than an RPC node; the UI names it in
+/// the active language.
+const String requestFieldsProviderLabel = 'dapp-request-fields';
+
 /// Deterministic fallback for pure coordinator/controller tests. Production
 /// injects [PublicRpcWalletConnectTransactionPreflight]. It deliberately
 /// refuses missing fields instead of recreating the removed fixed constants.
@@ -102,8 +126,8 @@ class RequestFieldsWalletConnectTransactionPreflight
     final maxFee = decoded.maxFeePerGasWei;
     final priorityFee = decoded.maxPriorityFeePerGasWei;
     if (gasLimit == null || maxFee == null || priorityFee == null) {
-      throw const WalletConnectPreflightFailure(
-        'dApp не передал gas/fee, а live RPC preflight не подключён.',
+      throw const WalletConnectPreflightFailure.coded(
+        AppErrorCode.wcPreflightNoFees,
       );
     }
     _validateFeeFields(
@@ -123,7 +147,7 @@ class RequestFieldsWalletConnectTransactionPreflight
       gasLimit: gasLimit,
       maxFeePerGasWei: maxFee,
       maxPriorityFeePerGasWei: priorityFee,
-      providerLabel: 'параметры dApp',
+      providerLabel: requestFieldsProviderLabel,
       wasSimulated: false,
       gasWasEstimated: false,
       feesWereEstimated: false,
@@ -214,7 +238,7 @@ class PublicRpcWalletConnectTransactionPreflight
           );
           if (rawBlock is! Map || rawBlock['baseFeePerGas'] is! String) {
             throw const WalletConnectPreflightFailure(
-              'RPC не вернул baseFeePerGas последнего блока.',
+              'latest block has no baseFeePerGas',
             );
           }
           final baseFee = _parseHexBigInt(
@@ -258,9 +282,9 @@ class PublicRpcWalletConnectTransactionPreflight
       }
     }
 
-    throw WalletConnectPreflightFailure(
-      'Не удалось безопасно проверить транзакцию через RPC: '
-      '${failures.join(' | ')}',
+    throw WalletConnectPreflightFailure.coded(
+      AppErrorCode.wcPreflightRpcFailed,
+      <String, Object>{'detail': failures.join(' | ')},
     );
   }
 
@@ -282,11 +306,11 @@ class PublicRpcWalletConnectTransactionPreflight
     if (error != null) {
       final message = error is Map ? error['message'] : error;
       throw WalletConnectPreflightFailure(
-        '$method отклонён: ${message ?? 'неизвестная RPC-ошибка'}',
+        '$method rejected: ${message ?? 'unknown RPC error'}',
       );
     }
     if (!response.containsKey('result')) {
-      throw WalletConnectPreflightFailure('$method вернул ответ без result.');
+      throw WalletConnectPreflightFailure('$method returned no result');
     }
     return response['result'];
   }
@@ -303,13 +327,17 @@ EvmNetwork _networkForChainId(String chainId) {
       }
     }
   }
-  throw WalletConnectPreflightFailure('Сеть $chainId не поддерживается.');
+  throw WalletConnectPreflightFailure.coded(
+    AppErrorCode.wcUnsupportedChain,
+    <String, Object>{'chainId': chainId},
+  );
 }
 
 void _validateAccount(String requested, String active) {
   if (requested.toLowerCase() != active.toLowerCase()) {
-    throw WalletConnectPreflightFailure(
-      'Запрос адресован другому аккаунту ($requested).',
+    throw WalletConnectPreflightFailure.coded(
+      AppErrorCode.requestOtherAccount,
+      <String, Object>{'address': requested},
     );
   }
 }
@@ -320,33 +348,32 @@ void _validateFeeFields({
   required BigInt priorityFee,
 }) {
   if (gasLimit <= 0) {
-    throw const WalletConnectPreflightFailure(
-      'Gas limit должен быть больше 0.',
+    throw const WalletConnectPreflightFailure.coded(
+      AppErrorCode.wcInvalidGas,
+      <String, Object>{'detail': 'gas limit must be above 0'},
     );
   }
   if (maxFee < BigInt.zero || priorityFee < BigInt.zero) {
-    throw const WalletConnectPreflightFailure(
-      'Gas fee не может быть отрицательной.',
+    throw const WalletConnectPreflightFailure.coded(
+      AppErrorCode.wcInvalidGas,
+      <String, Object>{'detail': 'negative fee'},
     );
   }
   if (priorityFee > maxFee) {
-    throw const WalletConnectPreflightFailure(
-      'maxPriorityFeePerGas превышает maxFeePerGas.',
+    throw const WalletConnectPreflightFailure.coded(
+      AppErrorCode.wcInvalidGas,
+      <String, Object>{'detail': 'maxPriorityFeePerGas exceeds maxFeePerGas'},
     );
   }
 }
 
 BigInt _parseHexBigInt(Object? value, String field) {
   if (value is! String || !value.startsWith('0x')) {
-    throw WalletConnectPreflightFailure(
-      '$field вернул некорректное hex-значение.',
-    );
+    throw WalletConnectPreflightFailure('$field is not a valid hex value');
   }
   final parsed = BigInt.tryParse(value.substring(2), radix: 16);
   if (parsed == null) {
-    throw WalletConnectPreflightFailure(
-      '$field вернул некорректное hex-значение.',
-    );
+    throw WalletConnectPreflightFailure('$field is not a valid hex value');
   }
   return parsed;
 }

@@ -150,7 +150,8 @@ void main() {
     expect(service.respondedResults, isEmpty);
     expect(
       service.respondedErrors.single.message,
-      contains('не поддерживается'),
+      // dApp-facing, so English whatever the wallet's UI language is.
+      'Chain eip155:137 is not supported.',
     );
   });
 

@@ -3,9 +3,30 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 
+import '../errors/app_error.dart';
 import '../key_storage/key_storage_backend.dart';
 
 enum BiometricAuthMode { local, simulated, unavailable }
+
+/// Why the system biometric dialog is shown. The dialog's sentence belongs to
+/// the active UI language, so domain code names the purpose and whoever builds
+/// the backend supplies the text ([BiometricPromptText]).
+enum BiometricPrompt {
+  enableQuickUnlock,
+  unlockWallet,
+  saveCardPin,
+  releaseCardPin,
+}
+
+typedef BiometricPromptText = String Function(BiometricPrompt prompt);
+
+/// Fallback for backends built without a localized source (tests, tools).
+String defaultBiometricPromptText(BiometricPrompt prompt) => switch (prompt) {
+  BiometricPrompt.enableQuickUnlock => 'Confirm to turn on quick unlock.',
+  BiometricPrompt.unlockWallet => 'Confirm to unlock the wallet.',
+  BiometricPrompt.saveCardPin => 'Confirm to save the card PIN.',
+  BiometricPrompt.releaseCardPin => 'Confirm to use the saved card PIN.',
+};
 
 abstract interface class BiometricAuthGateway {
   BiometricAuthMode get mode;
@@ -65,9 +86,9 @@ class LocalAuthenticationGateway implements BiometricAuthGateway {
         throw const BiometricCancelledFailure();
       }
     } on PlatformException catch (error) {
-      throw VaultFailure(
-        'Biometric authentication failed: ${error.message ?? error.code}',
-      );
+      throw VaultFailure.coded(AppErrorCode.biometricFailed, <String, Object>{
+        'detail': error.message ?? error.code,
+      });
     }
   }
 }

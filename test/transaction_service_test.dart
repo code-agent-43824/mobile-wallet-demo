@@ -132,7 +132,7 @@ void main() {
       expect(signed.rawTransactionBytes[0], 0x02);
       expect(signed.rawTransactionBytes[1], greaterThanOrEqualTo(0xc0));
       expect(signed.transactionHashHex, hasLength(66));
-      expect(signed.signingNote, contains('PIN нужен только один раз'));
+      expect(signed.signingNote, contains('one PIN'));
     },
   );
 

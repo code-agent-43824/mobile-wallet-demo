@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../errors/app_error.dart';
+
 /// Metadata about the dApp peer on the other end of a WalletConnect session.
 class WalletConnectPeer {
   const WalletConnectPeer({
@@ -80,13 +82,50 @@ class WalletConnectRequest {
   final List<Object?> params;
 }
 
-class WalletConnectServiceException implements Exception {
-  const WalletConnectServiceException(this.message);
+class WalletConnectServiceException implements Exception, CodedError {
+  /// A failure whose text comes from outside the app; shown as is.
+  const WalletConnectServiceException(String message)
+    : _message = message,
+      errorCode = null,
+      errorArgs = const <String, Object>{};
 
-  final String message;
+  const WalletConnectServiceException.coded(
+    AppErrorCode this.errorCode, [
+    this.errorArgs = const <String, Object>{},
+  ]) : _message = null;
+
+  final String? _message;
+
+  @override
+  final AppErrorCode? errorCode;
+
+  @override
+  final Map<String, Object> errorArgs;
+
+  @override
+  String get message => _message ?? debugDescribeError(errorCode!, errorArgs);
 
   @override
   String toString() => 'WalletConnectServiceException: $message';
+}
+
+/// JSON-RPC error texts sent *to dApps*. Protocol-facing rather than UI, so
+/// they stay English whatever language the wallet itself shows.
+abstract final class DappErrorText {
+  static const String userRejected = 'User rejected the request.';
+  static const String disconnected = 'Disconnected by the wallet.';
+  static const String walletNotInitialized = 'Wallet is not initialized.';
+
+  static String signatureRequired(String method) =>
+      '$method requires a wallet signature.';
+  static String unsupportedMethod(String method) =>
+      '$method is not supported by this wallet.';
+  static String otherAccount(String address) =>
+      'The request is for another account ($address).';
+  static String addressNotConnected(String address) =>
+      'Address $address is not connected to this session.';
+  static String unsupportedChain(int chainId) =>
+      'Chain eip155:$chainId is not supported.';
 }
 
 /// Wallet-side WalletConnect v2 service: external dApps pair with this wallet,
@@ -155,7 +194,8 @@ abstract interface class WalletConnectService {
 class UnavailableWalletConnectService implements WalletConnectService {
   const UnavailableWalletConnectService();
 
-  static const String _message = 'WalletConnect ещё не настроен в этой сборке.';
+  static const WalletConnectServiceException _notConfigured =
+      WalletConnectServiceException.coded(AppErrorCode.wcNotConfigured);
 
   @override
   bool get isAvailable => false;
@@ -165,7 +205,7 @@ class UnavailableWalletConnectService implements WalletConnectService {
 
   @override
   Future<void> pair({required String uri}) async {
-    throw const WalletConnectServiceException(_message);
+    throw _notConfigured;
   }
 
   @override
@@ -177,7 +217,7 @@ class UnavailableWalletConnectService implements WalletConnectService {
     required WalletConnectSessionProposal proposal,
     required List<String> accounts,
   }) async {
-    throw const WalletConnectServiceException(_message);
+    throw _notConfigured;
   }
 
   @override
@@ -255,8 +295,8 @@ class FakeWalletConnectService implements WalletConnectService {
   @override
   Future<void> pair({required String uri}) async {
     if (!uri.startsWith('wc:')) {
-      throw const WalletConnectServiceException(
-        'Некорректный WalletConnect URI (ожидался формат wc:...).',
+      throw const WalletConnectServiceException.coded(
+        AppErrorCode.wcInvalidUri,
       );
     }
     // Simulate the relay delivering a proposal shortly after pairing.

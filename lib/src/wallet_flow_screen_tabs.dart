@@ -33,6 +33,23 @@ class _WalletSwitcherData {
 
 /// A language's name in that language — deliberately not translated, so the
 /// list reads the same whichever language the app is currently showing.
+String _historyDirectionLabel(AppLocalizations l10n, HistoryDirection value) =>
+    switch (value) {
+      HistoryDirection.incoming => l10n.historyIncoming,
+      HistoryDirection.outgoing => l10n.historyOutgoing,
+      HistoryDirection.self => l10n.historySelf,
+      HistoryDirection.contract => l10n.historyContract,
+      HistoryDirection.unknown => l10n.historyUnknown,
+    };
+
+String _historyStatusLabel(AppLocalizations l10n, HistoryStatus value) =>
+    switch (value) {
+      HistoryStatus.success => l10n.historySuccess,
+      HistoryStatus.failed => l10n.historyFailed,
+      HistoryStatus.pending => l10n.historyPending,
+      HistoryStatus.unknown => l10n.historyUnknown,
+    };
+
 String _languageName(Locale locale) => switch (locale.languageCode) {
   'en' => 'English',
   _ => 'Русский',
@@ -93,7 +110,9 @@ class _ActivityTab extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: NocturneSpacing.x3),
             child: _SummaryTile(
-              label: '${tx.directionLabel} · ${tx.statusLabel}',
+              label:
+                  '${_historyDirectionLabel(l10n, tx.direction)} · '
+                  '${_historyStatusLabel(l10n, tx.status)}',
               value:
                   '${tx.valueFormatted}\n${tx.counterparty}\n'
                   '${tx.timestampUtc?.toIso8601String() ?? l10n.activityUnknownTime}',
@@ -117,6 +136,8 @@ class _SettingsTab extends StatelessWidget {
     required this.currentBackendId,
     required this.biometricsEnabled,
     required this.isHardwareCustody,
+    required this.lockOnOpenEnabled,
+    required this.onLockOnOpenChanged,
     required this.onLock,
     required this.onRefresh,
     required this.onListWallets,
@@ -132,6 +153,8 @@ class _SettingsTab extends StatelessWidget {
   final String currentBackendId;
   final bool biometricsEnabled;
   final bool isHardwareCustody;
+  final bool lockOnOpenEnabled;
+  final Future<void> Function(bool enabled) onLockOnOpenChanged;
   final VoidCallback onLock;
   final Future<void> Function() onRefresh;
   final Future<List<SwitchableWallet>> Function() onListWallets;
@@ -145,7 +168,7 @@ class _SettingsTab extends StatelessWidget {
 
   /// Null when this build has no card transport (desktop, or a test without an
   /// adapter) — the switcher then offers no way to add one.
-  final Future<void> Function()? onConnectAnotherCard;
+  final VoidCallback? onConnectAnotherCard;
 
   @override
   Widget build(BuildContext context) {
@@ -168,6 +191,14 @@ class _SettingsTab extends StatelessWidget {
         _SummaryTile(
           label: l10n.settingsBiometrics,
           value: biometricsEnabled ? l10n.settingsOn : l10n.settingsOff,
+        ),
+        const SizedBox(height: NocturneSpacing.x3),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: lockOnOpenEnabled,
+          onChanged: onLockOnOpenChanged,
+          title: Text(l10n.settingsLockOnOpen),
+          subtitle: Text(l10n.settingsLockOnOpenBody),
         ),
         const SizedBox(height: NocturneSpacing.x6),
         OutlinedButton.icon(
@@ -197,12 +228,13 @@ class _SettingsTab extends StatelessWidget {
               icon: const Icon(Icons.refresh),
               label: Text(l10n.settingsRefreshChain),
             ),
-            if (!isHardwareCustody)
-              OutlinedButton.icon(
-                onPressed: onLock,
-                icon: const Icon(Icons.lock_outline),
-                label: Text(l10n.settingsLockAgain),
-              ),
+            // A card unlocks with its PIN and a tap, so locking is offered for
+            // both kinds of wallet.
+            OutlinedButton.icon(
+              onPressed: onLock,
+              icon: const Icon(Icons.lock_outline),
+              label: Text(l10n.settingsLockAgain),
+            ),
           ],
         ),
       ],
@@ -498,21 +530,22 @@ class _OfflineCacheBanner extends StatelessWidget {
 /// with the loading, empty and offline-cache states the design models.
 class _WalletTab extends StatefulWidget {
   const _WalletTab({
+    required this.controller,
     required this.chainData,
     required this.address,
     required this.transactionService,
     required this.trackingTransport,
     required this.canUnlockWithBiometrics,
-    required this.onAuthorizeAndSubmit,
     required this.onScan,
   });
 
+  /// Runs the send and drives the send sheet's signing step.
+  final WalletFlowController controller;
   final ChainDataController chainData;
   final String address;
   final TransactionService transactionService;
   final JsonRpcTransport trackingTransport;
   final bool canUnlockWithBiometrics;
-  final AuthorizeAndSubmitTransfer onAuthorizeAndSubmit;
 
   /// Opens the surface where scanning happens (the Связи tab), so the design's
   /// third quick action leads somewhere real instead of being a dead button.
@@ -594,13 +627,20 @@ class _WalletTabState extends State<_WalletTab> {
     WalletChainSnapshot snapshot,
     EvmNetworkConfig config,
   ) {
-    final l10n = AppLocalizations.of(context);
     final style = PlatformStyle.of(context);
+    final controller = widget.controller;
+    // The sheet draws the signing step itself, so the root busy overlay stays
+    // out of the way for as long as it is open.
+    controller.beginInlineConfirmation();
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: NocturneColors.surface,
       shape: RoundedRectangleBorder(borderRadius: style.sheetBorderRadius),
       isScrollControlled: true,
+      // Dismissal goes through the sheet's own close action and back gesture,
+      // which it withholds while a signature is in flight.
+      isDismissible: false,
+      enableDrag: false,
       builder: (sheetContext) => Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
@@ -611,35 +651,19 @@ class _WalletTabState extends State<_WalletTab> {
           ),
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(NocturneSpacing.gutter),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // The sheet keeps showing the send result after the operation,
-                // so it needs its own way out — the back gesture alone is not
-                // an affordance.
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: IconButton(
-                    onPressed: () => Navigator.of(sheetContext).pop(),
-                    icon: const Icon(Icons.close),
-                    tooltip: l10n.actionClose,
-                  ),
-                ),
-                _TransferPreparationSection(
-                  snapshot: snapshot,
-                  fromAddress: widget.address,
-                  networkConfig: config,
-                  transactionService: widget.transactionService,
-                  trackingTransport: widget.trackingTransport,
-                  canUnlockWithBiometrics: widget.canUnlockWithBiometrics,
-                  onAuthorizeAndSubmit: widget.onAuthorizeAndSubmit,
-                ),
-              ],
+            child: _TransferPreparationSection(
+              controller: controller,
+              snapshot: snapshot,
+              fromAddress: widget.address,
+              networkConfig: config,
+              transactionService: widget.transactionService,
+              trackingTransport: widget.trackingTransport,
+              canUnlockWithBiometrics: widget.canUnlockWithBiometrics,
             ),
           ),
         ),
       ),
-    );
+    ).whenComplete(controller.endInlineConfirmation);
   }
 
   void _showNetworkSheet(BuildContext context) {

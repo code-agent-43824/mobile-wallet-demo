@@ -40,10 +40,10 @@ class _FakeBlockchainProvider implements BlockchainProvider {
         RecentTransactionSnapshot(
           hash: '0xTx',
           timestampUtc: null,
-          directionLabel: 'Входящая',
+          direction: HistoryDirection.incoming,
           counterparty: '0xCounterparty',
           valueFormatted: '0.25 ETH',
-          statusLabel: 'Confirmed',
+          status: HistoryStatus.success,
         ),
       ],
     );
@@ -140,6 +140,48 @@ class _FailingBroadcaster implements TransactionBroadcaster {
       'RPC отклонил транзакцию: execution reverted',
     );
   }
+}
+
+/// A card that already holds the supported key: adoption reads its public
+/// account and nothing else.
+class _ReadyCardAdapter implements RutokenNativeAdapter {
+  static const String address = '0x2222222222222222222222222222222222222222';
+
+  @override
+  Future<void> cancelPendingOperation() async {}
+
+  @override
+  Future<void> closeSession(RutokenNativeSession session) async {}
+
+  @override
+  Future<WalletAccountDescriptor> importWallet({
+    required RutokenNativeSession session,
+    required Uint8List masterPrivateKey,
+    required Uint8List chainCode,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<RutokenNativeSession> openSession({required String pin}) async =>
+      RutokenNativeSession(
+        id: 'ready',
+        openedAtUtc: DateTime.utc(2026, 10, 24),
+      );
+
+  @override
+  Future<WalletAccountDescriptor?> readAccountDescriptor(
+    RutokenNativeSession session,
+  ) async => const WalletAccountDescriptor(
+    backendId: 'rutoken_nfc',
+    address: address,
+    derivationPath: "m/44'/60'/0'/0/0",
+  );
+
+  @override
+  Future<RawEcdsaSignature> signDigest({
+    required RutokenNativeSession session,
+    required String derivationPath,
+    required Uint8List digest,
+  }) => throw UnimplementedError();
 }
 
 class _UnusedRutokenAdapter implements RutokenNativeAdapter {
@@ -249,7 +291,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Wallet Demo'), findsOneWidget);
-    expect(find.text('v1.56.0+67'), findsOneWidget);
+    expect(find.text('v1.57.0+68'), findsOneWidget);
     // Onboarding variant B: no storage picker on the first screen — the
     // backend follows from which action is taken.
     expect(find.text('Кошелёк за минуту'), findsOneWidget);
@@ -260,6 +302,136 @@ void main() {
     // the card action is correctly absent. The Rutoken test below asserts it
     // appears when an adapter is present.
     expect(find.text('У меня есть карта'), findsNothing);
+  });
+
+  testWidgets('another card is added from its own screen, one sheet deep', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        locale: const Locale('ru'),
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _FakeBlockchainProvider(),
+        rutokenNativeAdapter: _ReadyCardAdapter(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Создать кошелёк'));
+    await tester.pumpAndSettle();
+    final setupFields = find.byType(TextField);
+    await tester.enterText(setupFields.at(0), '1234');
+    await tester.enterText(setupFields.at(1), '1234');
+    await tester.tap(find.text('Создать кошелёк'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Я сохранил seed-фразу'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Пока без биометрии'));
+    await tester.pumpAndSettle();
+
+    Future<void> openAddCard() async {
+      // The tab label; the app bar repeats it once Настройки is open.
+      await tester.tap(find.text('Настройки').last);
+      await tester.pumpAndSettle();
+      final switcher = find.text('Переключить кошелёк');
+      await tester.ensureVisible(switcher);
+      await tester.tap(switcher);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Подключить ещё карту'));
+      await tester.pumpAndSettle();
+    }
+
+    await openAddCard();
+    // Only the card's three ways in — never phone-wallet creation, which the
+    // welcome screen would have put one tap away from the wallet in use.
+    expect(find.text('Новая карта'), findsOneWidget);
+    expect(find.text('Подключить готовую карту'), findsOneWidget);
+    expect(find.text('Создать на карте'), findsOneWidget);
+    expect(find.text('Импортировать на карту'), findsOneWidget);
+    expect(find.text('Создать кошелёк'), findsNothing);
+
+    // «Назад» returns to the wallet that was active.
+    await tester.tap(find.text('Назад'));
+    await tester.pumpAndSettle();
+    expect(find.text('Новая карта'), findsNothing);
+    expect(find.text('Переключить кошелёк'), findsOneWidget);
+
+    await openAddCard();
+    await tester.tap(find.text('Подключить готовую карту'));
+    await tester.pumpAndSettle();
+    await _enterOperationPin(tester, '1234');
+    await tester.tap(find.text('Подтвердить'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining(_ReadyCardAdapter.address), findsWidgets);
+    await tester.tap(find.text('Продолжить'));
+    await tester.pumpAndSettle();
+
+    // The connected card is now the active wallet.
+    expect(find.text('Новая карта'), findsNothing);
+    await tester.tap(find.text('Настройки').last);
+    await tester.pumpAndSettle();
+    expect(find.text(_ReadyCardAdapter.address), findsOneWidget);
+  });
+
+  testWidgets('lock-on-open: the next start asks for the PIN on the keypad', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final store = InMemorySecureKeyValueStore();
+
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        locale: const Locale('ru'),
+        store: store,
+        blockchainProvider: _FakeBlockchainProvider(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Создать кошелёк'));
+    await tester.pumpAndSettle();
+    final setupFields = find.byType(TextField);
+    await tester.enterText(setupFields.at(0), '1234');
+    await tester.enterText(setupFields.at(1), '1234');
+    await tester.tap(find.text('Создать кошелёк'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Я сохранил seed-фразу'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Пока без биометрии'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Настройки').last);
+    await tester.pumpAndSettle();
+    final toggle = find.text('Запрашивать PIN при открытии');
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+
+    // A fresh start of the app on the same storage.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        locale: const Locale('ru'),
+        store: store,
+        blockchainProvider: _FakeBlockchainProvider(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Кошелёк заблокирован'), findsOneWidget);
+    expect(find.text('Кошелёк'), findsNothing, reason: 'no tabs behind it');
+    await _enterOperationPin(tester, '1234');
+    await tester.tap(find.text('Разблокировать'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Кошелёк заблокирован'), findsNothing);
+    expect(find.text('Отправить'), findsOneWidget);
   });
 
   testWidgets('requires complete backup before Rutoken provisioning', (
@@ -393,10 +565,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Подтвердите операцию'), findsNothing);
+    // The review step replaces the form inside the same sheet.
+    expect(find.text('Проверьте перевод'), findsOneWidget);
     // Renamed from the developer-ish "Итоговый debit" while localizing.
     expect(find.text('Спишется всего'), findsOneWidget);
     expect(find.text('Получатель'), findsOneWidget);
-    expect(find.textContaining('Preview валиден'), findsOneWidget);
+    expect(find.text('Подписать и отправить'), findsOneWidget);
   });
 
   testWidgets('uses funded balance after switching networks', (
@@ -456,7 +630,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Недостаточно'), findsNothing);
-    expect(find.textContaining('Preview валиден'), findsOneWidget);
+    expect(find.text('Проверьте перевод'), findsOneWidget);
   });
 
   testWidgets('ignores a late snapshot from the previous network', (
@@ -567,10 +741,7 @@ void main() {
     );
     await tester.enterText(sendFields.at(1), '0.1');
 
-    final sendButton = find.text('Подписать и отправить');
-    await tester.ensureVisible(sendButton);
-    await tester.tap(sendButton);
-    await tester.pumpAndSettle();
+    await _reviewAndSign(tester);
 
     // The per-op auth sheet offers the biometric fast-path; use it to sign.
     expect(find.text('Подтвердите операцию'), findsOneWidget);
@@ -627,10 +798,7 @@ void main() {
     );
     await tester.enterText(sendFields.at(1), '0.1');
 
-    final sendButton = find.text('Подписать и отправить');
-    await tester.ensureVisible(sendButton);
-    await tester.tap(sendButton);
-    await tester.pumpAndSettle();
+    await _reviewAndSign(tester);
 
     // Sending is a private-key op: confirm the per-op auth sheet with the PIN.
     expect(find.text('Подтвердите операцию'), findsOneWidget);
@@ -639,12 +807,21 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
+    // The result is the last step of the same sheet: pending → confirmed.
     expect(find.text('Успешная отправка'), findsOneWidget);
+    expect(find.text('Сеть подтвердила перевод.'), findsOneWidget);
     expect(find.textContaining('0xsubmittedhash'), findsOneWidget);
-    expect(find.textContaining('broadcast.fake'), findsOneWidget);
-    expect(find.textContaining('Loaded nonce'), findsOneWidget);
-    expect(find.textContaining('Статус: Confirmed'), findsOneWidget);
+    // Nonce, endpoint and block are developer detail behind «Подробности».
+    expect(find.textContaining('broadcast.fake'), findsNothing);
+    await tester.tap(find.text('Подробности'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('RPC: broadcast.fake'), findsOneWidget);
+    expect(find.textContaining('Nonce: '), findsOneWidget);
     expect(find.textContaining('Block: 16'), findsOneWidget);
+
+    await tester.tap(find.text('Готово'));
+    await tester.pumpAndSettle();
+    expect(find.text('Успешная отправка'), findsNothing);
   });
 
   testWidgets('keeps tracking async after successful submission', (
@@ -691,10 +868,7 @@ void main() {
     );
     await tester.enterText(sendFields.at(1), '0.1');
 
-    final sendButton = find.text('Подписать и отправить');
-    await tester.ensureVisible(sendButton);
-    await tester.tap(sendButton);
-    await tester.pumpAndSettle();
+    await _reviewAndSign(tester);
 
     // Confirm the per-op auth sheet; the unlock+submit then completes while
     // receipt tracking stays pending (delayed transport).
@@ -715,13 +889,14 @@ void main() {
       find.textContaining('Перевод отправлен'),
       findsOneWidget,
     );
-    expect(find.text('Подписать и отправить'), findsOneWidget);
+    // Tracking does not hold the sheet: the way out is already offered.
+    expect(find.text('Готово'), findsOneWidget);
 
     // Advance past the 4s delayed transport so the receipt resolves.
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Статус: Confirmed'), findsOneWidget);
+    expect(find.text('Сеть подтвердила перевод.'), findsOneWidget);
   });
 
   testWidgets('shows failure state when broadcast is rejected', (
@@ -768,10 +943,7 @@ void main() {
     );
     await tester.enterText(sendFields.at(1), '0.1');
 
-    final sendButton = find.text('Подписать и отправить');
-    await tester.ensureVisible(sendButton);
-    await tester.tap(sendButton);
-    await tester.pumpAndSettle();
+    await _reviewAndSign(tester);
 
     // Confirm the per-op auth sheet; the broadcast then fails downstream.
     expect(find.text('Подтвердите операцию'), findsOneWidget);
@@ -780,8 +952,13 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
+    expect(find.text('Перевод не отправлен'), findsOneWidget);
     expect(find.textContaining('execution reverted'), findsOneWidget);
     expect(find.text('Успешная отправка'), findsNothing);
+    // Shown in the sheet, not repeated in the page banner behind it.
+    await tester.tap(find.text('Закрыть'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('execution reverted'), findsNothing);
   });
 }
 
@@ -792,6 +969,19 @@ Future<void> _enterOperationPin(WidgetTester tester, String pin) async {
     await tester.tap(find.byKey(ValueKey<String>('pin-key-$digit')));
     await tester.pump();
   }
+}
+
+/// Moves the send sheet from the filled form to the PIN step: the review step
+/// comes first, and only it offers signing.
+Future<void> _reviewAndSign(WidgetTester tester) async {
+  final review = find.text('Проверить перевод');
+  await tester.ensureVisible(review);
+  await tester.tap(review);
+  await tester.pumpAndSettle();
+  final sign = find.text('Подписать и отправить');
+  await tester.ensureVisible(sign);
+  await tester.tap(sign);
+  await tester.pumpAndSettle();
 }
 
 /// Opens the transfer sheet. The redesign moved the form off the wallet screen,

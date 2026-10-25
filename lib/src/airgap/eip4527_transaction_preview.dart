@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:web3dart/web3dart.dart' show bytesToHex;
 
+import '../errors/app_error.dart';
 import 'eip4527.dart';
 
 /// Human-verifiable fields decoded from the unsigned transaction carried by an
@@ -64,13 +65,17 @@ class Eip4527TransactionPreviewDecoder {
 
   Eip4527TransactionPreview decode(EthSignRequest request) {
     if (request.signData.isEmpty) {
-      throw const Eip4527Exception('Пустые данные транзакции AirGap.');
+      throw const Eip4527Exception.coded(
+        AppErrorCode.airgapMalformedTransaction,
+        <String, Object>{'detail': 'empty transaction data'},
+      );
     }
     return switch (request.dataType) {
       EthSignDataType.transaction => _decodeLegacy(request),
       EthSignDataType.typedTransaction => _decodeTyped(request),
-      _ => throw const Eip4527Exception(
-        'В базовом AirGap режиме поддерживаются только транзакции.',
+      _ => throw const Eip4527Exception.coded(
+        AppErrorCode.airgapUnsupportedTransaction,
+        <String, Object>{'detail': 'only transactions are supported'},
       ),
     };
   }
@@ -78,8 +83,11 @@ class Eip4527TransactionPreviewDecoder {
   Eip4527TransactionPreview _decodeLegacy(EthSignRequest request) {
     final list = _decodeTopList(request.signData);
     if (list.length < 9) {
-      throw const Eip4527Exception(
-        'Legacy-транзакция должна содержать EIP-155 chainId.',
+      throw const Eip4527Exception.coded(
+        AppErrorCode.airgapMalformedTransaction,
+        <String, Object>{
+          'detail': 'legacy transaction without an EIP-155 chainId',
+        },
       );
     }
     // Keystone/MetaMask vectors may carry an unsigned 9-field transaction
@@ -104,13 +112,20 @@ class Eip4527TransactionPreviewDecoder {
   Eip4527TransactionPreview _decodeTyped(EthSignRequest request) {
     final transactionType = request.signData.first;
     if (transactionType != 2) {
-      throw Eip4527Exception(
-        'Пока поддерживается только EIP-1559 typed transaction (получен type $transactionType).',
+      throw Eip4527Exception.coded(
+        AppErrorCode.airgapUnsupportedTransaction,
+        <String, Object>{
+          'detail':
+              'transaction type $transactionType; only EIP-1559 is supported',
+        },
       );
     }
     final list = _decodeTopList(request.signData.sublist(1));
     if (list.length < 9) {
-      throw const Eip4527Exception('Неполная EIP-1559 транзакция.');
+      throw const Eip4527Exception.coded(
+        AppErrorCode.airgapMalformedTransaction,
+        <String, Object>{'detail': 'incomplete EIP-1559 transaction'},
+      );
     }
     final embeddedChainId = _smallInt(list[0], 'chainId');
     _assertChain(request.chainId, embeddedChainId);
@@ -140,8 +155,11 @@ class Eip4527TransactionPreviewDecoder {
   }) {
     final to = _bytes(fields[toIndex], 'to');
     if (to.isNotEmpty && to.length != 20) {
-      throw Eip4527Exception(
-        'Адрес назначения должен быть 20 байт, получено ${to.length}.',
+      throw Eip4527Exception.coded(
+        AppErrorCode.airgapMalformedTransaction,
+        <String, Object>{
+          'detail': 'recipient is ${to.length} bytes, expected 20',
+        },
       );
     }
     final data = _bytes(fields[dataIndex], 'data');
@@ -162,8 +180,9 @@ class Eip4527TransactionPreviewDecoder {
 
   void _assertChain(int outer, int embedded) {
     if (outer != embedded) {
-      throw Eip4527Exception(
-        'chainId запроса ($outer) не совпадает с транзакцией ($embedded).',
+      throw Eip4527Exception.coded(
+        AppErrorCode.airgapChainMismatch,
+        <String, Object>{'requested': outer, 'embedded': embedded},
       );
     }
   }
@@ -171,14 +190,20 @@ class Eip4527TransactionPreviewDecoder {
   List<Object> _decodeTopList(Uint8List bytes) {
     final decoded = _RlpReader(bytes).read();
     if (decoded is! List<Object>) {
-      throw const Eip4527Exception('Ожидался RLP-список транзакции.');
+      throw const Eip4527Exception.coded(
+        AppErrorCode.airgapMalformedTransaction,
+        <String, Object>{'detail': 'expected an RLP list'},
+      );
     }
     return decoded;
   }
 
   Uint8List _bytes(Object value, String field) {
     if (value is! Uint8List) {
-      throw Eip4527Exception('Поле $field должно быть RLP byte string.');
+      throw Eip4527Exception.coded(
+        AppErrorCode.airgapMalformedTransaction,
+        <String, Object>{'detail': 'field $field is not an RLP byte string'},
+      );
     }
     return value;
   }
@@ -195,7 +220,10 @@ class Eip4527TransactionPreviewDecoder {
   int _smallInt(Object value, String field) {
     final number = _bigInt(value, field);
     if (number > BigInt.from(0x7fffffff)) {
-      throw Eip4527Exception('Поле $field слишком велико.');
+      throw Eip4527Exception.coded(
+        AppErrorCode.airgapMalformedTransaction,
+        <String, Object>{'detail': 'field $field is too large'},
+      );
     }
     return number.toInt();
   }
@@ -210,14 +238,20 @@ class _RlpReader {
   Object read() {
     final value = _readValue();
     if (_offset != bytes.length) {
-      throw const Eip4527Exception('Лишние байты после RLP-транзакции.');
+      throw const Eip4527Exception.coded(
+        AppErrorCode.airgapMalformedTransaction,
+        <String, Object>{'detail': 'trailing bytes after the transaction'},
+      );
     }
     return value;
   }
 
   Object _readValue() {
     if (_offset >= bytes.length) {
-      throw const Eip4527Exception('Оборванный RLP payload.');
+      throw const Eip4527Exception.coded(
+        AppErrorCode.airgapMalformedTransaction,
+        <String, Object>{'detail': 'truncated RLP payload'},
+      );
     }
     final prefix = bytes[_offset++];
     if (prefix <= 0x7f) {
@@ -237,7 +271,10 @@ class _RlpReader {
 
   int _readLength(int byteCount) {
     if (byteCount < 1 || byteCount > 4 || _offset + byteCount > bytes.length) {
-      throw const Eip4527Exception('Некорректная длина RLP.');
+      throw const Eip4527Exception.coded(
+        AppErrorCode.airgapMalformedTransaction,
+        <String, Object>{'detail': 'invalid RLP length'},
+      );
     }
     var result = 0;
     for (var index = 0; index < byteCount; index++) {
@@ -248,7 +285,10 @@ class _RlpReader {
 
   Uint8List _take(int length) {
     if (length < 0 || _offset + length > bytes.length) {
-      throw const Eip4527Exception('Оборванная RLP строка.');
+      throw const Eip4527Exception.coded(
+        AppErrorCode.airgapMalformedTransaction,
+        <String, Object>{'detail': 'truncated RLP string'},
+      );
     }
     final result = Uint8List.fromList(bytes.sublist(_offset, _offset + length));
     _offset += length;
@@ -257,7 +297,10 @@ class _RlpReader {
 
   List<Object> _readList(int length) {
     if (length < 0 || _offset + length > bytes.length) {
-      throw const Eip4527Exception('Оборванный RLP список.');
+      throw const Eip4527Exception.coded(
+        AppErrorCode.airgapMalformedTransaction,
+        <String, Object>{'detail': 'truncated RLP list'},
+      );
     }
     final end = _offset + length;
     final result = <Object>[];
@@ -265,7 +308,10 @@ class _RlpReader {
       result.add(_readValue());
     }
     if (_offset != end) {
-      throw const Eip4527Exception('Некорректная граница RLP списка.');
+      throw const Eip4527Exception.coded(
+        AppErrorCode.airgapMalformedTransaction,
+        <String, Object>{'detail': 'invalid RLP list boundary'},
+      );
     }
     return result;
   }

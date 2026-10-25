@@ -1,5 +1,6 @@
 import '../auth/wallet_operation_auth.dart';
 import '../blockchain/network_config.dart';
+import '../errors/app_error.dart';
 import '../transactions/transaction_service.dart';
 import 'eip712.dart';
 import 'wallet_connect_preflight.dart';
@@ -58,7 +59,7 @@ class WalletConnectInboundCoordinator {
       if (signer == null) {
         await _service.respondError(
           request: request,
-          message: 'Для метода ${request.method} требуется подпись кошелька.',
+          message: DappErrorText.signatureRequired(request.method),
         );
         return;
       }
@@ -76,7 +77,7 @@ class WalletConnectInboundCoordinator {
       if (!_codec.isTransactionMethod(request.method)) {
         await _service.respondError(
           request: request,
-          message: 'Метод ${request.method} не поддерживается этим кошельком.',
+          message: DappErrorText.unsupportedMethod(request.method),
         );
         return;
       }
@@ -85,7 +86,7 @@ class WalletConnectInboundCoordinator {
       if (tx.fromAddress.toLowerCase() != signer.address.toLowerCase()) {
         await _service.respondError(
           request: request,
-          message: 'Запрос адресован другому аккаунту (${tx.fromAddress}).',
+          message: DappErrorText.otherAccount(tx.fromAddress),
         );
         return;
       }
@@ -97,16 +98,16 @@ class WalletConnectInboundCoordinator {
             walletAddress: signer.address,
           );
       if (!preview.matches(request)) {
-        throw const WalletConnectPreflightFailure(
-          'Preview относится к другому WalletConnect-запросу.',
+        throw const WalletConnectPreflightFailure.coded(
+          AppErrorCode.wcPreviewMismatch,
         );
       }
       if (preview.fromAddress.toLowerCase() != tx.fromAddress.toLowerCase() ||
           preview.toAddress.toLowerCase() != tx.toAddress.toLowerCase() ||
           preview.valueWei != tx.valueWei ||
           !_sameBytes(preview.data, tx.data)) {
-        throw const WalletConnectPreflightFailure(
-          'Preview не совпадает с параметрами WalletConnect-запроса.',
+        throw const WalletConnectPreflightFailure.coded(
+          AppErrorCode.wcPreviewMismatch,
         );
       }
 
@@ -158,7 +159,7 @@ class WalletConnectInboundCoordinator {
     if (walletAddress == null) {
       await _service.respondError(
         request: request,
-        message: 'Кошелёк не инициализирован.',
+        message: DappErrorText.walletNotInitialized,
       );
       return;
     }
@@ -166,7 +167,7 @@ class WalletConnectInboundCoordinator {
     if (decoded.address.toLowerCase() != walletAddress.toLowerCase()) {
       await _service.respondError(
         request: request,
-        message: 'Адрес ${decoded.address} не подключён к этой сессии.',
+        message: DappErrorText.addressNotConnected(decoded.address),
       );
       return;
     }
@@ -220,7 +221,7 @@ class WalletConnectInboundCoordinator {
     if (!supported) {
       await _service.respondError(
         request: request,
-        message: 'Сеть eip155:$requestedChainId не поддерживается.',
+        message: DappErrorText.unsupportedChain(requestedChainId),
       );
       return;
     }
@@ -239,7 +240,7 @@ class WalletConnectInboundCoordinator {
     if (message.address.toLowerCase() != signer.address.toLowerCase()) {
       await _service.respondError(
         request: request,
-        message: 'Запрос адресован другому аккаунту (${message.address}).',
+        message: DappErrorText.otherAccount(message.address),
       );
       return;
     }
@@ -262,7 +263,7 @@ class WalletConnectInboundCoordinator {
     if (typed.address.toLowerCase() != signer.address.toLowerCase()) {
       await _service.respondError(
         request: request,
-        message: 'Запрос адресован другому аккаунту (${typed.address}).',
+        message: DappErrorText.otherAccount(typed.address),
       );
       return;
     }

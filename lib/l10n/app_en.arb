@@ -108,11 +108,8 @@
   "transferAvailable": "Available: {amount} {symbol}",
   "transferPreviewAction": "Check the transfer",
   "transferSignAndSend": "Sign and send",
-  "transferSending": "Sending…",
   "transferPickAssetFirst": "Pick an asset to send first.",
   "transferNeedsKey": "Signing and sending a transfer needs private-key access.",
-  "transferSendState": "Send status",
-  "transferStatus": "Status",
   "transferSuccess": "Sent successfully",
   "transferRecipient": "Recipient",
   "transferTotalDebit": "Total debited",
@@ -135,13 +132,10 @@
       }
     }
   },
-  "transferInProgress": "Preparing the transfer and sending it to the network.",
   "transferBroadcast": "Transfer sent. Waiting for network confirmation…",
   "transferBroadcastAfterRetry": "Transfer sent on attempt {count}. Waiting for network confirmation…",
   "transferReplacedBody": "The network required a higher fee, so the transfer was resent with a fee {multiplier}× higher.",
-  "transferTrackingIdle": "Tracking has not started yet.",
   "transferTrackingFailed": "Could not track the transfer: {error}",
-  "transferStatusLine": "Status: {status}",
   "@transferBroadcastAfterRetry": {
     "placeholders": {
       "count": {
@@ -159,13 +153,6 @@
   "@transferTrackingFailed": {
     "placeholders": {
       "error": {
-        "type": "String"
-      }
-    }
-  },
-  "@transferStatusLine": {
-    "placeholders": {
-      "status": {
         "type": "String"
       }
     }
@@ -225,15 +212,11 @@
   "unlockWithBiometrics": "Unlock with biometrics",
   "lockedTitleCard": "The card is locked",
   "lockedTitlePhone": "The wallet is locked",
-  "lockedBodyCard": "The card is bound. Every operation needs its PIN and a tap.",
+  "lockedBodyCard": "Enter the card PIN and hold the card to the phone to open the wallet.",
   "lockedBodyPhone": "The wallet is ready. Enter the PIN to get in.",
   "lockedAddress": "Address",
   "lockedStorage": "Storage",
-  "lockedChipLocked": "Locked",
-  "lockedChipBiometrics": "Biometrics on",
-  "lockedPinCard": "Card PIN",
-  "lockedPinPhone": "Unlock PIN",
-  "lockedUnlockCard": "Connect the card",
+  "lockedUnlockCard": "Unlock with the card",
   "lockedUnlockPhone": "Unlock",
   "authConfirmTitle": "Confirm the operation",
   "authConfirmAction": "Confirm",
@@ -276,7 +259,6 @@
       }
     }
   },
-  "errorCardNoWallet": "The card holds no compatible wallet.",
   "errorCardUnsupportedBuild": "Card support is not available in this build.",
   "errorUseCardCreateFlow": "Use the card's own creation flow.",
   "errorUseCardImportFlow": "Use the card's own import flow.",
@@ -316,7 +298,6 @@
     }
   },
   "errorScanRequestFirst": "Scan the MetaMask request first.",
-  "wcRejectedByUser": "The request was rejected by the user.",
   "errorCancelNfcFailed": "Could not cancel waiting for NFC: {error}",
   "@errorCancelNfcFailed": {
     "placeholders": {
@@ -564,5 +545,272 @@
   "walletsForgetCardBody": "The app will stop remembering this card. The card and its key are unchanged — you can connect it again at any time.",
   "walletsConnectAnotherCard": "Connect another card",
   "busyForgettingCard": "Forgetting the card…",
-  "walletsNewCardSlot": "New card — create or import a key"
+  "walletsNewCardSlot": "New card — create or import a key",
+  "errWalletAlreadyExists": "This phone already holds a wallet. Remove it first or use another storage.",
+  "errWalletNotInitialized": "The wallet has not been set up yet.",
+  "errInvalidPin": "Wrong PIN.",
+  "errInvalidMnemonic": "The seed phrase did not pass validation. Check the words and their order.",
+  "errBiometricUnavailable": "Biometrics are unavailable on this device.",
+  "errBiometricNotEnabled": "Biometric unlock is not turned on for this wallet.",
+  "errBiometricCancelled": "The biometric check was cancelled.",
+  "errBiometricFailed": "The biometric check failed ({detail}).",
+  "@errBiometricFailed": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "errVaultLockedOut": "Too many wrong attempts. Try again in {wait}.",
+  "@errVaultLockedOut": {
+    "placeholders": {
+      "wait": {
+        "type": "String"
+      }
+    }
+  },
+  "errVaultCorrupt": "The wallet data on this phone is corrupt or unreadable.",
+  "errVaultSchemaUnsupported": "The wallet is stored in a format this version does not understand. Update the app.",
+  "errCardPinEmpty": "Enter the card PIN.",
+  "errCardCancelled": "Waiting for the card was cancelled.",
+  "errCardTimeout": "No card detected within 30 seconds. Hold it to the phone and try again.",
+  "errCardPinInvalid": "Wrong card PIN.",
+  "errCardPinLocked": "The card PIN is locked.",
+  "errCardNfcLost": "Lost contact with the card. Hold it to the phone again.",
+  "errCardNativeFailure": "The card module reported an error.",
+  "errCardMasterKeyFailed": "Could not derive the master key from the seed phrase.",
+  "errCardAddressMismatch": "The address read from the card does not match this seed phrase.",
+  "errCardNoCompatibleWallet": "The card holds no compatible wallet.",
+  "errCardProfileUnsupported": "The card's data is in an unsupported format.",
+  "errCardNotRegistered": "This card is not registered on this phone.",
+  "errCardDataCorrupted": "The saved card data is corrupt.",
+  "errCardNoAccountXpub": "This phone has no account export data for this card: AirGap export works only for cards whose key was written by this app.",
+  "errCardWrongCard": "A different card was presented: its address does not match the active wallet.",
+  "errQrCameraUnavailable": "Camera scanning is unavailable — load the QR from a file.",
+  "errQrCameraOpenFailed": "Could not open the camera.",
+  "errQrImageNotRecognized": "No QR code found in the selected image.",
+  "errQrScannerUnavailable": "The QR scanner is unavailable in this build.",
+  "errUrMalformed": "The QR code is not a valid request ({detail}).",
+  "@errUrMalformed": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "errUrWrongType": "This QR is a different kind of request: expected {expected}, got {actual}.",
+  "@errUrWrongType": {
+    "placeholders": {
+      "expected": {
+        "type": "String"
+      },
+      "actual": {
+        "type": "String"
+      }
+    }
+  },
+  "errTxRecipientInvalid": "Enter a valid recipient address.",
+  "errTxAmountEmpty": "Enter the amount.",
+  "errTxAmountFormat": "The amount is in the wrong format.",
+  "errTxAmountDigitsOnly": "The amount may contain digits only.",
+  "errTxAmountTooManyDecimals": "Too many decimal places: this asset allows at most {decimals}.",
+  "@errTxAmountTooManyDecimals": {
+    "placeholders": {
+      "decimals": {
+        "type": "String"
+      }
+    }
+  },
+  "errTxAmountNotPositive": "The amount must be greater than zero.",
+  "errTxInsufficientAsset": "Not enough {symbol} for this amount.",
+  "@errTxInsufficientAsset": {
+    "placeholders": {
+      "symbol": {
+        "type": "String"
+      }
+    }
+  },
+  "errTxInsufficientNativeForAmountAndFee": "Not enough funds for the amount plus the network fee.",
+  "errTxInsufficientNativeForFee": "Not enough funds for the network fee.",
+  "errTxNonceNegative": "Invalid transaction number (nonce).",
+  "errTxSenderMismatch": "The key does not match the sender address.",
+  "errWcNotConfigured": "WalletConnect is not configured in this build.",
+  "errWcNotInitialized": "WalletConnect has not connected yet. Check the connection and try again.",
+  "errWcInvalidUri": "This is not a WalletConnect link (expected wc:…).",
+  "errWcProposalExpired": "This connection invitation is no longer active.",
+  "errWcRelayNoSession": "The WalletConnect network returned no session data. Try again.",
+  "errWcUnsupportedNamespaces": "The app requires what this wallet does not support: networks {chains}, methods {methods}.",
+  "@errWcUnsupportedNamespaces": {
+    "placeholders": {
+      "chains": {
+        "type": "String"
+      },
+      "methods": {
+        "type": "String"
+      }
+    }
+  },
+  "errWcMalformedRequest": "The app sent a malformed request ({detail}).",
+  "@errWcMalformedRequest": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "errWcMalformedTypedData": "Malformed data to sign ({detail}).",
+  "@errWcMalformedTypedData": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "errWcPreviewMismatch": "The check does not match the request. Open the request again.",
+  "errWcPreflightNoFees": "The app sent no fee, and it cannot be checked on the network.",
+  "errWcPreflightRpcFailed": "Could not check the transaction on the network ({detail}).",
+  "@errWcPreflightRpcFailed": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "errWcUnsupportedChain": "Network {chainId} is not supported.",
+  "@errWcUnsupportedChain": {
+    "placeholders": {
+      "chainId": {
+        "type": "String"
+      }
+    }
+  },
+  "errWcInvalidGas": "Invalid fee parameters ({detail}).",
+  "@errWcInvalidGas": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "errAirgapMalformedTransaction": "The transaction from MetaMask is malformed ({detail}).",
+  "@errAirgapMalformedTransaction": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "errAirgapUnsupportedTransaction": "This MetaMask request is not supported ({detail}).",
+  "@errAirgapUnsupportedTransaction": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "errAirgapChainMismatch": "The request's network ({requested}) does not match the transaction's ({embedded}).",
+  "@errAirgapChainMismatch": {
+    "placeholders": {
+      "requested": {
+        "type": "String"
+      },
+      "embedded": {
+        "type": "String"
+      }
+    }
+  },
+  "errAirgapSignatureInvalid": "Could not produce the signature ({detail}).",
+  "@errAirgapSignatureInvalid": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "errAirgapTypedDataInvalid": "The data to sign is invalid ({detail}).",
+  "@errAirgapTypedDataInvalid": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "durationSeconds": "{count} s",
+  "@durationSeconds": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "durationMinutes": "{count} min",
+  "@durationMinutes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "qrScanTitle": "Scan QR",
+  "qrScanHint": "Point the camera at the QR code",
+  "qrScanHintFor": "Point the camera at the QR code ({title})",
+  "@qrScanHintFor": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "qrScanProgress": "Collected: {received}/{expected}",
+  "@qrScanProgress": {
+    "placeholders": {
+      "received": {
+        "type": "int"
+      },
+      "expected": {
+        "type": "int"
+      }
+    }
+  },
+  "qrScanAwaitFirstFragment": "Waiting for the first fragment",
+  "qrScanCameraError": "Could not open the camera. Check the camera permission or load the QR from a file.",
+  "qrTorchOn": "Turn on the flashlight",
+  "qrTorchOff": "Turn off the flashlight",
+  "biometricPromptEnableQuickUnlock": "Confirm to turn on quick unlock.",
+  "biometricPromptUnlockWallet": "Confirm to unlock the wallet.",
+  "biometricPromptSaveCardPin": "Confirm to save the card PIN.",
+  "biometricPromptReleaseCardPin": "Confirm to use the saved card PIN.",
+  "historyIncoming": "Incoming",
+  "historyOutgoing": "Outgoing",
+  "historySelf": "To self",
+  "historyContract": "Contract",
+  "historySuccess": "Confirmed",
+  "historyFailed": "Failed",
+  "historyPending": "Pending",
+  "historyUnknown": "Unknown",
+  "createPhoneWalletTitle": "Wallet on this phone",
+  "createPhoneWalletBody": "First set a PIN — it encrypts the wallet. Then the app creates a seed phrase and shows it once so you can write down a backup.",
+  "createPhoneWalletAction": "Create wallet",
+  "actionDone": "Done",
+  "confirmSuccessTitle": "Done",
+  "confirmFailureTitle": "That did not work",
+  "wcApproveSuccess": "The app has the response.",
+  "airgapExportSuccess": "The account QR is ready — show it to MetaMask.",
+  "airgapSignSuccess": "The signature is ready — show the QR to MetaMask.",
+  "cardConnectSuccess": "The card is connected and is now the active wallet.",
+  "tapCardSignBody": "Hold the card to the back of the phone until the signature is done. The key never leaves the card.",
+  "transferReview": "Review the transfer",
+  "transferEdit": "Edit",
+  "transferNetworkFee": "Network fee (estimate)",
+  "transferNotSent": "The transfer was not sent",
+  "transferConfirmed": "The network confirmed the transfer.",
+  "transferReverted": "The network rejected the transaction.",
+  "transferPendingTimeout": "Confirmation is taking long — check the history later.",
+  "transferHash": "Transaction hash",
+  "actionContinue": "Continue",
+  "addCardTitle": "New card",
+  "addCardBody": "Connect a card that already holds a key, or write a key to an empty card. The active wallet stays as it is until the card is connected.",
+  "busyTapCardToUnlock": "Hold the card to the phone to unlock…",
+  "settingsLockOnOpen": "Ask for the PIN when opening",
+  "settingsLockOnOpenBody": "The app opens on the lock screen and locks again after a minute in the background. Each signature still asks on its own."
 }

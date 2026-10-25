@@ -4,11 +4,31 @@ import 'package:bc_ur/bc_ur.dart';
 import 'package:cbor/cbor.dart';
 import 'package:web3dart/web3dart.dart' show bytesToHex, hexToBytes;
 
-/// Thrown when an EIP-4527 / BC-UR payload (or one of its fields) is malformed.
-class Eip4527Exception implements Exception {
-  const Eip4527Exception(this.message);
+import '../errors/app_error.dart';
 
-  final String message;
+/// Thrown when an EIP-4527 / BC-UR payload (or one of its fields) is malformed.
+class Eip4527Exception implements Exception, CodedError {
+  /// A failure whose text comes from outside the app; shown as is.
+  const Eip4527Exception(String message)
+    : _message = message,
+      errorCode = null,
+      errorArgs = const <String, Object>{};
+
+  const Eip4527Exception.coded(
+    AppErrorCode this.errorCode, [
+    this.errorArgs = const <String, Object>{},
+  ]) : _message = null;
+
+  final String? _message;
+
+  @override
+  final AppErrorCode? errorCode;
+
+  @override
+  final Map<String, Object> errorArgs;
+
+  @override
+  String get message => _message ?? debugDescribeError(errorCode!, errorArgs);
 
   @override
   String toString() => 'Eip4527Exception: $message';

@@ -4,6 +4,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:image/image.dart' as img;
 import 'package:zxing2/qrcode.dart';
 
+import '../errors/app_error.dart';
 import 'qr_scanner.dart';
 
 /// Decodes QR text from raw image bytes. Pure Dart (`image` + `zxing2`), so it
@@ -72,9 +73,7 @@ class FileQrScanner implements QrScanner {
 
   @override
   Future<String?> scanWithCamera({String title = ''}) async {
-    throw const QrScannerException(
-      'Сканирование камерой пока недоступно — используйте загрузку из файла.',
-    );
+    throw const QrScannerException.coded(AppErrorCode.qrCameraUnavailable);
   }
 
   @override
@@ -82,9 +81,7 @@ class FileQrScanner implements QrScanner {
     String title = '',
     String? expectedType,
   }) async {
-    throw const QrScannerException(
-      'Сканирование камерой пока недоступно — используйте загрузку из файла.',
-    );
+    throw const QrScannerException.coded(AppErrorCode.qrCameraUnavailable);
   }
 
   @override
@@ -95,9 +92,7 @@ class FileQrScanner implements QrScanner {
     }
     final text = _decoder.decode(bytes);
     if (text == null) {
-      throw const QrScannerException(
-        'Не удалось распознать QR-код на выбранном изображении.',
-      );
+      throw const QrScannerException.coded(AppErrorCode.qrImageNotRecognized);
     }
     return text;
   }

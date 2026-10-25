@@ -109,7 +109,11 @@ void main() {
     expect(snapshot.nativeBalanceFormatted, '0');
     expect(snapshot.baseFeeGwei, 1);
     expect(snapshot.tokenBalances.single.symbol, 'USDC');
-    expect(snapshot.recentTransactions.single.directionLabel, 'Входящая');
+    expect(
+      snapshot.recentTransactions.single.direction,
+      HistoryDirection.incoming,
+    );
+    expect(snapshot.recentTransactions.single.status, HistoryStatus.success);
   });
 
   test('returns cached snapshot when live RPC endpoints fail', () async {
@@ -142,5 +146,12 @@ void main() {
     expect(snapshot.tokenBalances.single.symbol, 'USDC');
     expect(snapshot.tokenBalances.single.rawBalance, BigInt.from(42500000));
     expect(snapshot.recentTransactions.single.hash, '0xabc');
+    // Written before v1.57, when the cache stored display labels: they must
+    // still read as data rather than as "unknown".
+    expect(
+      snapshot.recentTransactions.single.direction,
+      HistoryDirection.incoming,
+    );
+    expect(snapshot.recentTransactions.single.status, HistoryStatus.success);
   });
 }

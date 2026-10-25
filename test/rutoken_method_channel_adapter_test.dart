@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile_wallet_demo/src/errors/app_error.dart';
 import 'package:mobile_wallet_demo/src/key_storage/rutoken_method_channel_adapter.dart';
 import 'package:web3dart/web3dart.dart' show hexToBytes;
 
@@ -190,9 +191,9 @@ void main() {
         isA<RutokenNativeException>()
             .having((error) => error.code, 'code', 'rutoken_cancelled')
             .having(
-              (error) => error.message,
-              'message',
-              'Ожидание Рутокена отменено.',
+              (error) => error.errorCode,
+              'errorCode',
+              AppErrorCode.cardCancelled,
             ),
       ),
     );
@@ -207,12 +208,11 @@ void main() {
   });
 
   test('maps stable native PIN, timeout, and NFC-loss categories', () async {
-    const cases = <String, String>{
-      'rutoken_timeout':
-          'Рутокен не обнаружен за 30 секунд. Поднесите карту и повторите.',
-      'rutoken_pin_invalid': 'Неверный PIN Рутокена.',
-      'rutoken_pin_locked': 'PIN Рутокена заблокирован.',
-      'rutoken_nfc_lost': 'Связь с Рутокеном потеряна. Поднесите карту заново.',
+    const cases = <String, AppErrorCode>{
+      'rutoken_timeout': AppErrorCode.cardTimeout,
+      'rutoken_pin_invalid': AppErrorCode.cardPinInvalid,
+      'rutoken_pin_locked': AppErrorCode.cardPinLocked,
+      'rutoken_nfc_lost': AppErrorCode.cardNfcLost,
     };
 
     for (final entry in cases.entries) {
@@ -226,7 +226,12 @@ void main() {
         throwsA(
           isA<RutokenNativeException>()
               .having((error) => error.code, 'code', entry.key)
-              .having((error) => error.message, 'message', entry.value),
+              .having((error) => error.errorCode, 'errorCode', entry.value)
+              .having(
+                (error) => error.message,
+                'message',
+                isNot(contains('raw native detail')),
+              ),
         ),
       );
     }
@@ -251,9 +256,9 @@ void main() {
         isA<RutokenNativeException>()
             .having((error) => error.code, 'code', 'rutoken_native')
             .having(
-              (error) => error.message,
-              'message',
-              'Ошибка нативного модуля Рутокена.',
+              (error) => error.errorCode,
+              'errorCode',
+              AppErrorCode.cardNativeFailure,
             )
             .having(
               (error) => error.toString(),

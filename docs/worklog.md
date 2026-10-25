@@ -18,6 +18,48 @@ Entry template:
 
 ---
 
+## 2026-10-24 — Phase 13 close-out + LATER items: error codes, sequential confirmation, add-card screen, lock-on-open — branch claude/friendly-hawking-hpbpbv — done (v1.57.0+68)
+- Plan (owner request): four functional chunks, each tested, then one version bump (v1.57.0).
+  - **A. Error codes.** Domain/infrastructure failures (`key_storage/`, `qr/`, `walletconnect/`, `airgap/`,
+    `transactions/`, `auth/`) stop carrying inline Russian. Each exception keeps its type (catch sites rely on
+    it) and gains an `AppError` = `AppErrorCode` + args; `describeError(l10n, error)` at the UI edge turns it
+    into RU/EN text through an exhaustive `switch`, so a code without copy fails to compile. Protocol parse
+    failures (RLP, BC-UR, EIP-712, WC params) collapse into a few codes with a language-neutral technical
+    detail, per the 13.6 decision that protocol diagnostics stay untranslated. JSON-RPC errors sent *to dApps*
+    become fixed English (protocol-facing, not UI). Also: biometric prompt reasons come from the active
+    locale, history direction/status become enums (old cached labels still read), and the last inline UI copy
+    (create-wallet stage, camera scanner) moves into ARB.
+  - **B. Sequential confirmation (13.5 deviation).** One sheet walks PIN → card tap / signing → result instead
+    of stacking a PIN sheet over the send sheet with the busy overlay on top; the send sheet itself becomes
+    form → review → PIN → signing → result. WalletConnect approve, AirGap export/sign and connecting another
+    card use the same sheet. The root busy overlay stays for everything else.
+  - **C. Add-card screen.** «Подключить ещё карту» and the switcher's empty card row open one screen offering
+    all three card actions (connect a ready card, create a new key, import a seed); create/import return to it.
+  - **D. Lock-on-open (optional, off by default).** A Настройки switch; when on, the app opens on the locked
+    screen and re-locks after a minute in the background (a grace period, so the file picker, the biometric
+    dialog or NFC do not lock it mid-task). Phone vault: PIN or vault biometrics; card: card PIN + tap, or the
+    stored-PIN biometrics when enabled. No key material is kept after the check.
+- Done:
+  - **A** (`0dbb5a8`): `AppErrorCode` + `CodedError` on every domain exception; `describeError`/`describeAppError`
+    with an exhaustive switch; ~60 codes, RU/EN copy; `test/error_text_test.dart` checks every code in both
+    languages (Cyrillic in RU, none in EN, no placeholders or ids left). Card errors lost the vendor name (the
+    redesign's rule) — the device matrix notes the new wording. `DappErrorText` holds the English JSON-RPC texts;
+    biometric dialog reasons go through `BiometricPrompt` + a resolver reading the live locale; history
+    direction/status are enums and pre-v1.57 cached labels still read. The controller's catch-all now shows
+    coded failures as themselves instead of «Не удалось выполнить операцию: …».
+  - **B** (`f335030`): `_confirmOperation` + `_PinEntryPanel` / `_OperationProgress` / `_OperationResult`; the
+    send sheet is form → review → PIN → signing → result with nonce/RPC/block/gas behind «Подробности». Used by
+    WC approve, AirGap export/sign, card adopt/provision/check. Failures show in the sheet with «Повторить» and
+    are cleared from the page banner. The old `_promptForAuth`/`_OperationAuthSheet` are gone.
+  - **C** (`abf8458`): `WalletFlowStage.addCard`, `_CardActions` shared with onboarding, `openAddCard` /
+    `closeAddCard` / `leaveCardSetup`; the empty card row no longer switches the active wallet.
+  - **D** (`2327b2a`): `setLockOnOpen` (store key `wallet.lock_on_open.v1`), `appBackgrounded`/`appResumed`
+    with `lockOnOpenGrace` = 1 min and an injectable clock, card unlock via open/close session, keypad lock
+    screen, sheets popped on lock, «Заблокировать снова» for card wallets too.
+  - Locally on Flutter 3.47.8: format clean, analyze clean, 233/233 tests.
+- Next / open: the four v1.57 rows in `docs/device-test-matrix.md` need a physical run (card sheet with pulse and
+  cancel, new card copy, lock-on-open on phone and card); Phase 10 and 14.5 hardware items are unchanged.
+
 ## 2026-10-24 — Latest Flutter, Kotlin plugin cleanup, v1.56.0 release — branch claude/friendly-hawking-hpbpbv — done (v1.56.0+67)
 - Plan (owner request): stop pinning Flutter — CI and `.fvmrc` follow the latest stable (3.47.8 today);
   remove the Kotlin Gradle Plugin problems as far as the dependency tree allows; delete the stale branches;

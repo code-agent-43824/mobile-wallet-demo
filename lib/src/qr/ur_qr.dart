@@ -1,10 +1,30 @@
 import 'package:bc_ur/bc_ur.dart';
 
-/// A malformed, mismatched, or incomplete Blockchain Commons UR sequence.
-class UrQrException implements Exception {
-  const UrQrException(this.message);
+import '../errors/app_error.dart';
 
-  final String message;
+/// A malformed, mismatched, or incomplete Blockchain Commons UR sequence.
+class UrQrException implements Exception, CodedError {
+  /// A failure whose text comes from outside the app; shown as is.
+  const UrQrException(String message)
+    : _message = message,
+      errorCode = null,
+      errorArgs = const <String, Object>{};
+
+  const UrQrException.coded(
+    AppErrorCode this.errorCode, [
+    this.errorArgs = const <String, Object>{},
+  ]) : _message = null;
+
+  final String? _message;
+
+  @override
+  final AppErrorCode? errorCode;
+
+  @override
+  final Map<String, Object> errorArgs;
+
+  @override
+  String get message => _message ?? debugDescribeError(errorCode!, errorArgs);
 
   @override
   String toString() => 'UrQrException: $message';
@@ -24,7 +44,9 @@ class UrQrEncoder {
     try {
       ur = BCUR.fromString(normalized);
     } catch (error) {
-      throw UrQrException('Некорректный BC-UR: $error');
+      throw UrQrException.coded(AppErrorCode.urMalformed, <String, Object>{
+        'detail': 'invalid UR: $error',
+      });
     }
     if (ur.payload.length <= maxFragmentLength) {
       return <String>[ur.toString()];
@@ -45,12 +67,18 @@ class UrQrEncoder {
   int _sequenceLength(String firstPart) {
     final pieces = firstPart.split('/');
     if (pieces.length != 3) {
-      throw const UrQrException('Не удалось создать multipart BC-UR.');
+      throw const UrQrException.coded(
+        AppErrorCode.urMalformed,
+        <String, Object>{'detail': 'cannot split into multipart UR'},
+      );
     }
     final sequence = pieces[1].split('-');
     final count = sequence.length == 2 ? int.tryParse(sequence[1]) : null;
     if (count == null || count < 1) {
-      throw const UrQrException('Некорректная нумерация multipart BC-UR.');
+      throw const UrQrException.coded(
+        AppErrorCode.urMalformed,
+        <String, Object>{'detail': 'invalid multipart sequence numbering'},
+      );
     }
     return count;
   }
@@ -82,14 +110,23 @@ class UrQrAssembler {
     final normalized = normalizeUr(value);
     final pieces = normalized.split('/');
     if (pieces.length != 2 && pieces.length != 3) {
-      throw const UrQrException('Ожидался single- или multipart BC-UR QR.');
+      throw const UrQrException.coded(
+        AppErrorCode.urMalformed,
+        <String, Object>{'detail': 'not a single- or multipart UR'},
+      );
     }
     final type = pieces.first.substring(3);
     if (expectedType != null && type != expectedType) {
-      throw UrQrException('Ожидался ur:$expectedType, получен ur:$type.');
+      throw UrQrException.coded(AppErrorCode.urWrongType, <String, Object>{
+        'expected': 'ur:$expectedType',
+        'actual': 'ur:$type',
+      });
     }
     if (_type != null && _type != type) {
-      throw const UrQrException('QR-фрагменты относятся к разным UR типам.');
+      throw const UrQrException.coded(
+        AppErrorCode.urMalformed,
+        <String, Object>{'detail': 'fragments belong to different UR types'},
+      );
     }
     _type = type;
 
@@ -97,7 +134,9 @@ class UrQrAssembler {
       try {
         _result = BCUR.fromString(normalized).toString();
       } catch (error) {
-        throw UrQrException('Некорректный BC-UR: $error');
+        throw UrQrException.coded(AppErrorCode.urMalformed, <String, Object>{
+          'detail': 'invalid UR: $error',
+        });
       }
       return true;
     }
@@ -105,13 +144,16 @@ class UrQrAssembler {
     try {
       _decoder.receivePart(normalized);
     } catch (error) {
-      throw UrQrException('Некорректный multipart BC-UR: $error');
+      throw UrQrException.coded(AppErrorCode.urMalformed, <String, Object>{
+        'detail': 'invalid multipart UR: $error',
+      });
     }
     if (_decoder.isComplete) {
       final decoded = _decoder.getResult();
       if (decoded == null) {
-        throw const UrQrException(
-          'Не удалось собрать BC-UR: повреждён набор QR-фрагментов.',
+        throw const UrQrException.coded(
+          AppErrorCode.urMalformed,
+          <String, Object>{'detail': 'fragment set is corrupt'},
         );
       }
       _result = decoded.toString();
@@ -125,7 +167,9 @@ class UrQrAssembler {
 String normalizeUr(String value) {
   final normalized = value.trim().toLowerCase();
   if (!normalized.startsWith('ur:')) {
-    throw const UrQrException('Ожидался BC-UR, начинающийся с "ur:".');
+    throw const UrQrException.coded(AppErrorCode.urMalformed, <String, Object>{
+      'detail': 'expected a value starting with "ur:"',
+    });
   }
   return normalized;
 }

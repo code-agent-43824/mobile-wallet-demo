@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import '../l10n/app_localizations.dart';
 import 'blockchain/blockchain_provider.dart';
 import 'blockchain/network_config.dart';
+import 'error_text.dart';
 
 /// Owns the selected network and the chain snapshot the UI renders.
 ///
@@ -115,7 +116,7 @@ class ChainDataController extends ChangeNotifier {
       if (!_isCurrent(refreshId, network)) {
         return;
       }
-      _errorMessage = error.message;
+      _errorMessage = describeError(_messages, error);
     } catch (error) {
       // Anything the provider does not wrap — a cache read outside its retry
       // loop, a timeout, a decode failure — must still reach the UI. Swallowing

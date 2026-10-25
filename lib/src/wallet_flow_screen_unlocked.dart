@@ -1,42 +1,31 @@
 part of 'wallet_flow_screen.dart';
 
-/// Signature for the send-form authorize+sign+submit callback: the widget keeps
-/// the read-only preview, this runs the private-key part (auth → unlock → sign →
-/// submit) in the controller. Returns null if the user cancelled the auth
-/// prompt; throws [TransactionFailure]/[VaultFailure] on a real failure.
-typedef AuthorizeAndSubmitTransfer =
-    Future<HardenedSubmitResult?> Function({
-      required WalletChainSnapshot snapshot,
-      required String fromAddress,
-      required String toAddress,
-      required String amountText,
-      required TransferAssetOption asset,
-      required TransactionTracker tracker,
-      String? pin,
-      bool useBiometrics,
-    });
+/// Where the send sheet is in the confirmation pattern. One sheet walks every
+/// step rather than stacking a PIN sheet and a busy overlay on top of it.
+enum _SendStep { form, review, pin, working, result }
 
-/// The transfer form. No key material is held while it is shown; submitting it
-/// triggers a per-operation auth prompt and a freshly-unlocked sign via
-/// [onAuthorizeAndSubmit].
+/// The transfer sheet: form → review → PIN → signing (or the card tap) →
+/// result (pending → confirmed). No key material is held while it is shown;
+/// the private-key part runs in [WalletFlowController.authorizeAndSubmitTransfer]
+/// behind the PIN step, freshly unlocked for this send only.
 class _TransferPreparationSection extends StatefulWidget {
   const _TransferPreparationSection({
+    required this.controller,
     required this.snapshot,
     required this.fromAddress,
     required this.networkConfig,
     required this.transactionService,
     required this.trackingTransport,
     required this.canUnlockWithBiometrics,
-    required this.onAuthorizeAndSubmit,
   });
 
+  final WalletFlowController controller;
   final WalletChainSnapshot snapshot;
   final String fromAddress;
   final EvmNetworkConfig networkConfig;
   final TransactionService transactionService;
   final JsonRpcTransport trackingTransport;
   final bool canUnlockWithBiometrics;
-  final AuthorizeAndSubmitTransfer onAuthorizeAndSubmit;
 
   @override
   State<_TransferPreparationSection> createState() =>
@@ -48,17 +37,13 @@ class _TransferPreparationSectionState
   late final TextEditingController _addressController;
   late final TextEditingController _amountController;
 
+  _SendStep _step = _SendStep.form;
   TransferAssetOption? _selectedAsset;
   TransferPreview? _preview;
-  LoadedNonce? _loadedNonce;
-  SignedTransfer? _signedTransfer;
-  SubmittedTransfer? _submittedTransfer;
-  TransactionReceipt? _trackingReceipt;
   String? _error;
-  bool _isSubmitting = false;
-  int _submissionAttempts = 0;
-  double _gasMultiplier = 1.0;
-  bool _replacementTransfer = false;
+  HardenedSubmitResult? _result;
+  String? _failure;
+  TransactionReceipt? _trackingReceipt;
 
   List<TransferAssetOption> get _assets =>
       widget.transactionService.availableAssets(
@@ -93,16 +78,13 @@ class _TransferPreparationSectionState
     // unchanged so validation uses the latest snapshot rather than the object
     // created before an incoming transfer or network refresh.
     _selectedAsset = nextSelectedAsset;
-    if (snapshotChanged || selectedId != nextSelectedAsset?.id) {
+    // A changed snapshot invalidates a review that has not been signed yet;
+    // once signing has started, the result belongs to the snapshot it used.
+    if ((snapshotChanged || selectedId != nextSelectedAsset?.id) &&
+        (_step == _SendStep.form || _step == _SendStep.review)) {
       _preview = null;
-      _loadedNonce = null;
-      _signedTransfer = null;
-      _submittedTransfer = null;
-      _trackingReceipt = null;
-      _submissionAttempts = 0;
-      _gasMultiplier = 1.0;
-      _replacementTransfer = false;
       _error = null;
+      _step = _SendStep.form;
     }
   }
 
@@ -113,12 +95,13 @@ class _TransferPreparationSectionState
     super.dispose();
   }
 
-  void _buildPreview() {
+  void _review() {
+    final l10n = AppLocalizations.of(context);
     final asset = _selectedAsset;
     if (asset == null) {
+      setState(() => _error = l10n.transferPickAssetFirst);
       return;
     }
-
     try {
       final preview = widget.transactionService.preparePreview(
         snapshot: widget.snapshot,
@@ -129,36 +112,23 @@ class _TransferPreparationSectionState
       );
       setState(() {
         _preview = preview;
-        _loadedNonce = null;
-        _signedTransfer = null;
-        _submittedTransfer = null;
-        _trackingReceipt = null;
         _error = null;
+        _step = _SendStep.review;
       });
     } on TransactionFailure catch (error) {
       setState(() {
         _preview = null;
-        _loadedNonce = null;
-        _signedTransfer = null;
-        _submittedTransfer = null;
-        _trackingReceipt = null;
-        _error = error.message;
+        _error = describeError(l10n, error);
       });
     }
   }
 
-  Future<void> _signAndSubmit() async {
+  void _toPin() {
     final l10n = AppLocalizations.of(context);
     final asset = _selectedAsset;
-    if (asset == null) {
-      setState(() {
-        _error = l10n.transferPickAssetFirst;
-      });
-      return;
-    }
-
-    // Read-only validation stays in the widget; the private-key part runs in the
-    // controller behind a per-op auth prompt.
+    if (asset == null) return;
+    // Read-only validation stays here; the private-key part runs in the
+    // controller after the PIN step.
     try {
       widget.transactionService.prepareTransfer(
         snapshot: widget.snapshot,
@@ -168,173 +138,135 @@ class _TransferPreparationSectionState
         asset: asset,
       );
     } on TransactionFailure catch (error) {
-      setState(() {
-        _error = error.message;
-      });
+      setState(() => _error = describeError(l10n, error));
       return;
     }
-
-    final credential = await _promptForAuth(
-      context,
-      reason: l10n.transferNeedsKey,
-      biometricsOffered: widget.canUnlockWithBiometrics,
-    );
-    if (credential == null || !mounted) {
-      // User dismissed the auth sheet — abort silently, no error.
-      return;
-    }
-
     setState(() {
-      _isSubmitting = true;
       _error = null;
-      _loadedNonce = null;
-      _signedTransfer = null;
-      _submittedTransfer = null;
+      _step = _SendStep.pin;
+    });
+  }
+
+  Future<void> _submit(String? pin, bool useBiometrics) async {
+    final l10n = AppLocalizations.of(context);
+    final asset = _selectedAsset;
+    if (asset == null) return;
+    setState(() {
+      _step = _SendStep.working;
+      _result = null;
+      _failure = null;
       _trackingReceipt = null;
-      _submissionAttempts = 0;
-      _gasMultiplier = 1.0;
-      _replacementTransfer = false;
     });
 
+    HardenedSubmitResult? result;
+    String? failure;
     try {
-      final tracker = TransactionTracker(
-        rpcTransport: widget.trackingTransport,
-      );
-
-      final result = await widget.onAuthorizeAndSubmit(
+      result = await widget.controller.authorizeAndSubmitTransfer(
         snapshot: widget.snapshot,
         fromAddress: widget.fromAddress,
         toAddress: _addressController.text,
         amountText: _amountController.text,
         asset: asset,
-        tracker: tracker,
-        pin: credential.pin,
-        useBiometrics: credential.useBiometrics,
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      if (result == null) {
-        // The controller surfaced the failure via its own errorMessage banner
-        // (VaultFailure: wrong PIN/lockout/offline). Just clear the spinner.
-        setState(() {
-          _isSubmitting = false;
-        });
-        return;
-      }
-
-      setState(() {
-        _preview = result.preparedTransfer.preview;
-        _loadedNonce = result.loadedNonce;
-        _signedTransfer = result.signedTransfer;
-        _submittedTransfer = result.submittedTransfer;
-        _submissionAttempts = result.attempts;
-        _gasMultiplier = result.gasMultiplierUsed;
-        _replacementTransfer = result.replacementUsed;
-        _error = null;
-        _isSubmitting = false;
-      });
-
-      unawaited(
-        result.trackingFuture
-            .then((trackingReceipt) {
-              if (!mounted) {
-                return;
-              }
-              setState(() {
-                _trackingReceipt = trackingReceipt;
-              });
-            })
-            .catchError((Object error) {
-              if (!mounted) {
-                return;
-              }
-              final message = error is TransactionFailure
-                  ? error.message
-                  : l10n.transferTrackingFailed('$error');
-              setState(() {
-                _trackingReceipt = TransactionReceipt(
-                  status: TransactionStatus.failed,
-                  errorMessage: message,
-                );
-              });
-            }),
+        tracker: TransactionTracker(rpcTransport: widget.trackingTransport),
+        pin: pin,
+        useBiometrics: useBiometrics,
       );
     } on TransactionFailure catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _error = error.message;
-      });
-    } finally {
-      if (mounted && _isSubmitting) {
-        setState(() {
-          _isSubmitting = false;
-        });
-      }
+      failure = describeError(l10n, error);
     }
+    if (!mounted) return;
+    if (result == null) {
+      // The controller reported the failure through its error state; show it
+      // here and drop it there, so the page banner does not repeat it.
+      failure ??= widget.controller.errorMessage ?? l10n.transferNotSent;
+      widget.controller.clearError();
+      setState(() {
+        _failure = failure;
+        _step = _SendStep.result;
+      });
+      return;
+    }
+
+    final submitted = result;
+    setState(() {
+      _result = submitted;
+      _step = _SendStep.result;
+    });
+    unawaited(
+      submitted.trackingFuture
+          .then((receipt) {
+            if (mounted) setState(() => _trackingReceipt = receipt);
+          })
+          .catchError((Object error) {
+            if (!mounted) return;
+            setState(() {
+              _trackingReceipt = TransactionReceipt(
+                status: TransactionStatus.failed,
+                errorMessage: error is TransactionFailure
+                    ? describeError(l10n, error)
+                    : l10n.transferTrackingFailed('$error'),
+              );
+            });
+          }),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final preview = _preview;
-    final assets = _assets;
-    final submittedTransfer = _submittedTransfer;
-    final signedTransfer = _signedTransfer;
-    final loadedNonce = _loadedNonce;
+    final step = _step;
+    return PopScope(
+      // Leaving mid-signature would orphan the operation's progress.
+      canPop: step != _SendStep.working,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // The sheet needs its own way out — the back gesture alone is not an
+          // affordance — except while signing, when leaving is not offered.
+          Align(
+            alignment: Alignment.centerRight,
+            child: IconButton(
+              onPressed: step == _SendStep.working
+                  ? null
+                  : () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.close),
+              tooltip: l10n.actionClose,
+            ),
+          ),
+          switch (step) {
+            _SendStep.form => _buildForm(context),
+            _SendStep.review => _buildReview(context),
+            _SendStep.pin => _PinEntryPanel(
+              reason: l10n.transferNeedsKey,
+              biometricsOffered: widget.canUnlockWithBiometrics,
+              onPin: (pin) => _submit(pin, false),
+              onBiometrics: () => _submit(null, true),
+              onCancel: () => setState(() => _step = _SendStep.review),
+            ),
+            _SendStep.working => _OperationProgress(
+              controller: widget.controller,
+            ),
+            _SendStep.result => _buildResult(context),
+          },
+        ],
+      ),
+    );
+  }
 
+  Widget _buildForm(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final assets = _assets;
+    final selected = _selectedAsset;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _SectionTitle(l10n.transferTitle),
         const SizedBox(height: 16),
-        if (_replacementTransfer)
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: NocturneColors.warning.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: NocturneColors.warning),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.warning, color: NocturneColors.warning),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l10n.transferReplaced,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: NocturneColors.warning,
-                              fontWeight: NocturneType.semibold,
-                            ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        l10n.transferReplacedBody(
-                          _gasMultiplier.toStringAsFixed(2),
-                        ),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        const SizedBox(height: 16),
         DropdownButtonFormField<String>(
-          initialValue: _selectedAsset?.id,
+          initialValue: selected?.id,
           decoration: InputDecoration(
             labelText: l10n.transferAsset,
-            border: OutlineInputBorder(),
+            border: const OutlineInputBorder(),
           ),
           items: assets
               .map(
@@ -349,11 +281,6 @@ class _TransferPreparationSectionState
             setState(() {
               _selectedAsset = nextAsset;
               _preview = null;
-              _loadedNonce = null;
-              _signedTransfer = null;
-              _submittedTransfer = null;
-              _trackingReceipt = null;
-              _submissionAttempts = 0;
               _error = null;
             });
           },
@@ -364,7 +291,7 @@ class _TransferPreparationSectionState
           decoration: InputDecoration(
             labelText: l10n.transferRecipientLabel,
             hintText: '0x…',
-            border: OutlineInputBorder(),
+            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 12),
@@ -374,143 +301,158 @@ class _TransferPreparationSectionState
           decoration: InputDecoration(
             labelText: l10n.transferAmount,
             hintText: l10n.transferAmountHint,
-            helperText: _selectedAsset == null
+            helperText: selected == null
                 ? null
                 : l10n.transferAvailable(
-                    _selectedAsset!.balanceFormatted,
-                    _selectedAsset!.symbol,
+                    selected.balanceFormatted,
+                    selected.symbol,
                   ),
             border: const OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              FilledButton.icon(
-                onPressed: _isSubmitting ? null : _buildPreview,
-                icon: const Icon(Icons.visibility_outlined),
-                label: Text(l10n.transferPreviewAction),
-              ),
-              FilledButton.icon(
-                onPressed: _isSubmitting ? null : _signAndSubmit,
-                icon: _isSubmitting
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.send_outlined),
-                label: Text(
-                  _isSubmitting
-                      ? l10n.transferSending
-                      : l10n.transferSignAndSend,
-                ),
-              ),
-            ],
           ),
         ),
         if (_error case final String message) ...[
           const SizedBox(height: 12),
           _ErrorBanner(message: message),
         ],
-        if (preview != null) ...[
-          const SizedBox(height: 16),
-          _SummaryTile(label: l10n.transferRecipient, value: preview.toAddress),
-          const SizedBox(height: 10),
-          _SummaryTile(
-            label: l10n.transferAssetAndAmount,
-            value: preview.amountFormatted,
-          ),
-          const SizedBox(height: 10),
-          _SummaryTile(
-            label: 'Estimated gas',
-            value:
-                '${preview.gasLimit} gas\nmax fee ≈ ${preview.maxFeePerGasGwei.toStringAsFixed(3)} gwei',
-          ),
-          const SizedBox(height: 10),
-          _SummaryTile(
-            label: 'Estimated network fee',
-            value: preview.estimatedNetworkFeeNativeFormatted,
-          ),
-          const SizedBox(height: 10),
-          _SummaryTile(
-            label: l10n.transferTotalDebit,
-            value: preview.totalDebitFormatted,
-          ),
-          const SizedBox(height: 10),
-          _SummaryTile(label: l10n.transferStatus, value: preview.previewNote),
-        ],
-        if (_isSubmitting) ...[
-          const SizedBox(height: 16),
-          _SummaryTile(
-            label: l10n.transferSendState,
-            value: l10n.transferInProgress,
-          ),
-        ],
-        if (loadedNonce != null) ...[
-          const SizedBox(height: 16),
-          _SummaryTile(
-            label: 'Loaded nonce',
-            value:
-                '${loadedNonce.nonce}\nRPC: ${loadedNonce.providerLabel}\n${loadedNonce.loadedAtUtc.toIso8601String()}',
-          ),
-        ],
-        if (signedTransfer != null) ...[
-          const SizedBox(height: 10),
-          _SummaryTile(
-            label: 'Signed transaction',
-            value:
-                '${signedTransfer.transactionHashHex}\n${signedTransfer.signingNote}',
-          ),
-        ],
-        if (submittedTransfer != null) ...[
-          const SizedBox(height: 10),
-          _SummaryTile(
-            label: l10n.transferSuccess,
-            value:
-                '${submittedTransfer.networkTransactionHash}\nRPC: ${submittedTransfer.providerLabel}\n${submittedTransfer.submittedAtUtc.toIso8601String()}',
-          ),
-          const SizedBox(height: 10),
-          _SummaryTile(
-            label: 'Tracking / lifecycle',
-            value: _buildTrackingStatus(),
-          ),
-        ],
+        const SizedBox(height: 16),
+        FilledButton.icon(
+          onPressed: _review,
+          icon: const Icon(Icons.visibility_outlined),
+          label: Text(l10n.transferPreviewAction),
+        ),
       ],
     );
   }
 
-  String _buildTrackingStatus() {
+  Widget _buildReview(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final receipt = _trackingReceipt;
-    if (_submittedTransfer == null) {
-      return l10n.transferTrackingIdle;
+    final preview = _preview;
+    if (preview == null) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionTitle(l10n.transferReview),
+        const SizedBox(height: 16),
+        _SummaryTile(label: l10n.transferRecipient, value: preview.toAddress),
+        const SizedBox(height: 10),
+        _SummaryTile(
+          label: l10n.transferAssetAndAmount,
+          value: preview.amountFormatted,
+        ),
+        const SizedBox(height: 10),
+        _SummaryTile(
+          label: l10n.transferNetworkFee,
+          value: preview.estimatedNetworkFeeNativeFormatted,
+        ),
+        const SizedBox(height: 10),
+        _SummaryTile(
+          label: l10n.transferTotalDebit,
+          value: preview.totalDebitFormatted,
+        ),
+        if (_error case final String message) ...[
+          const SizedBox(height: 12),
+          _ErrorBanner(message: message),
+        ],
+        const SizedBox(height: 16),
+        FilledButton.icon(
+          onPressed: _toPin,
+          icon: const Icon(Icons.send_outlined),
+          label: Text(l10n.transferSignAndSend),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: () => setState(() {
+            _error = null;
+            _step = _SendStep.form;
+          }),
+          child: Text(l10n.transferEdit),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildResult(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final result = _result;
+    if (result == null) {
+      return _OperationResult(
+        success: false,
+        title: l10n.transferNotSent,
+        body: _failure ?? '',
+        primaryLabel: l10n.actionBack,
+        onPrimary: () => setState(() => _step = _SendStep.review),
+        secondaryLabel: l10n.actionClose,
+        onSecondary: () => Navigator.of(context).pop(),
+      );
     }
+    final submitted = result.submittedTransfer;
+    final receipt = _trackingReceipt;
+    return _OperationResult(
+      success:
+          receipt?.status != TransactionStatus.reverted &&
+          receipt?.status != TransactionStatus.failed,
+      title: l10n.transferSuccess,
+      body: _trackingSentence(l10n, result, receipt),
+      primaryLabel: l10n.actionDone,
+      onPrimary: () => Navigator.of(context).pop(),
+      details: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (result.replacementUsed) ...[
+            _ErrorBanner(
+              message:
+                  '${l10n.transferReplaced}. '
+                  '${l10n.transferReplacedBody(result.gasMultiplierUsed.toStringAsFixed(2))}',
+            ),
+            const SizedBox(height: 10),
+          ],
+          _SummaryTile(
+            label: l10n.transferHash,
+            value: submitted.networkTransactionHash,
+          ),
+          // Nonce, endpoint, block and gas are developer detail; the design
+          // keeps them behind «Подробности» rather than in the result itself.
+          ExpansionTile(
+            title: Text(l10n.settingsDetails),
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: const EdgeInsets.only(bottom: 8),
+            expandedCrossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SelectableText(
+                <String>[
+                  'Nonce: ${result.loadedNonce.nonce}',
+                  'RPC: ${submitted.providerLabel}',
+                  if (receipt?.blockNumber case final Object block)
+                    'Block: $block',
+                  if (receipt?.gasUsed case final Object gas) 'Gas used: $gas',
+                  if (result.attempts > 1)
+                    l10n.transferAttempts(result.attempts),
+                  submitted.submittedAtUtc.toIso8601String(),
+                ].join('\n'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _trackingSentence(
+    AppLocalizations l10n,
+    HardenedSubmitResult result,
+    TransactionReceipt? receipt,
+  ) {
     if (receipt == null) {
-      return _submissionAttempts > 1
-          ? l10n.transferBroadcastAfterRetry(_submissionAttempts)
+      return result.attempts > 1
+          ? l10n.transferBroadcastAfterRetry(result.attempts)
           : l10n.transferBroadcast;
     }
-
-    final statusLabel = switch (receipt.status) {
-      TransactionStatus.confirmed => 'Confirmed',
-      TransactionStatus.reverted => 'Reverted',
-      TransactionStatus.pending => 'Pending / timeout',
-      TransactionStatus.failed => 'Failed',
+    return switch (receipt.status) {
+      TransactionStatus.confirmed => l10n.transferConfirmed,
+      TransactionStatus.reverted => l10n.transferReverted,
+      TransactionStatus.pending => l10n.transferPendingTimeout,
+      TransactionStatus.failed =>
+        receipt.errorMessage ?? l10n.transferTrackingFailed(''),
     };
-
-    final details = <String>[
-      l10n.transferStatusLine(statusLabel),
-      if (receipt.blockNumber != null) 'Block: ${receipt.blockNumber}',
-      if (receipt.gasUsed != null) 'Gas used: ${receipt.gasUsed}',
-      if (_submissionAttempts > 1) l10n.transferAttempts(_submissionAttempts),
-      if (receipt.errorMessage != null) receipt.errorMessage!,
-    ];
-
-    return details.join('\n');
   }
 }

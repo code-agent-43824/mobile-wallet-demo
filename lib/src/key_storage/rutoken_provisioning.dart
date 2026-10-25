@@ -6,6 +6,7 @@ import 'package:bip39/bip39.dart' as bip39;
 import 'package:unorm_dart/unorm_dart.dart' as unorm;
 import 'package:web3dart/web3dart.dart' show bytesToHex, publicKeyToAddress;
 
+import '../errors/app_error.dart';
 import 'custody_backend.dart';
 import 'rutoken_method_channel_adapter.dart';
 import 'secure_key_value_store.dart';
@@ -100,12 +101,10 @@ class RutokenProvisioningService {
   }) async {
     final normalizedMnemonic = _normalizeMnemonic(mnemonic);
     if (!bip39.validateMnemonic(normalizedMnemonic)) {
-      throw const RutokenNativeException(
-        'Seed-фраза не прошла проверку BIP-39.',
-      );
+      throw const RutokenNativeException.coded(AppErrorCode.invalidMnemonic);
     }
     if (pin.isEmpty) {
-      throw const RutokenNativeException('PIN Рутокена не должен быть пустым.');
+      throw const RutokenNativeException.coded(AppErrorCode.cardPinEmpty);
     }
 
     Uint8List? seed;
@@ -119,8 +118,8 @@ class RutokenProvisioningService {
       final master = bip32.BIP32.fromSeed(seed);
       final privateKey = master.privateKey;
       if (privateKey == null || privateKey.length != 32) {
-        throw const RutokenNativeException(
-          'Не удалось получить 32-байтовый BIP-32 master key.',
+        throw const RutokenNativeException.coded(
+          AppErrorCode.cardMasterKeyFailed,
         );
       }
       masterPrivateKey = Uint8List.fromList(privateKey);
@@ -175,8 +174,8 @@ class RutokenProvisioningService {
 
       if (imported.derivationPath != addressPath ||
           imported.address.toLowerCase() != expectedAddress.toLowerCase()) {
-        throw const RutokenNativeException(
-          'Адрес, полученный от Рутокена, не совпал с BIP-39/BIP-32 эталоном.',
+        throw const RutokenNativeException.coded(
+          AppErrorCode.cardAddressMismatch,
         );
       }
       final verifiedPublicAccount = WalletAccountPublicKey(
@@ -212,7 +211,7 @@ class RutokenProvisioningService {
   /// master. The token is read only; no key object is created or replaced.
   Future<WalletAccountDescriptor> adoptExisting({required String pin}) async {
     if (pin.isEmpty) {
-      throw const RutokenNativeException('PIN Рутокена не должен быть пустым.');
+      throw const RutokenNativeException.coded(AppErrorCode.cardPinEmpty);
     }
     final session = await _adapter.openSession(pin: pin);
     final serial = session.serial;
@@ -222,15 +221,15 @@ class RutokenProvisioningService {
     try {
       account = await _adapter.readAccountDescriptor(session);
       if (account == null) {
-        throw const RutokenNativeException(
-          'Рутокен не содержит совместимый BIP-32 кошелёк.',
+        throw const RutokenNativeException.coded(
+          AppErrorCode.cardNoCompatibleWallet,
         );
       }
       if (account.backendId != 'rutoken_nfc' ||
           account.derivationPath != addressPath ||
           !RegExp(r'^0x[0-9a-fA-F]{40}$').hasMatch(account.address)) {
-        throw const RutokenNativeException(
-          'Публичный профиль Рутокена имеет неподдерживаемый формат.',
+        throw const RutokenNativeException.coded(
+          AppErrorCode.cardProfileUnsupported,
         );
       }
     } catch (error) {
@@ -307,7 +306,7 @@ class RutokenProvisioningService {
       document,
     ).any((entry) => entry['id'] == profileId);
     if (!exists) {
-      throw const RutokenNativeException('Такая карта не зарегистрирована.');
+      throw const RutokenNativeException.coded(AppErrorCode.cardNotRegistered);
     }
     document['selectedId'] = profileId;
     await _writeDocument(document);
@@ -338,9 +337,7 @@ class RutokenProvisioningService {
     try {
       return _accountFromJson(entry);
     } catch (_) {
-      throw const RutokenNativeException(
-        'Сохранённый публичный профиль Рутокена повреждён.',
-      );
+      throw const RutokenNativeException.coded(AppErrorCode.cardDataCorrupted);
     }
   }
 
@@ -350,9 +347,7 @@ class RutokenProvisioningService {
     try {
       return _publicAccountFromJson(entry);
     } catch (_) {
-      throw const RutokenNativeException(
-        'Сохранённые публичные данные Рутокена повреждены.',
-      );
+      throw const RutokenNativeException.coded(AppErrorCode.cardDataCorrupted);
     }
   }
 
@@ -370,23 +365,17 @@ class RutokenProvisioningService {
     try {
       json = jsonDecode(raw);
     } catch (_) {
-      throw const RutokenNativeException(
-        'Сохранённые публичные данные Рутокена повреждены.',
-      );
+      throw const RutokenNativeException.coded(AppErrorCode.cardDataCorrupted);
     }
     if (json is! Map<String, dynamic>) {
-      throw const RutokenNativeException(
-        'Сохранённые публичные данные Рутокена повреждены.',
-      );
+      throw const RutokenNativeException.coded(AppErrorCode.cardDataCorrupted);
     }
     final schema = json['schema'];
     if (schema == 3) return json;
     if (schema == 1 || schema == 2) return _migrateSingleProfile(json);
     // A newer schema from a downgraded install: refuse rather than guess, so a
     // future format cannot be silently truncated back to this one.
-    throw const RutokenNativeException(
-      'Сохранённые публичные данные Рутокена повреждены.',
-    );
+    throw const RutokenNativeException.coded(AppErrorCode.cardDataCorrupted);
   }
 
   Map<String, dynamic> _emptyDocument() => <String, dynamic>{
@@ -401,9 +390,7 @@ class RutokenProvisioningService {
   Map<String, dynamic> _migrateSingleProfile(Map<String, dynamic> json) {
     final address = json['address'];
     if (address is! String || address.isEmpty) {
-      throw const RutokenNativeException(
-        'Сохранённые публичные данные Рутокена повреждены.',
-      );
+      throw const RutokenNativeException.coded(AppErrorCode.cardDataCorrupted);
     }
     final id = RutokenCardProfile.idForAddress(address);
     final entry = Map<String, dynamic>.from(json)
@@ -422,9 +409,7 @@ class RutokenProvisioningService {
   List<Map<String, dynamic>> _entries(Map<String, dynamic> document) {
     final profiles = document['profiles'];
     if (profiles is! List) {
-      throw const RutokenNativeException(
-        'Сохранённые публичные данные Рутокена повреждены.',
-      );
+      throw const RutokenNativeException.coded(AppErrorCode.cardDataCorrupted);
     }
     return profiles.whereType<Map<String, dynamic>>().toList();
   }
@@ -473,9 +458,7 @@ class RutokenProvisioningService {
         label: json['label'] as String?,
       );
     } catch (_) {
-      throw const RutokenNativeException(
-        'Сохранённый публичный профиль Рутокена повреждён.',
-      );
+      throw const RutokenNativeException.coded(AppErrorCode.cardDataCorrupted);
     }
   }
 

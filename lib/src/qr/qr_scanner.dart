@@ -1,3 +1,5 @@
+import '../errors/app_error.dart';
+
 /// Injectable seam for obtaining a QR payload — a WalletConnect `wc:` pairing
 /// URI or an EIP-4527 BC-UR request — from one of two sources:
 ///
@@ -30,10 +32,28 @@ abstract interface class QrScanner {
   Future<String?> loadFromFile();
 }
 
-class QrScannerException implements Exception {
-  const QrScannerException(this.message);
+class QrScannerException implements Exception, CodedError {
+  /// A failure whose text comes from outside the app; shown as is.
+  const QrScannerException(String message)
+    : _message = message,
+      errorCode = null,
+      errorArgs = const <String, Object>{};
 
-  final String message;
+  const QrScannerException.coded(
+    AppErrorCode this.errorCode, [
+    this.errorArgs = const <String, Object>{},
+  ]) : _message = null;
+
+  final String? _message;
+
+  @override
+  final AppErrorCode? errorCode;
+
+  @override
+  final Map<String, Object> errorArgs;
+
+  @override
+  String get message => _message ?? debugDescribeError(errorCode!, errorArgs);
 
   @override
   String toString() => 'QrScannerException: $message';
@@ -44,7 +64,9 @@ class QrScannerException implements Exception {
 class UnavailableQrScanner implements QrScanner {
   const UnavailableQrScanner();
 
-  static const String _message = 'Сканер QR недоступен в этой сборке.';
+  static const QrScannerException _unavailable = QrScannerException.coded(
+    AppErrorCode.qrScannerUnavailable,
+  );
 
   @override
   bool get isCameraScanAvailable => false;
@@ -54,7 +76,7 @@ class UnavailableQrScanner implements QrScanner {
 
   @override
   Future<String?> scanWithCamera({String title = ''}) async {
-    throw const QrScannerException(_message);
+    throw _unavailable;
   }
 
   @override
@@ -62,12 +84,12 @@ class UnavailableQrScanner implements QrScanner {
     String title = '',
     String? expectedType,
   }) async {
-    throw const QrScannerException(_message);
+    throw _unavailable;
   }
 
   @override
   Future<String?> loadFromFile() async {
-    throw const QrScannerException(_message);
+    throw _unavailable;
   }
 }
 

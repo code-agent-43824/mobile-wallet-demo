@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/auth/biometric_auth.dart';
+import 'package:mobile_wallet_demo/src/errors/app_error.dart';
 import 'package:mobile_wallet_demo/src/key_storage/custody_backend.dart';
 import 'package:mobile_wallet_demo/src/key_storage/rutoken_method_channel_adapter.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
@@ -34,10 +35,9 @@ void main() {
       expect(controller.busyMessage, isNull);
       expect(controller.canCancelBusyOperation, isFalse);
       expect(controller.isBusyCancellationRequested, isFalse);
-      expect(
-        controller.errorMessage,
-        'Не удалось выполнить операцию: Ожидание Рутокена отменено.',
-      );
+      // A coded card failure reads as itself, not wrapped in "operation
+      // failed: …", and never names the vendor.
+      expect(controller.errorMessage, 'Ожидание карты отменено.');
     },
   );
 }
@@ -59,8 +59,8 @@ class _PendingRutokenAdapter implements RutokenNativeAdapter {
     cancelCount++;
     if (!_open.isCompleted) {
       _open.completeError(
-        const RutokenNativeException(
-          'Ожидание Рутокена отменено.',
+        const RutokenNativeException.coded(
+          AppErrorCode.cardCancelled,
           code: 'rutoken_cancelled',
         ),
       );

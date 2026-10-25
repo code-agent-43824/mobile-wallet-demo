@@ -11,6 +11,7 @@ import 'package:web3dart/web3dart.dart';
 
 import '../auth/biometric_auth.dart';
 import '../auth/pin_unlock_session.dart';
+import '../errors/app_error.dart';
 import 'biometric_secret_store.dart';
 import 'key_storage_backend.dart';
 import 'secure_key_value_store.dart';
@@ -27,7 +28,9 @@ class PhoneSecureVault implements KeyStorageBackend {
     DateTime Function()? now,
     int pbkdf2Iterations = _defaultPinIterations,
     Random? random,
+    BiometricPromptText? biometricPromptText,
   }) : _store = store,
+       _biometricPromptText = biometricPromptText ?? defaultBiometricPromptText,
        _biometricAuth = biometricAuth ?? defaultBiometricAuthGateway(),
        _session = session ?? PinUnlockSession(ttl: unlockTtl),
        _maxUnlockAttempts = maxUnlockAttempts,
@@ -67,6 +70,7 @@ class PhoneSecureVault implements KeyStorageBackend {
 
   final SecureKeyValueStore _store;
   final BiometricAuthGateway _biometricAuth;
+  final BiometricPromptText _biometricPromptText;
   final PinUnlockSession _session;
   final int _maxUnlockAttempts;
   final Duration _unlockLockout;
@@ -130,10 +134,7 @@ class PhoneSecureVault implements KeyStorageBackend {
   /// misroute — fail loudly instead of silently discarding the wallet.
   Future<void> _refuseIfWalletExists() async {
     if (await hasWallet()) {
-      throw const VaultFailure(
-        'На этом телефоне уже есть кошелёк. Сначала удалите его или '
-        'используйте другое хранилище.',
-      );
+      throw const VaultFailure.coded(AppErrorCode.walletAlreadyExists);
     }
   }
 
@@ -195,7 +196,7 @@ class PhoneSecureVault implements KeyStorageBackend {
       }
 
       await _biometricAuth.authenticate(
-        reason: 'Подтвердите биометрию для включения быстрого unlock.',
+        reason: _biometricPromptText(BiometricPrompt.enableQuickUnlock),
       );
 
       // Unwrap the DEK with the PIN, then hand it to the gated biometric store.
@@ -233,7 +234,7 @@ class PhoneSecureVault implements KeyStorageBackend {
     // Releasing the DEK prompts for biometric authentication inside the store.
     final dek = await _biometricSecretStore.retrieve(
       id: _biometricSecretId,
-      reason: 'Подтвердите биометрию для разблокировки кошелька.',
+      reason: _biometricPromptText(BiometricPrompt.unlockWallet),
     );
     if (dek == null) {
       throw const BiometricNotEnabledFailure();
@@ -369,24 +370,8 @@ class PhoneSecureVault implements KeyStorageBackend {
     }
     final nowUtc = _now();
     if (nowUtc.isBefore(lockedUntil)) {
-      throw VaultLockedOutFailure(
-        'Слишком много неверных попыток. '
-        'Повторите через ${_formatRemaining(lockedUntil.difference(nowUtc))}.',
-      );
+      throw VaultLockedOutFailure(lockedUntil.difference(nowUtc));
     }
-  }
-
-  /// Renders the wait as minutes once it exceeds a minute — "через 300 с" is
-  /// technically right and practically unreadable.
-  static String _formatRemaining(Duration remaining) {
-    final seconds = remaining.inSeconds;
-    // Round a sub-minute wait up so it never reads "0 с"; longer waits round up
-    // to whole minutes from the true remainder, so a fresh five-minute lockout
-    // says five and not six.
-    if (seconds < 59) {
-      return '${seconds + 1} с';
-    }
-    return '${(seconds / 60).ceil()} мин';
   }
 
   Future<void> _registerFailedUnlock(_VaultPayload payload) async {

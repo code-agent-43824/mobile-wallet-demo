@@ -10,11 +10,30 @@ import 'package:web3dart/src/utils/rlp.dart' as rlp;
 import '../key_storage/custody_backend.dart';
 import '../transactions/transaction_service.dart';
 import 'wallet_operation_auth.dart';
+import '../errors/app_error.dart';
 
-class ExternalSignatureFailure implements Exception {
-  const ExternalSignatureFailure(this.message);
+class ExternalSignatureFailure implements Exception, CodedError {
+  /// A failure whose text comes from outside the app; shown as is.
+  const ExternalSignatureFailure(String message)
+    : _message = message,
+      errorCode = null,
+      errorArgs = const <String, Object>{};
 
-  final String message;
+  const ExternalSignatureFailure.coded(
+    AppErrorCode this.errorCode, [
+    this.errorArgs = const <String, Object>{},
+  ]) : _message = null;
+
+  final String? _message;
+
+  @override
+  final AppErrorCode? errorCode;
+
+  @override
+  final Map<String, Object> errorArgs;
+
+  @override
+  String get message => _message ?? debugDescribeError(errorCode!, errorArgs);
 
   @override
   String toString() => 'ExternalSignatureFailure: $message';
@@ -145,13 +164,11 @@ class ExternalDigestWalletTransactionSigner implements WalletTransactionSigner {
     required int nonce,
   }) async {
     if (nonce < 0) {
-      throw const TransactionFailure('Nonce должен быть неотрицательным.');
+      throw const TransactionFailure.coded(AppErrorCode.txNonceNegative);
     }
     if (address.toLowerCase() !=
         preparedTransfer.preview.fromAddress.toLowerCase()) {
-      throw const TransactionFailure(
-        'Аппаратный аккаунт не соответствует адресу отправителя.',
-      );
+      throw const TransactionFailure.coded(AppErrorCode.txSenderMismatch);
     }
     final transaction = preparedTransfer.transaction.copyWith(
       from: EthereumAddress.fromHex(address),
@@ -170,7 +187,7 @@ class ExternalDigestWalletTransactionSigner implements WalletTransactionSigner {
     return transactionService.assembleSignedTransfer(
       preparedTransfer: preparedTransfer,
       rawSignedTransaction: raw,
-      signingNote: 'Транзакция подписана внешним custody backend.',
+      signingNote: 'Signed by the external custody backend.',
     );
   }
 

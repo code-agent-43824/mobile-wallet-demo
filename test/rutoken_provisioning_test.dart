@@ -414,13 +414,30 @@ void main() {
     final newCardRow = (await controller.listSwitchableWallets()).firstWhere(
       (wallet) => wallet.isCardStorage && wallet.isEmptySlot,
     );
+    final activeAddress = controller.summary?.address;
     await controller.switchActiveWallet(newCardRow);
 
     expect(
       controller.stage,
-      WalletFlowStage.welcome,
+      WalletFlowStage.addCard,
       reason: 'the row exists to set up another card, not to re-pick this one',
     );
+    expect(
+      controller.summary?.address,
+      activeAddress,
+      reason: 'opening «Новая карта» must not change the active wallet',
+    );
+
+    // The card's create stage returns to «Новая карта», not to the welcome
+    // screen with its phone-wallet creation.
+    controller.goToRutokenCreate();
+    expect(controller.stage, WalletFlowStage.rutokenCreate);
+    controller.leaveCardSetup();
+    expect(controller.stage, WalletFlowStage.addCard);
+
+    controller.closeAddCard();
+    expect(controller.stage, WalletFlowStage.unlocked);
+    expect(controller.summary?.address, activeAddress);
     controller.dispose();
   });
 
