@@ -111,3 +111,11 @@ Automated widget/controller tests cover these with fakes; none of them is physic
 | Card errors read without the vendor name | NOT RUN | Wrong PIN, timeout, cancel and card removal show «Неверный PIN карты.», the 30-second message, «Ожидание карты отменено.», «Связь с картой потеряна…» — in Russian and, after switching the language, in English. |
 | Lock-on-open, phone vault | NOT RUN | With the switch on, a cold start opens the lock screen (keypad); the PIN opens the dashboard. A minute in the background locks again; the file picker and the biometric dialog do not. |
 | Lock-on-open, card | NOT RUN | The card's PIN + tap opens the dashboard without a signature; a different card is refused with «Поднесена другая карта…». With the card PIN under biometrics, the fingerprint alone opens it. |
+
+## v1.58 checks (launch on every platform/ABI)
+
+| Check | Result | Acceptance |
+| --- | --- | --- |
+| iOS simulator launch, Xcode 27 SDK | NOT RUN | The app built with the Xcode 27 SDK opens on the simulator (no SIGTRAP «UIScene life cycle is required»). |
+| Android x86_64 emulator launch | NOT RUN | `android-launch-check.yml` (x86_64): «stayed alive», no `UnsatisfiedLinkError`; the welcome screen shows «Аппаратные карты на этом устройстве пока не поддерживаются.» instead of «У меня есть карта». |
+| Android arm64 phone, cards still present | NOT RUN | On a real arm64 phone «У меня есть карта» is offered and a card session opens as before (the ABI gate must not hide cards there). |

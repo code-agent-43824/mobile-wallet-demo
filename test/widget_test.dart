@@ -291,7 +291,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Wallet Demo'), findsOneWidget);
-    expect(find.text('v1.57.0+68'), findsOneWidget);
+    expect(find.text('v1.58.0+69'), findsOneWidget);
     // Onboarding variant B: no storage picker on the first screen — the
     // backend follows from which action is taken.
     expect(find.text('Кошелёк за минуту'), findsOneWidget);
