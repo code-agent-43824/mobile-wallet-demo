@@ -298,10 +298,15 @@ void main() {
     expect(find.text('Phone Secure Vault'), findsNothing);
     expect(find.text('Создать кошелёк'), findsOneWidget);
     expect(find.text('Импортировать seed-фразу'), findsOneWidget);
-    // No card adapter is injected here, so no card backend is registered and
-    // the card action is correctly absent. The Rutoken test below asserts it
-    // appears when an adapter is present.
+    // No card adapter is injected here (as on a phone without the card
+    // libraries), so no card backend is registered: the card action is absent
+    // and a note says why. The Rutoken test below asserts it appears when an
+    // adapter is present.
     expect(find.text('У меня есть карта'), findsNothing);
+    expect(
+      find.text('Аппаратные карты на этом устройстве пока не поддерживаются.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('another card is added from its own screen, one sheet deep', (
@@ -453,6 +458,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(
+      find.text('Аппаратные карты на этом устройстве пока не поддерживаются.'),
+      findsNothing,
+    );
     // The card actions are behind «У меня есть карта» now.
     await tester.tap(find.text('У меня есть карта'));
     await tester.pumpAndSettle();

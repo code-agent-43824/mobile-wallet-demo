@@ -17,14 +17,17 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        lifecycle.addObserver(rutokenRuntime)
+        rutokenRuntime?.let(lifecycle::addObserver)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        // Without the card libraries the channel stays unregistered; Dart
+        // creates no adapter for it on such a device.
+        val runtime = rutokenRuntime ?: return
         RutokenMethodChannel(
             messenger = flutterEngine.dartExecutor.binaryMessenger,
-            runtime = rutokenRuntime,
+            runtime = runtime,
             activity = this,
         ).register()
     }

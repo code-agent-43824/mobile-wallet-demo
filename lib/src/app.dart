@@ -142,7 +142,9 @@ class _MobileWalletDemoAppState extends State<MobileWalletDemoApp> {
     _qrScanner = widget._qrScanner ?? _defaultQrScanner();
     _rutokenNativeAdapter =
         widget._rutokenNativeAdapter ??
-        (Platform.isAndroid ? MethodChannelRutokenNativeAdapter() : null);
+        (isRutokenSupportedOnThisDevice
+            ? MethodChannelRutokenNativeAdapter()
+            : null);
     unawaited(_restoreLocale());
   }
 

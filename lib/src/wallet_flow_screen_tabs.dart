@@ -357,6 +357,9 @@ class _SettingsTab extends StatelessWidget {
                         icon: const Icon(Icons.add_card),
                         label: Text(l10n.walletsConnectAnotherCard),
                       ),
+                    ] else ...[
+                      const SizedBox(height: NocturneSpacing.x4),
+                      const _CardsUnsupportedNote(),
                     ],
                     const SizedBox(height: NocturneSpacing.x4),
                     OutlinedButton(
