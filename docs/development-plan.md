@@ -37,7 +37,7 @@ Current factual status of the project:
 milestone is an optional Rutoken custody backend for Android/iOS whose signing keys stay non-exporting after
 recoverable provisioning and which supports the same own-send, WalletConnect, and EIP-4527 AirGap flows.
 
-- **NOW — v1.57.0+68:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
+- **NOW — v1.58.0+69:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
   MetaMask-compatible EIP-4527 AirGap, per-operation authentication, hardened QR scanning, and the
   Rutoken custody/signature foundation, physically validated Android read/sign/provisioning, and the registered
   production backend are built. A compatible pre-provisioned card can be adopted read-only without rewriting its
@@ -45,7 +45,9 @@ recoverable provisioning and which supports the same own-send, WalletConnect, an
   separate biometric-gated secret store; and Android NFC discovery is cancellable with stable sanitized
   PIN/timeout/NFC-loss errors and primary-failure-preserving teardown. Every signature and card operation
   walks one sheet (PIN → signing or card tap → result), failures are coded and read in RU or EN, another card
-  is added from its own «Новая карта» screen, and an optional lock-on-open privacy screen exists.
+  is added from its own «Новая карта» screen, and an optional lock-on-open privacy screen exists. v1.58 restores
+  the iOS scene manifest (a launch blocker on the Xcode 27 SDK) and runs without cards, instead of crashing,
+  where the card libraries cannot load.
 - **NEXT — Phase 10 completion:** the deferred physical matrix was executed in full on v1.51.0+62
   (Nothing Phone 3a / Android 16, 2026-08-17) and **Android now passes every required row except one**:
   Rutoken-backed WalletConnect `personal_sign`/EIP-712/transaction, EIP-4527 AirGap export + live-camera scan +
@@ -61,6 +63,13 @@ recoverable provisioning and which supports the same own-send, WalletConnect, an
 - **LATER:** broader device/platform integration tests, and only then additional chains/accounts if product
   scope changes. Not Phase 10 prerequisites. (Lock-on-open, coded domain errors and the add-card screen moved
   from here into v1.57.)
+- **Tech debt — cards on other ABIs (owner, v1.58):** `libwtpkcs11ecp.so` ships for arm64-v8a only and the
+  PC/SC bridge has no x86_64 build, so x86_64 emulators and 32-bit phones run card-less: the transport, the
+  runtime and the channel are skipped unless the process runs as arm64 (Kotlin `os.arch`, Dart `Abi.current()`),
+  and the card actions give way to «Аппаратные карты на этом устройстве пока не поддерживаются.». The owner is
+  obtaining the vendor libraries for the other ABIs; with them, drop the gate and run the card rows there.
+- **Watch:** `local_auth`'s iOS plugin still uses the deprecated app-delegate lifecycle under the UIScene
+  manifest; take its scene-aware release when it ships.
 
 History is preserved in the phase sections and `docs/worklog.md`; the operational source of truth is the
 NOW / NEXT / LATER summary above plus the Phase 10 exit criteria below.
@@ -821,6 +830,9 @@ possible, since the owner has a second card.
   UI edge (dApp-facing JSON-RPC errors fixed English, biometric dialog text localized, history labels as data);
   one confirmation sheet walks PIN → signing/tap → result (13.5); the «Новая карта» screen; optional
   lock-on-open (lock screen on start and after a minute in the background; card unlock = PIN + tap, no signing)
+- `v1.58` — launch fixes: the iOS `UISceneConfigurations` block is back (lost in `a011c2c`; required by the
+  Xcode 27 SDK), Android runs card-less instead of crashing where the process is not arm64, and the 16 KB
+  alignment check ignores 32-bit libs
 
 ## Current non-goals and validation limits
 - no iOS hardware-device SDK implementation yet; Android physical signing passed on v1.51, while the v1.55

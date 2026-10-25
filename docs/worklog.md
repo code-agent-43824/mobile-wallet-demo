@@ -18,6 +18,49 @@ Entry template:
 
 ---
 
+## 2026-10-25 — iOS scene manifest, Android card-less mode without arm64, 16 KB check scope — branch claude/friendly-hawking-hpbpbv — done (v1.58.0+69)
+- Plan (owner-forwarded recommendation, three items in priority order):
+  1. **iOS launch crash.** `ios/Runner/Info.plist` lost `UISceneConfigurations` in `a011c2c` (an unrelated
+     RPC commit that rewrote the plist), while `AppDelegate` (`FlutterImplicitEngineDelegate`) and
+     `SceneDelegate.swift` already follow the scene template. Apps built with the Xcode 27 SDK require the
+     UIScene life cycle and stop with SIGTRAP at launch without it. Restore the block exactly as
+     `flutter create` writes it (`UIWindowScene`, `$(PRODUCT_MODULE_NAME).SceneDelegate`, storyboard `Main`).
+     Side note to track: `local_auth`'s iOS plugin still uses the deprecated app-delegate lifecycle.
+  2. **Android crash without arm64 (owner decision: card-less mode, as tech debt until the owner obtains the
+     vendor libraries for the other ABIs).** `libwtpkcs11ecp.so` ships for arm64-v8a only, and the PC/SC
+     bridge (`librtpcsc.so`, `librtconnection.so`) has no x86_64 build either, so `WalletDemoApplication`
+     dies with `UnsatisfiedLinkError` on x86_64 emulators and 32-bit phones. Gate on the *process* ABI, not
+     `Build.SUPPORTED_ABIS` (x86_64 images with ARM translation list `arm64-v8a` there while the app runs
+     x86_64): Kotlin skips the transport, the runtime and the channel unless `os.arch` is `aarch64`; Dart
+     creates no adapter unless `Abi.current()` is `androidArm64`. The existing "no adapter" path (iOS,
+     Windows) already hides every card action; add one line saying cards are not supported on this device.
+  3. **16 KB check scope.** `scripts/check_apk_alignment.py` flags `armeabi-v7a` libs, but 16 KB pages exist
+     only on 64-bit devices; report 32-bit libs without failing on them.
+  Regression: `android-launch-check.yml` on x86_64 must say "stayed alive"; iOS launch is checked on a
+  simulator by the owner.
+- Done:
+  - `ios/Runner/Info.plist`: `UISceneConfigurations` restored byte-for-byte from the Flutter 3.47.8 template
+    (plist parses; `SceneDelegate.swift` already matched the template and is in the Xcode project).
+  - Android: `WalletDemoApplication.isRutokenSupported` (`os.arch == "aarch64"`) guards the PC/SC bridge, the
+    runtime and (in `MainActivity`) the lifecycle observer and the method channel; `rutokenRuntime` is
+    nullable. Dart: `isRutokenSupportedOnThisDevice` (`Platform.isAndroid && Abi.current() == Abi.androidArm64`)
+    decides whether `app.dart` creates `MethodChannelRutokenNativeAdapter`. Without an adapter the welcome
+    screen and the wallets sheet show `cardsUnsupportedOnDevice` (RU/EN) where the card actions were; this
+    also applies on iOS and Windows, which have no adapter either. The widget tests assert the note with no
+    adapter and its absence with one.
+  - `scripts/check_apk_alignment.py`: 32-bit ELF libs are listed as "n/a (32-bit, 4 KB pages)" and never fail;
+    on the local release APK the two armeabi-v7a findings (`libbarhopper_v3.so`, `libuniffi_yttrium_wcpay.so`)
+    are now n/a and every 64-bit lib passes.
+  - v1.58.0+69: CHANGELOG, plan (NOW, tech-debt and watch items, release line), README, CLAUDE.md gotchas,
+    device matrix "v1.58 checks" (NOT RUN). Local: format clean, analyze clean, `flutter test` 233/233,
+    debug APK builds.
+  - Remote: `android-launch-check.yml` x86_64 / API 34 / debug on `c3e7785` ([run 8](https://github.com/code-agent-43824/mobile-wallet-demo/actions/runs/40208514724))
+    — «RESULT: app stayed alive 20s», no `UnsatisfiedLinkError`; `ci.yml` on the branch ([run 205](https://github.com/code-agent-43824/mobile-wallet-demo/actions/runs/40208521144))
+    green on every platform (it only builds iOS, so the launch fix is not exercised there).
+- Next / open: the owner checks the iOS simulator launch on the Xcode 27 SDK and an arm64 phone still offering cards; when the vendor libraries
+  for x86_64/armeabi-v7a arrive, drop both ABI gates. Hardware RETEST rows (v1.55 NFC-loss fix) still wait for
+  a card session.
+
 ## 2026-10-24 — Phase 13 close-out + LATER items: error codes, sequential confirmation, add-card screen, lock-on-open — branch claude/friendly-hawking-hpbpbv — done (v1.57.0+68)
 - Plan (owner request): four functional chunks, each tested, then one version bump (v1.57.0).
   - **A. Error codes.** Domain/infrastructure failures (`key_storage/`, `qr/`, `walletconnect/`, `airgap/`,

@@ -1,9 +1,20 @@
+import 'dart:ffi' show Abi;
+import 'dart:io' show Platform;
+
 import 'package:flutter/services.dart';
 import 'package:pointycastle/ecc/curves/secp256k1.dart';
 import 'package:web3dart/web3dart.dart' show bytesToHex, publicKeyToAddress;
 
 import '../errors/app_error.dart';
 import 'custody_backend.dart';
+
+/// Whether this process can load the card libraries.
+///
+/// Tech debt: they ship for arm64-v8a only, so x86_64 emulators and 32-bit
+/// phones run without cards. This is the process ABI, the same fact
+/// `WalletDemoApplication.isRutokenSupported` checks on the Kotlin side.
+bool get isRutokenSupportedOnThisDevice =>
+    Platform.isAndroid && Abi.current() == Abi.androidArm64;
 
 class RutokenNativeException implements Exception, CodedError {
   /// A failure whose text comes from outside the app; shown as is.

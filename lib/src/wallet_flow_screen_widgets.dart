@@ -128,6 +128,24 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
+/// Stands in for the card actions where the card libraries cannot load, so
+/// their absence reads as a device limit rather than a missing feature.
+class _CardsUnsupportedNote extends StatelessWidget {
+  const _CardsUnsupportedNote();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Text(
+      AppLocalizations.of(context).cardsUnsupportedOnDevice,
+      textAlign: TextAlign.center,
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: NocturneColors.textMuted,
+      ),
+    );
+  }
+}
+
 class _ErrorBanner extends StatelessWidget {
   const _ErrorBanner({required this.message});
 

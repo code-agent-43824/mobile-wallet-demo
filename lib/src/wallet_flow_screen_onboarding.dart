@@ -80,7 +80,9 @@ class _WelcomeStage extends StatelessWidget {
                 : () => onBackendSelected(cardBackendId),
             icon: const Icon(Icons.nfc_outlined),
             label: Text(l10n.welcomeHaveCard),
-          ),
+          )
+        else
+          const _CardsUnsupportedNote(),
         const SizedBox(height: 12),
         OutlinedButton.icon(
           onPressed: () async {
