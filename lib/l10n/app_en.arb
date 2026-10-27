@@ -813,5 +813,6 @@
   "busyTapCardToUnlock": "Hold the card to the phone to unlock…",
   "settingsLockOnOpen": "Ask for the PIN when opening",
   "settingsLockOnOpenBody": "The app opens on the lock screen and locks again after a minute in the background. Each signature still asks on its own.",
-  "cardsUnsupportedOnDevice": "Hardware cards are not supported on this device yet."
+  "cardsUnsupportedOnDevice": "Hardware cards are not supported on this device yet.",
+  "errBiometricLockedOut": "Biometrics are locked after too many failed attempts. Use your PIN."
 }

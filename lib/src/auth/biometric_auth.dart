@@ -60,6 +60,8 @@ class LocalAuthenticationGateway implements BiometricAuthGateway {
     try {
       return await _localAuthentication.isDeviceSupported() &&
           await _localAuthentication.canCheckBiometrics;
+    } on LocalAuthException {
+      return false;
     } on PlatformException {
       return false;
     }
@@ -72,25 +74,49 @@ class LocalAuthenticationGateway implements BiometricAuthGateway {
       throw const BiometricUnavailableFailure();
     }
 
+    final bool authenticated;
     try {
-      final authenticated = await _localAuthentication.authenticate(
+      authenticated = await _localAuthentication.authenticate(
         localizedReason: reason,
-        options: const AuthenticationOptions(
-          biometricOnly: true,
-          stickyAuth: true,
-          useErrorDialogs: true,
-        ),
+        biometricOnly: true,
+        persistAcrossBackgrounding: true,
       );
-
-      if (!authenticated) {
-        throw const BiometricCancelledFailure();
-      }
+    } on LocalAuthException catch (error) {
+      throw _failureFor(error);
     } on PlatformException catch (error) {
       throw VaultFailure.coded(AppErrorCode.biometricFailed, <String, Object>{
         'detail': error.message ?? error.code,
       });
     }
+    if (!authenticated) {
+      throw const BiometricCancelledFailure();
+    }
   }
+
+  /// The plugin no longer explains failures with its own system dialogs, so
+  /// each kind maps to the app's wording. The code enum may grow, hence the
+  /// default arm.
+  static VaultFailure _failureFor(LocalAuthException error) =>
+      switch (error.code) {
+        // The PIN is right there, so backing out of the dialog is a cancel.
+        LocalAuthExceptionCode.userCanceled ||
+        LocalAuthExceptionCode.systemCanceled ||
+        LocalAuthExceptionCode.timeout ||
+        LocalAuthExceptionCode.userRequestedFallback =>
+          const BiometricCancelledFailure(),
+        LocalAuthExceptionCode.noBiometricHardware ||
+        LocalAuthExceptionCode.noBiometricsEnrolled ||
+        LocalAuthExceptionCode.noCredentialsSet ||
+        LocalAuthExceptionCode.biometricHardwareTemporarilyUnavailable =>
+          const BiometricUnavailableFailure(),
+        LocalAuthExceptionCode.temporaryLockout ||
+        LocalAuthExceptionCode.biometricLockout => const VaultFailure.coded(
+          AppErrorCode.biometricLockedOut,
+        ),
+        _ => VaultFailure.coded(AppErrorCode.biometricFailed, <String, Object>{
+          'detail': error.description ?? error.code.name,
+        }),
+      };
 }
 
 class SimulatedBiometricAuthGateway implements BiometricAuthGateway {
