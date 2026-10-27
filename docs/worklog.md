@@ -18,6 +18,32 @@ Entry template:
 
 ---
 
+## 2026-10-27 — local_auth 3 (UIScene-compatible biometrics) — branch claude/friendly-hawking-hpbpbv — done (v1.59.0+70)
+- Plan (owner request; closes the plan's "Watch" item): `local_auth` ^2.3.0 → ^3.0.2, which brings
+  `local_auth_darwin` 2.0.5 ("Improves compatibility with UIScene" since 2.0.2), `local_auth_android` 2.3.0
+  (already built-in Kotlin, minSdk 24 ≤ our 28) and `local_auth_windows` 2.0.2 (unused: Windows keeps the
+  simulated gateway). Only `auth/biometric_auth.dart` touches the plugin.
+  - API: `authenticate(localizedReason:, biometricOnly: true, persistAcrossBackgrounding: true)` replaces
+    `AuthenticationOptions` (`stickyAuth`); `useErrorDialogs` is gone, so the app must word the failures the
+    plugin used to explain with system dialogs.
+  - Errors: 3.x throws `LocalAuthException` with a `LocalAuthExceptionCode` instead of `PlatformException`.
+    Map it: user/system cancel, timeout and "use fallback" → `BiometricCancelledFailure` (the PIN path is
+    right there); no hardware / nothing enrolled / no credentials / hardware temporarily unavailable →
+    `BiometricUnavailableFailure`; temporary or biometric lockout → a new code `biometricLockedOut` («…
+    заблокирована после нескольких попыток, введите PIN»); anything else → `biometricFailed` with the code
+    name as detail. The enum is open-ended by contract, so the switch keeps a default arm.
+  - Tests: a fake `LocalAuthentication` drives the mapping (none existed for the real gateway).
+  - Physical check after merge: biometric enable/approve/cancel on Android and iOS (existing matrix rows).
+- Done: `pubspec.yaml` `local_auth: ^3.0.2`; the lock re-resolved only the four `local_auth*` packages.
+  `LocalAuthenticationGateway` calls the 3.x `authenticate(…)` and maps `LocalAuthException` codes as planned
+  (`PlatformException` stays caught as a generic failure); new `AppErrorCode.biometricLockedOut` with RU/EN
+  copy. `test/biometric_auth_test.dart` covers every current code, the options passed and the no-sensor path.
+  The debug APK still lists only `walletconnect_pay` as applying KGP. Local: format clean, analyze clean,
+  `flutter test` 239/239, debug APK builds. Plan "Watch" item removed; device matrix "v1.59 checks" added
+  (NOT RUN). v1.59.0+70.
+- Next / open: CI's iOS builds are the first compile of `local_auth_darwin` 2.0.5 here; the biometric rows
+  (Android and iOS) need a device run.
+
 ## 2026-10-25 — iOS scene manifest, Android card-less mode without arm64, 16 KB check scope — branch claude/friendly-hawking-hpbpbv — done (v1.58.0+69)
 - Plan (owner-forwarded recommendation, three items in priority order):
   1. **iOS launch crash.** `ios/Runner/Info.plist` lost `UISceneConfigurations` in `a011c2c` (an unrelated
