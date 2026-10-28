@@ -20,6 +20,7 @@ enum AppErrorCode {
   biometricUnavailable,
   biometricNotEnabled,
   biometricCancelled,
+  biometricLockedOut,
   biometricFailed,
 
   /// Args: `remaining` ([Duration]).

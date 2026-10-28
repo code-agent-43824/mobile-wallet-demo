@@ -119,3 +119,12 @@ Automated widget/controller tests cover these with fakes; none of them is physic
 | iOS simulator launch, Xcode 27 SDK | NOT RUN | The app built with the Xcode 27 SDK opens on the simulator (no SIGTRAP «UIScene life cycle is required»). |
 | Android x86_64 emulator launch | PASS (launch) — 2026-10-25, `c3e7785`, [run 8](https://github.com/code-agent-43824/mobile-wallet-demo/actions/runs/40208514724), API 34 debug: «app stayed alive 20s», no fatal marker or `UnsatisfiedLinkError` in logcat. The note on the welcome screen was not looked at (no screenshot); widget tests cover it. | `android-launch-check.yml` (x86_64): «stayed alive», no `UnsatisfiedLinkError`; the welcome screen shows «Аппаратные карты на этом устройстве пока не поддерживаются.» instead of «У меня есть карта». |
 | Android arm64 phone, cards still present | NOT RUN | On a real arm64 phone «У меня есть карта» is offered and a card session opens as before (the ABI gate must not hide cards there). |
+
+## v1.59 checks (local_auth 3)
+
+| Check | Android | iOS | Acceptance |
+| --- | --- | --- | --- |
+| Biometrics enable / unlock / card PIN | NOT RUN | NOT RUN | Turning biometrics on, unlocking with them and releasing a saved card PIN each show the system dialog once and succeed. |
+| Cancel and «use PIN» | NOT RUN | NOT RUN | Backing out of the dialog or choosing the fallback shows «Проверка биометрии отменена.» and the PIN path still works. |
+| Lockout | NOT RUN | NOT RUN | After repeated failed fingerprints/faces the app shows «Биометрия заблокирована после нескольких неудачных попыток. Используйте PIN.», not a raw code. |
+

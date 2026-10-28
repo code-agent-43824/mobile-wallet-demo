@@ -33,6 +33,7 @@ String describeAppError(
     AppErrorCode.biometricUnavailable => l10n.errBiometricUnavailable,
     AppErrorCode.biometricNotEnabled => l10n.errBiometricNotEnabled,
     AppErrorCode.biometricCancelled => l10n.errBiometricCancelled,
+    AppErrorCode.biometricLockedOut => l10n.errBiometricLockedOut,
     AppErrorCode.biometricFailed => l10n.errBiometricFailed(arg('detail')),
     AppErrorCode.vaultLockedOut => l10n.errVaultLockedOut(
       formatWait(l10n, args['remaining'] as Duration? ?? Duration.zero),

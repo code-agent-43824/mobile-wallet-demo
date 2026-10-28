@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number used as the build suffix.
-version: 1.58.0+69
+version: 1.59.0+70
 
 environment:
   sdk: ^3.11.0
@@ -50,7 +50,7 @@ dependencies:
   # web3dart 3.x moved EthereumAddress/EtherAmount into the `wallet` package and
   # no longer re-exports them, so we depend on it directly for those types.
   wallet: ^0.0.18
-  local_auth: ^2.3.0
+  local_auth: ^3.0.2
   file_selector: ^1.0.0
   image: ^4.0.0
   zxing2: ^0.2.0
