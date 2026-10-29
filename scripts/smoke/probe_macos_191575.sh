@@ -7,7 +7,7 @@ set -euo pipefail
 package="$1"
 import_line="$2"
 statement="$3"
-dir="$RUNNER_TEMP/probe-${package:-ffi}"
+dir="$RUNNER_TEMP/probe_${package:-ffi}"
 flutter create --platforms=macos "$dir" >/dev/null
 cd "$dir"
 [ -z "$package" ] || flutter pub add "$package" >/dev/null
