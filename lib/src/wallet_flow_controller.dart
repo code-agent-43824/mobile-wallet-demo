@@ -1132,8 +1132,13 @@ class WalletFlowController extends ChangeNotifier {
       const codec = WalletConnectV2RequestCodec();
       if (codec.isChainSwitchMethod(request.method)) {
         await _runGuarded(() async {
-          await coordinator.handleRequest(request: request);
-          _removePendingRequest(request);
+          try {
+            await coordinator.switchChain(request);
+          } finally {
+            // Answered either way, so the card goes; a failure stays visible
+            // in the error banner.
+            _removePendingRequest(request);
+          }
         });
         return;
       }
@@ -1173,6 +1178,7 @@ class WalletFlowController extends ChangeNotifier {
       }
       await _walletConnectService.respondError(
         request: request,
+        code: DappErrorCode.userRejected,
         message: DappErrorText.userRejected,
       );
       _removePendingRequest(request);

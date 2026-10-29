@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/auth/wallet_operation_auth.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
+import 'package:mobile_wallet_demo/src/errors/app_error.dart';
 import 'package:mobile_wallet_demo/src/key_storage/key_storage_backend.dart';
 import 'package:mobile_wallet_demo/src/transactions/transaction_service.dart';
 import 'package:mobile_wallet_demo/src/walletconnect/wallet_connect_inbound.dart';
@@ -132,6 +133,11 @@ void main() {
       expect(service.respondedErrors, isEmpty);
       expect(service.respondedResults.single.id, request.id);
       expect(service.respondedResults.single.result, isNull);
+      // The dApp moves on chainChanged, which the session switch emits.
+      expect(service.switchedChains.single, (
+        topic: 'topic-1',
+        chainId: 11155111,
+      ));
     },
   );
 
@@ -148,10 +154,60 @@ void main() {
     await _coordinator(service).handleRequest(request: request);
 
     expect(service.respondedResults, isEmpty);
+    expect(service.switchedChains, isEmpty);
     expect(
       service.respondedErrors.single.message,
       // dApp-facing, so English whatever the wallet's UI language is.
       'Chain eip155:137 is not supported.',
+    );
+    // EIP-3326's "unrecognized chain", not a generic rejection.
+    expect(
+      service.respondedErrors.single.code,
+      DappErrorCode.unrecognizedChain,
+    );
+  });
+
+  test('switchChain reports an unknown chain to the wallet too', () async {
+    final service = FakeWalletConnectService();
+    final request = service.simulateRequest(
+      topic: 'topic-1',
+      method: 'wallet_switchEthereumChain',
+      params: const <Object?>[
+        <String, Object?>{'chainId': '0x89'},
+      ],
+    );
+
+    await expectLater(
+      _coordinator(service).switchChain(request),
+      throwsA(
+        isA<WalletConnectServiceException>().having(
+          (error) => error.errorCode,
+          'errorCode',
+          AppErrorCode.wcUnsupportedChain,
+        ),
+      ),
+    );
+    expect(
+      service.respondedErrors.single.code,
+      DappErrorCode.unrecognizedChain,
+    );
+  });
+
+  test('an unsupported method answers EIP-1193 4200', () async {
+    final service = FakeWalletConnectService();
+    final request = service.simulateRequest(
+      topic: 'topic-1',
+      method: 'eth_getEncryptionPublicKey',
+      params: const <Object?>['0x1111111111111111111111111111111111111111'],
+    );
+
+    await _coordinator(
+      service,
+    ).handleRequest(request: request, signer: _signer);
+
+    expect(
+      service.respondedErrors.single.code,
+      DappErrorCode.unsupportedMethod,
     );
   });
 

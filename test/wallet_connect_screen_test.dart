@@ -318,6 +318,11 @@ void main() {
     expect(find.text('Входящий запрос на подпись'), findsNothing);
     expect(service.respondedErrors, isEmpty);
     expect(service.respondedResults.single.result, isNull);
+    // Success is said out loud instead of the card silently vanishing.
+    expect(
+      find.text('Приложение переключено на сеть Ethereum Sepolia.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets(

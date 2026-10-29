@@ -181,17 +181,59 @@ class ReownWalletConnectService implements WalletConnectService {
   @override
   Future<void> respondError({
     required WalletConnectRequest request,
+    required int code,
     required String message,
   }) async {
     final JsonRpcResponse response = JsonRpcResponse(
       id: request.id,
       jsonrpc: '2.0',
-      error: JsonRpcError(code: 5000, message: message),
+      error: JsonRpcError(code: code, message: message),
     );
     await _requireKit().respondSessionRequest(
       topic: request.topic,
       response: response,
     );
+  }
+
+  @override
+  Future<void> switchSessionChain({
+    required String topic,
+    required int chainId,
+  }) async {
+    final kit = _requireKit();
+    final session = kit.getActiveSessions()[topic];
+    final namespace = session?.namespaces['eip155'];
+    if (session == null || namespace == null || namespace.accounts.isEmpty) {
+      throw const WalletConnectServiceException.coded(
+        AppErrorCode.wcRelayNoSession,
+      );
+    }
+    final chain = 'eip155:$chainId';
+    final chains = namespace.chains ?? <String>[];
+    if (!chains.contains(chain)) {
+      // The session's account is the same on every EVM chain.
+      final address = namespace.accounts.first.split(':').last;
+      await kit.updateSession(
+        topic: topic,
+        namespaces: <String, Namespace>{
+          ...session.namespaces,
+          'eip155': Namespace(
+            chains: <String>[...chains, chain],
+            accounts: <String>[...namespace.accounts, '$chain:$address'],
+            methods: namespace.methods,
+            events: namespace.events,
+          ),
+        },
+      );
+    }
+    if (namespace.events.contains('chainChanged')) {
+      await kit.emitSessionEvent(
+        topic: topic,
+        chainId: chain,
+        event: SessionEventParams(name: 'chainChanged', data: chainId),
+      );
+    }
+    _emitSessions();
   }
 
   @override

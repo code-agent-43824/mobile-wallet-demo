@@ -52,13 +52,19 @@ class WalletConnectInboundCoordinator {
       }
 
       if (_codec.isChainSwitchMethod(request.method)) {
-        await _handleChainSwitch(request);
+        try {
+          await switchChain(request);
+        } on Object {
+          // switchChain has already answered the dApp; the wallet UI calls it
+          // directly when it needs the failure.
+        }
         return;
       }
 
       if (signer == null) {
         await _service.respondError(
           request: request,
+          code: DappErrorCode.unauthorized,
           message: DappErrorText.signatureRequired(request.method),
         );
         return;
@@ -77,6 +83,7 @@ class WalletConnectInboundCoordinator {
       if (!_codec.isTransactionMethod(request.method)) {
         await _service.respondError(
           request: request,
+          code: DappErrorCode.unsupportedMethod,
           message: DappErrorText.unsupportedMethod(request.method),
         );
         return;
@@ -86,6 +93,7 @@ class WalletConnectInboundCoordinator {
       if (tx.fromAddress.toLowerCase() != signer.address.toLowerCase()) {
         await _service.respondError(
           request: request,
+          code: DappErrorCode.unauthorized,
           message: DappErrorText.otherAccount(tx.fromAddress),
         );
         return;
@@ -148,7 +156,11 @@ class WalletConnectInboundCoordinator {
 
       await _service.respondResult(request: request, result: result);
     } catch (error) {
-      await _service.respondError(request: request, message: error.toString());
+      await _service.respondError(
+        request: request,
+        code: DappErrorCode.internal,
+        message: error.toString(),
+      );
     }
   }
 
@@ -159,6 +171,7 @@ class WalletConnectInboundCoordinator {
     if (walletAddress == null) {
       await _service.respondError(
         request: request,
+        code: DappErrorCode.unauthorized,
         message: DappErrorText.walletNotInitialized,
       );
       return;
@@ -167,6 +180,7 @@ class WalletConnectInboundCoordinator {
     if (decoded.address.toLowerCase() != walletAddress.toLowerCase()) {
       await _service.respondError(
         request: request,
+        code: DappErrorCode.unauthorized,
         message: DappErrorText.addressNotConnected(decoded.address),
       );
       return;
@@ -210,20 +224,47 @@ class WalletConnectInboundCoordinator {
     return true;
   }
 
-  /// EIP-3326 / EIP-1193 chain switching changes the dApp session context but
-  /// does not access the private key. The request's own CAIP-2 chain can still
-  /// point at the old chain; the target is carried in params.
-  Future<void> _handleChainSwitch(WalletConnectRequest request) async {
-    final requestedChainId = _codec.decodeSwitchEthereumChainId(request.params);
+  /// EIP-3326 chain switching changes the dApp session context but does not
+  /// access the private key. The request's own CAIP-2 chain can still point at
+  /// the old chain; the target is carried in params. The dApp follows the
+  /// session's `chainChanged` event rather than this result, so the session is
+  /// switched first and answered after. Every outcome answers the dApp; a
+  /// failure is then rethrown for the wallet UI.
+  Future<void> switchChain(WalletConnectRequest request) async {
+    final int chainId;
+    try {
+      chainId = _codec.decodeSwitchEthereumChainId(request.params);
+    } on WalletConnectCodecException catch (error) {
+      await _service.respondError(
+        request: request,
+        code: DappErrorCode.invalidParams,
+        message: error.message,
+      );
+      rethrow;
+    }
     final supported = evmNetworkConfigs.values.any(
-      (config) => config.chainId == requestedChainId,
+      (config) => config.chainId == chainId,
     );
     if (!supported) {
       await _service.respondError(
         request: request,
-        message: DappErrorText.unsupportedChain(requestedChainId),
+        code: DappErrorCode.unrecognizedChain,
+        message: DappErrorText.unsupportedChain(chainId),
       );
-      return;
+      throw WalletConnectServiceException.coded(
+        AppErrorCode.wcUnsupportedChain,
+        <String, Object>{'chainId': 'eip155:$chainId'},
+      );
+    }
+    try {
+      await _service.switchSessionChain(topic: request.topic, chainId: chainId);
+    } catch (error) {
+      await _service.respondError(
+        request: request,
+        code: DappErrorCode.internal,
+        message: error.toString(),
+      );
+      rethrow;
     }
     // EIP-3326 success result is JSON null.
     await _service.respondResult(request: request, result: null);
@@ -240,6 +281,7 @@ class WalletConnectInboundCoordinator {
     if (message.address.toLowerCase() != signer.address.toLowerCase()) {
       await _service.respondError(
         request: request,
+        code: DappErrorCode.unauthorized,
         message: DappErrorText.otherAccount(message.address),
       );
       return;
@@ -263,6 +305,7 @@ class WalletConnectInboundCoordinator {
     if (typed.address.toLowerCase() != signer.address.toLowerCase()) {
       await _service.respondError(
         request: request,
+        code: DappErrorCode.unauthorized,
         message: DappErrorText.otherAccount(typed.address),
       );
       return;

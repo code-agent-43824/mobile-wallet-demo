@@ -265,6 +265,31 @@ void main() {
     expect(controller.pendingRequest, isNull);
     expect(service.respondedErrors, isEmpty);
     expect(service.respondedResults.single.result, isNull);
+    expect(service.switchedChains.single.chainId, 11155111);
+
+    controller.dispose();
+    await service.dispose();
+  });
+
+  test('a switch to an unknown chain is answered and reported', () async {
+    final service = FakeWalletConnectService();
+    final controller = await buildUnlocked(service);
+
+    service.simulateRequest(
+      topic: 'topic-1',
+      method: 'wallet_switchEthereumChain',
+      params: const <Object?>[
+        <String, Object?>{'chainId': '0x89'},
+      ],
+    );
+    await pumpEventQueue();
+
+    await controller.approvePendingRequest();
+
+    // The dApp has its answer, so the card goes; the user sees why.
+    expect(controller.pendingRequest, isNull);
+    expect(controller.errorMessage, contains('eip155:137'));
+    expect(service.respondedErrors.single.code, 4902);
 
     controller.dispose();
     await service.dispose();

@@ -58,7 +58,11 @@ void main() {
       expect(wc.respondedResults.single.id, request.id);
       expect(wc.respondedResults.single.result, '0xdeadbeef');
 
-      await wc.respondError(request: request, message: 'отклонено');
+      await wc.respondError(
+        request: request,
+        code: DappErrorCode.userRejected,
+        message: 'отклонено',
+      );
       expect(wc.respondedErrors.single.message, 'отклонено');
     });
 

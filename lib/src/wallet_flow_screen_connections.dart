@@ -99,14 +99,39 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
 
   bool get _biometricsOffered => widget.canUnlockWithBiometrics;
 
+  /// The network a `wallet_switchEthereumChain` request asks for, by name
+  /// when the wallet carries it.
+  String _switchTargetName(WalletConnectRequest request) {
+    try {
+      final chainId = const WalletConnectV2RequestCodec()
+          .decodeSwitchEthereumChainId(request.params);
+      for (final config in evmNetworkConfigs.values) {
+        if (config.chainId == chainId) {
+          return config.name;
+        }
+      }
+      return 'eip155:$chainId';
+    } on WalletConnectCodecException {
+      return request.chainId;
+    }
+  }
+
   Future<void> _approveRequest() async {
     final l10n = AppLocalizations.of(context);
     const codec = WalletConnectV2RequestCodec();
     final request = widget.pendingRequest;
     if (request != null && codec.isChainSwitchMethod(request.method)) {
       // Chain switching changes the dApp context only; it must not unlock the
-      // vault or ask for a PIN.
+      // vault or ask for a PIN. A failure shows in the error banner; success
+      // would otherwise be silent, since the card just goes away.
+      final network = _switchTargetName(request);
       await widget.onApproveRequest();
+      if (!mounted || widget.controller.errorMessage != null) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.wcChainSwitched(network))));
       return;
     }
     // Cancelling the sheet keeps the request shown; nothing was signed.

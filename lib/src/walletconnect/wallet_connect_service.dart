@@ -109,6 +109,18 @@ class WalletConnectServiceException implements Exception, CodedError {
   String toString() => 'WalletConnectServiceException: $message';
 }
 
+/// JSON-RPC error codes sent *to dApps*: the EIP-1193 provider errors, EIP-3326's
+/// unrecognized chain, JSON-RPC's own invalid-params/internal errors, and
+/// WalletConnect's code for a request the user turned down.
+abstract final class DappErrorCode {
+  static const int userRejected = 5000;
+  static const int unauthorized = 4100;
+  static const int unsupportedMethod = 4200;
+  static const int unrecognizedChain = 4902;
+  static const int invalidParams = -32602;
+  static const int internal = -32603;
+}
+
 /// JSON-RPC error texts sent *to dApps*. Protocol-facing rather than UI, so
 /// they stay English whatever language the wallet itself shows.
 abstract final class DappErrorText {
@@ -175,10 +187,21 @@ abstract interface class WalletConnectService {
     required Object? result,
   });
 
-  /// Responds to [request] with a JSON-RPC error (e.g. the user rejected it).
+  /// Responds to [request] with a JSON-RPC error: one of [DappErrorCode] and
+  /// a [DappErrorText] message.
   Future<void> respondError({
     required WalletConnectRequest request,
+    required int code,
     required String message,
+  });
+
+  /// Makes `eip155:[chainId]` the dApp's chain in session [topic]: adds it to
+  /// the session's namespace when the dApp never asked for it, then emits
+  /// `chainChanged`, which is what a dApp waits for after
+  /// `wallet_switchEthereumChain`.
+  Future<void> switchSessionChain({
+    required String topic,
+    required int chainId,
   });
 
   /// Disconnects the session identified by [topic].
@@ -247,8 +270,17 @@ class UnavailableWalletConnectService implements WalletConnectService {
   @override
   Future<void> respondError({
     required WalletConnectRequest request,
+    required int code,
     required String message,
   }) async {}
+
+  @override
+  Future<void> switchSessionChain({
+    required String topic,
+    required int chainId,
+  }) async {
+    throw _notConfigured;
+  }
 
   @override
   Future<void> disconnect({required String topic}) async {}
@@ -281,8 +313,12 @@ class FakeWalletConnectService implements WalletConnectService {
       <({int id, Object? result})>[];
 
   /// Error responses recorded for assertions, in arrival order.
-  final List<({int id, String message})> respondedErrors =
-      <({int id, String message})>[];
+  final List<({int id, int code, String message})> respondedErrors =
+      <({int id, int code, String message})>[];
+
+  /// Chain switches announced to dApps, in arrival order.
+  final List<({String topic, int chainId})> switchedChains =
+      <({String topic, int chainId})>[];
 
   int _idSeq = 0;
 
@@ -396,9 +432,18 @@ class FakeWalletConnectService implements WalletConnectService {
   @override
   Future<void> respondError({
     required WalletConnectRequest request,
+    required int code,
     required String message,
   }) async {
-    respondedErrors.add((id: request.id, message: message));
+    respondedErrors.add((id: request.id, code: code, message: message));
+  }
+
+  @override
+  Future<void> switchSessionChain({
+    required String topic,
+    required int chainId,
+  }) async {
+    switchedChains.add((topic: topic, chainId: chainId));
   }
 
   @override
