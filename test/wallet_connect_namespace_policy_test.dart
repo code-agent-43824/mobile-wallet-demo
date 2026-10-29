@@ -67,4 +67,26 @@ void main() {
       ),
     );
   });
+
+  test('approves a dApp that requires the unversioned eth_signTypedData', () {
+    final result = const WalletConnectNamespacePolicy().build(
+      requiredNamespaces: const <String, RequiredNamespace>{
+        'eip155': RequiredNamespace(
+          chains: <String>['eip155:11155111'],
+          methods: <String>[
+            'eth_sendTransaction',
+            'personal_sign',
+            'eth_signTypedData',
+            'eth_signTypedData_v4',
+          ],
+          events: <String>['chainChanged', 'accountsChanged'],
+        ),
+      },
+      optionalNamespaces: const <String, RequiredNamespace>{},
+      accounts: const <String>[
+        'eip155:11155111:0x1111111111111111111111111111111111111111',
+      ],
+    );
+    expect(result['eip155']!.methods, contains('eth_signTypedData'));
+  });
 }

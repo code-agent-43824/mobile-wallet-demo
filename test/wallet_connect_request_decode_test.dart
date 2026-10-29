@@ -101,10 +101,37 @@ void main() {
     );
   });
 
-  test('isTypedDataMethod recognises eth_signTypedData_v4 / _v3', () {
+  test('isTypedDataMethod recognises eth_signTypedData, _v3 and _v4', () {
     expect(codec.isTypedDataMethod('eth_signTypedData_v4'), isTrue);
     expect(codec.isTypedDataMethod('eth_signTypedData_v3'), isTrue);
+    expect(codec.isTypedDataMethod('eth_signTypedData'), isTrue);
     expect(codec.isTypedDataMethod('personal_sign'), isFalse);
+    expect(
+      WalletConnectV2RequestCodec.supportedMethods,
+      contains('eth_signTypedData'),
+    );
+  });
+
+  test('decodeTypedDataRequest accepts the pair reversed', () {
+    const address = '0x1111111111111111111111111111111111111111';
+    final decoded = codec.decodeTypedDataRequest(const <Object?>[
+      '{"primaryType":"Msg"}',
+      address,
+    ]);
+    expect(decoded.address, address);
+    expect(decoded.typedData['primaryType'], 'Msg');
+  });
+
+  test('decodeTypedDataRequest refuses legacy v1 typed data', () {
+    expect(
+      () => codec.decodeTypedDataRequest(<Object?>[
+        <Object?>[
+          <String, Object?>{'type': 'string', 'name': 'm', 'value': 'hi'},
+        ],
+        '0x1111111111111111111111111111111111111111',
+      ]),
+      throwsA(isA<WalletConnectCodecException>()),
+    );
   });
 
   test('decodeTypedDataRequest parses both a Map and a JSON string', () {

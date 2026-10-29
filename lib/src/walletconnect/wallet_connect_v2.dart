@@ -119,6 +119,10 @@ class WalletConnectV2RequestCodec {
   static const String ethSignMethod = 'eth_sign';
   static const String signTypedDataV4Method = 'eth_signTypedData_v4';
   static const String signTypedDataV3Method = 'eth_signTypedData_v3';
+
+  /// Unversioned name many dApps (and WalletConnect's default namespaces)
+  /// still request; it carries the same `[address, typedData]` as v4.
+  static const String signTypedDataMethod = 'eth_signTypedData';
   static const String switchEthereumChainMethod = 'wallet_switchEthereumChain';
   static const String getCapabilitiesMethod = 'wallet_getCapabilities';
 
@@ -129,6 +133,7 @@ class WalletConnectV2RequestCodec {
     ethSignMethod,
     signTypedDataV4Method,
     signTypedDataV3Method,
+    signTypedDataMethod,
     switchEthereumChainMethod,
     getCapabilitiesMethod,
   };
@@ -143,7 +148,9 @@ class WalletConnectV2RequestCodec {
 
   /// Whether [method] is an EIP-712 typed-data request (v3/v4 JSON shape).
   bool isTypedDataMethod(String method) =>
-      method == signTypedDataV4Method || method == signTypedDataV3Method;
+      method == signTypedDataV4Method ||
+      method == signTypedDataV3Method ||
+      method == signTypedDataMethod;
 
   /// Whether [method] changes dApp chain context without accessing a key.
   bool isChainSwitchMethod(String method) =>
@@ -217,8 +224,11 @@ class WalletConnectV2RequestCodec {
     return chainId;
   }
 
-  /// Decodes an `eth_signTypedData_v4` / `_v3` request (`[address, typedData]`),
-  /// where `typedData` is the EIP-712 object as a JSON string or a Map.
+  /// Decodes an `eth_signTypedData` / `_v3` / `_v4` request
+  /// (`[address, typedData]`), where `typedData` is the EIP-712 object as a
+  /// JSON string or a Map. Some dApps send the pair reversed; the address is
+  /// recognised by its shape. The legacy v1 form (an array of typed fields)
+  /// is not EIP-712 and is refused.
   WalletConnectTypedDataRequest decodeTypedDataRequest(List<Object?> params) {
     if (params.length < 2) {
       throw const WalletConnectCodecException.coded(
@@ -228,14 +238,28 @@ class WalletConnectV2RequestCodec {
         },
       );
     }
-    final address = params[0];
+    if (params[0] is List || params[1] is List) {
+      throw const WalletConnectCodecException.coded(
+        AppErrorCode.wcMalformedRequest,
+        <String, Object>{
+          'detail':
+              'legacy eth_signTypedData v1 (an array of fields) is not '
+              'supported; use EIP-712 typed data',
+        },
+      );
+    }
+    final reversed =
+        !_isEvmAddress(params[0]) &&
+        _isEvmAddress(params[1]) &&
+        _isTypedDataObject(params[0]);
+    final address = reversed ? params[1] : params[0];
     if (address is! String || address.isEmpty) {
       throw const WalletConnectCodecException.coded(
         AppErrorCode.wcMalformedRequest,
         <String, Object>{'detail': 'typed data request has no address'},
       );
     }
-    final raw = params[1];
+    final raw = reversed ? params[0] : params[1];
     final Map<String, dynamic> typedData;
     if (raw is String) {
       final decoded = jsonDecode(raw);
@@ -261,6 +285,14 @@ class WalletConnectV2RequestCodec {
       typedData: typedData,
     );
   }
+
+  static final RegExp _evmAddressPattern = RegExp(r'^0x[0-9a-fA-F]{40}$');
+
+  static bool _isEvmAddress(Object? value) =>
+      value is String && _evmAddressPattern.hasMatch(value);
+
+  static bool _isTypedDataObject(Object? value) =>
+      value is Map || (value is String && value.trimLeft().startsWith('{'));
 
   /// Decodes a `personal_sign` (`[message, address]`) or `eth_sign`
   /// (`[address, message]`) request. The message param is hex (`0x…`) bytes or
