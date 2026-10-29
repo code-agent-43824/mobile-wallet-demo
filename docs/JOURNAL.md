@@ -1,5 +1,21 @@
 # Журнал решений
 
+## 2026-10-29 — Что умеют раннеры GitHub для смока каждой цели
+
+- Гипотеза: каждую цель можно собрать на раннере своей ОС и архитектуры и сразу проверить запуском на таком же раннере.
+- Что сделали: конвейер `ci.yml` + `target-*.yml` прогнали на `main` четыре раза (runs 225–228) в режиме отладки.
+- Что показала проверка:
+  - Запуск релизной сборки и сценарий проходят на Android x86_64 (эмулятор на `ubuntu-latest`), iOS-симуляторе (`macos-latest`), Windows x64 (`windows-2022`), Windows arm64 (`windows-11-arm`), Linux x64 (`ubuntu-latest`) и Linux arm64 (`ubuntu-24.04-arm`).
+  - На `ubuntu-24.04-arm` нет `/dev/kvm`, поэтому эмулятор Android arm64 там не запустить. На macOS-раннерах он тоже не стартует: в июне это упёрлось в `HVF HV_UNSUPPORTED`.
+  - На `windows-11-arm` стоит Visual Studio 18 (MSVC 14.51). Его STL отвергает `<experimental/coroutine>` из `local_auth_windows` (STL1011); помогает `_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS` в `windows/CMakeLists.txt`.
+  - Release-сборка macOS падает в gen_snapshot: «Class with illegal cid, full-aot» на `_Rect` из `_window_macos.dart` Flutter 3.47.8 — это flutter/flutter#191575 (дубликат #188060).
+    - Бисект: чистый шаблон `flutter create` собирается, и шаблон с `shared_preferences`, с `path_provider` или с `dart:ffi` `Abi` тоже. Падает только полное приложение, так что виноват не один из этих пакетов.
+    - В сторонних проектах обходят так: перед сборкой помечают FFI-структуры `_window_macos.dart` в SDK как `@pragma('vm:entry-point')`.
+  - Однажды джоба `iOS / Build device app (unsigned)` 15 минут не получила macOS-раннер и была отменена. Это сбой инфраструктуры, повтор прошёл.
+- Вывод:
+  - Android arm64 выходит с пометкой «не проверено» до появления раннера с KVM. armeabi-v7a и iOS-устройство тоже с пометкой.
+  - Для macOS в CI применяется временная заплатка SDK `scripts/ci/patch_flutter_191575.sh`; убрать, когда Flutter исправит #191575.
+
 ## 2026-10-29 — Автор коммита с общими правилами
 
 - Гипотеза: коммит `2d69206` с общими правилами должен иметь автора `coding-agent`, как указал владелец; имя `Watson` было выбрано ошибочно.

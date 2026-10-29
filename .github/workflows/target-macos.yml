@@ -28,20 +28,10 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: ./.github/actions/setup-flutter
 
-      # Bring-up probes for flutter/flutter#191575 (gen_snapshot rejects the
-      # windowing FFI structs). A bare template builds; each probe adds one
-      # suspect to it, so the failing step names the trigger.
-      - name: Probe template + shared_preferences (objective_c FFI)
-        continue-on-error: true
-        run: bash scripts/smoke/probe_macos_191575.sh shared_preferences "import 'package:shared_preferences/shared_preferences.dart';" "await SharedPreferences.getInstance();"
-
-      - name: Probe template + path_provider (objective_c FFI)
-        continue-on-error: true
-        run: bash scripts/smoke/probe_macos_191575.sh path_provider "import 'package:path_provider/path_provider.dart';" "await getApplicationSupportDirectory();"
-
-      - name: Probe template + dart:ffi Abi
-        continue-on-error: true
-        run: bash scripts/smoke/probe_macos_191575.sh "" "import 'dart:ffi' show Abi;" "debugPrint('\${Abi.current()}');"
+      # flutter/flutter#191575: gen_snapshot rejects the windowing FFI
+      # structs in this app's release build (a bare template builds fine).
+      - name: Work around flutter#191575
+        run: bash scripts/ci/patch_flutter_191575.sh
 
       - name: Build macOS app
         run: flutter build macos --release --dart-define-from-file=dart_defines.json
