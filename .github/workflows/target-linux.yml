@@ -1,0 +1,97 @@
+name: target · Linux
+
+# Called by ci.yml once per architecture. Builds on a runner of that
+# architecture, then, on a smoke run, launches the release bundle and runs the
+# in-app scenario under Xvfb with an unlocked keyring on the same kind of runner.
+on:
+  workflow_call:
+    inputs:
+      arch:
+        description: x64 or arm64
+        type: string
+        required: true
+      runner:
+        type: string
+        required: true
+      smoke:
+        type: boolean
+        required: true
+      bring_up:
+        description: Tolerate failures while this target is being brought up
+        type: boolean
+        default: false
+    outputs:
+      result:
+        value: ${{ jobs.smoke.outputs.result }}
+
+jobs:
+  build:
+    name: Build
+    runs-on: ${{ inputs.runner }}
+    continue-on-error: ${{ inputs.bring_up }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Install Linux build packages
+        run: bash scripts/smoke/install_linux_deps.sh
+      - uses: ./.github/actions/setup-flutter
+
+      - name: Build Linux app
+        run: flutter build linux --release --dart-define-from-file=dart_defines.json
+
+      # A tarball keeps the executable bit an artifact upload would drop.
+      - name: Package
+        env:
+          ARCH: ${{ inputs.arch }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/stage
+          cp -a "build/linux/$ARCH/release/bundle" dist/stage/WalletDemo
+          tar -C dist/stage -czf "dist/linux-$ARCH.tar.gz" WalletDemo
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: linux-${{ inputs.arch }}
+          path: dist/linux-${{ inputs.arch }}.tar.gz
+          if-no-files-found: error
+
+  smoke:
+    name: Smoke
+    needs: build
+    if: inputs.smoke
+    runs-on: ${{ inputs.runner }}
+    continue-on-error: true # bring-up
+    timeout-minutes: 45
+    outputs:
+      result: ${{ steps.result.outputs.result }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Install Linux build and session packages
+        run: bash scripts/smoke/install_linux_deps.sh
+      - uses: ./.github/actions/setup-flutter
+
+      - name: Download the release build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          ARCH: ${{ inputs.arch }}
+        run: |
+          set -euo pipefail
+          gh run download "$RUN_ID" -n "linux-$ARCH" -D dist
+          tar -xzf "dist/linux-$ARCH.tar.gz" -C dist
+
+      - name: Launch the release build
+        run: bash scripts/smoke/linux_session.sh bash scripts/smoke/launch_check_desktop.sh dist/WalletDemo/WalletDemo
+
+      - name: Scenario
+        run: bash scripts/smoke/linux_session.sh flutter test integration_test/smoke_test.dart -d linux --dart-define-from-file=dart_defines.json
+
+      - id: result
+        run: echo "result=passed" >> "$GITHUB_OUTPUT"
+
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: smoke-linux-${{ inputs.arch }}
+          path: build/smoke
+          if-no-files-found: ignore

@@ -1,0 +1,130 @@
+name: target · iOS
+
+# Called by ci.yml. Builds the simulator app and the unsigned device app; on a
+# smoke run, launches the simulator app and runs the in-app scenario on a
+# simulator. The unsigned device app has nothing to run on.
+on:
+  workflow_call:
+    inputs:
+      smoke:
+        type: boolean
+        required: true
+    outputs:
+      simulator:
+        value: ${{ jobs.smoke_simulator.outputs.result }}
+
+jobs:
+  build_simulator:
+    name: Build simulator app
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: ./.github/actions/setup-flutter
+      - name: Cache CocoaPods
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/Library/Caches/CocoaPods
+            ios/Pods
+          key: ${{ runner.os }}-cocoapods-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cocoapods-
+
+      - name: Build iOS simulator app
+        run: flutter build ios --simulator --debug --dart-define-from-file=dart_defines.json
+
+      # Zipped with ditto: an artifact upload drops the executable bit, so the
+      # bundle travels as one archive that unpacks to a single "Wallet Demo.app".
+      - name: Package
+        run: |
+          set -euo pipefail
+          mkdir -p dist/stage
+          ditto build/ios/iphonesimulator/Runner.app "dist/stage/Wallet Demo.app"
+          ditto -c -k --sequesterRsrc --keepParent "dist/stage/Wallet Demo.app" dist/ios-simulator.zip
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-simulator
+          path: dist/ios-simulator.zip
+          if-no-files-found: error
+
+  build_device:
+    name: Build device app (unsigned)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: ./.github/actions/setup-flutter
+      - name: Cache CocoaPods
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/Library/Caches/CocoaPods
+            ios/Pods
+          key: ${{ runner.os }}-cocoapods-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cocoapods-
+
+      - name: Report code-signing status
+        env:
+          # Secrets are referenced only to test for presence; their values are
+          # never printed. A real signed-IPA export would be wired here, gated
+          # behind these Secrets (see README -> iOS artifacts). Nothing secret
+          # is ever committed to this public repo.
+          HAS_SIGNING: ${{ secrets.IOS_CERTIFICATE_BASE64 != '' && secrets.IOS_PROVISIONING_PROFILE_BASE64 != '' }}
+        run: |
+          if [ "$HAS_SIGNING" = "true" ]; then
+            echo "iOS signing secrets are present, but signed export is not implemented in this workflow."
+          else
+            echo "No iOS signing secrets configured -> building an UNSIGNED device app (technical artifact)."
+          fi
+
+      - name: Build iOS device app (unsigned)
+        run: flutter build ios --release --no-codesign --dart-define-from-file=dart_defines.json
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          mkdir -p dist/stage
+          ditto build/ios/iphoneos/Runner.app "dist/stage/Wallet Demo.app"
+          ditto -c -k --sequesterRsrc --keepParent "dist/stage/Wallet Demo.app" dist/ios-device-unsigned.zip
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-device
+          path: dist/ios-device-unsigned.zip
+          if-no-files-found: error
+
+  smoke_simulator:
+    name: Smoke simulator
+    needs: build_simulator
+    if: inputs.smoke
+    runs-on: macos-latest
+    continue-on-error: true # bring-up
+    timeout-minutes: 60
+    outputs:
+      result: ${{ steps.result.outputs.result }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: ./.github/actions/setup-flutter
+
+      - name: Download the simulator app
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          gh run download "$RUN_ID" -n ios-simulator -D dist
+          ditto -x -k dist/ios-simulator.zip dist
+
+      - name: Launch and scenario on the simulator
+        run: bash scripts/smoke/ios_simulator_smoke.sh "dist/Wallet Demo.app"
+
+      - id: result
+        run: echo "result=passed" >> "$GITHUB_OUTPUT"
+
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: smoke-ios-simulator
+          path: build/smoke
+          if-no-files-found: ignore

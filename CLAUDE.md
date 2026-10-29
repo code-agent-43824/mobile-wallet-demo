@@ -37,9 +37,9 @@ flutter build linux --release                    # Linux (needs GTK, libsecret: 
 flutter build macos --release                    # macOS (universal)
 ```
 
-CI (`ci.yml`) runs `validate` (format check → analyze → test) and only then builds all three platforms. **`dart format` is an enforced gate** — unformatted code fails CI. Run `dart format .` before committing.
+CI (`ci.yml`) runs `plan` and `validate` (format check → analyze → test), then one reusable workflow per target (`target-android.yml`, `target-ios.yml`, `target-windows.yml` ×2 arches, `target-linux.yml` ×2, `target-macos.yml`). Each builds on a runner of its own OS/architecture; on a smoke run each build is followed by smoke jobs on the same kind of runner that launch the exact release artifact (`scripts/smoke/`, `scripts/android_launch_check.sh`) and then run `integration_test/smoke_test.dart` from a clean install. **`dart format` is an enforced gate** — unformatted code fails CI. Run `dart format .` before committing.
 
-Releases: bump the version, add the CHANGELOG section, then either push tag `v<version>` or run `ci.yml` manually on `main` with `release` ticked — the `release` job publishes the APK as a GitHub Release (GitLab releases on its own tags).
+Releases: bump the version (and the CHANGELOG section) in `main`. The `plan` job sees that `v<version>` has no release, so that run smoke-tests every target and the `release` job publishes every artifact with a smoke table in the notes, creating the tag itself (agents cannot push tags through the proxy). A pushed `v*` tag matching the version also releases. A manual run with `smoke` ticked smoke-tests without publishing. Targets with no same-architecture runner (Android armeabi-v7a, the unsigned iOS device app, Android arm64 when the arm runner has no KVM) are released marked "not smoke-tested". (GitLab releases on its own tags.)
 
 The project's primary home is now the internal GitLab (`prototypes/mobile-wallet-demo`); `.gitlab-ci.yml` runs
 blocking SAST (semgrep + osv from `mko/ci-security`), the same format/analyze/test gate, an Android APK build, docs

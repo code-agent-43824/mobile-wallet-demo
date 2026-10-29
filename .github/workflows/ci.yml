@@ -1,5 +1,13 @@
 name: ci
 
+# Every push and PR validates the code and builds every target. A release run
+# also smoke-tests each build on a runner of the same OS and architecture
+# (target-*.yml: each smoke job needs only its own build) and publishes every
+# artifact as a GitHub release only after all of them passed. A release run is
+#   - a push to main whose pubspec version has no release yet (the workflow
+#     creates the v<version> tag; agents cannot push tags through the proxy);
+#   - a pushed v* tag matching the pubspec version.
+# A manual run with `smoke` ticked smoke-tests any branch without publishing.
 on:
   push:
     branches: [main]
@@ -7,8 +15,8 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
-      release:
-        description: Publish a GitHub release (tag v<pubspec version>) — main only
+      smoke:
+        description: Smoke-test every target (no release)
         type: boolean
         default: false
 
@@ -19,31 +27,58 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  JAVA_VERSION: '17'
-
 jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      release: ${{ steps.plan.outputs.release }}
+      smoke: ${{ steps.plan.outputs.smoke }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          SMOKE_INPUT: ${{ inputs.smoke }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: *\([0-9][0-9.]*\).*/\1/p' pubspec.yaml)"
+          release=false
+          if [ "$EVENT" = push ] && [ "$REF_TYPE" = tag ]; then
+            [ "$REF_NAME" = "v$version" ] || { echo "Tag $REF_NAME does not match pubspec version $version"; exit 1; }
+            release=true
+          elif [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; then
+            if gh release view "v$version" >/dev/null 2>&1; then
+              echo "v$version is already released."
+            else
+              echo "v$version has no release yet: this run releases it."
+              release=true
+            fi
+          fi
+          smoke="$release"
+          [ "$SMOKE_INPUT" = true ] && smoke=true
+          # Bring-up: smoke every push to main until each smoke job is green.
+          [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ] && smoke=true
+          {
+            echo "version=$version"
+            echo "release=$release"
+            echo "smoke=$smoke"
+          } >> "$GITHUB_OUTPUT"
+          echo "version=$version release=$release smoke=$smoke"
+
   validate:
     name: Validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Cache pub packages
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~/.pub-cache
-          key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pub-
-
-      - name: Install dependencies
-        run: flutter pub get
+      - uses: ./.github/actions/setup-flutter
 
       - name: Check formatting
         run: dart format --output=none --set-exit-if-changed .
@@ -55,243 +90,175 @@ jobs:
         run: flutter test
 
   android:
-    name: Android APK
-    runs-on: ubuntu-latest
-    needs: validate
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+    name: Android
+    needs: [plan, validate]
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/target-android.yml
+    with:
+      smoke: ${{ needs.plan.outputs.smoke == 'true' }}
 
-      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
-        with:
-          distribution: temurin
-          java-version: ${{ env.JAVA_VERSION }}
-          cache: gradle
+  ios:
+    name: iOS
+    needs: [plan, validate]
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/target-ios.yml
+    secrets: inherit
+    with:
+      smoke: ${{ needs.plan.outputs.smoke == 'true' }}
 
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Cache pub packages
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~/.pub-cache
-          key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pub-
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Build APK
-        run: flutter build apk --release --dart-define-from-file=dart_defines.json
-
-      - name: Upload Android artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: android-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: error
-
-  ios_simulator:
-    name: iOS Simulator build
-    runs-on: macos-latest
-    needs: validate
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Cache pub packages
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~/.pub-cache
-          key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pub-
-
-      - name: Cache CocoaPods
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: |
-            ~/Library/Caches/CocoaPods
-            ios/Pods
-          key: ${{ runner.os }}-cocoapods-${{ hashFiles('ios/Podfile.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cocoapods-
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Build iOS simulator app
-        run: flutter build ios --simulator --debug --dart-define-from-file=dart_defines.json
-
-      - name: Package simulator .app (keep the .app folder, not its contents)
-        run: |
-          set -euo pipefail
-          app="build/ios/iphonesimulator/Runner.app"
-          stage="build/ios/sim-artifact"
-          rm -rf "$stage"
-          mkdir -p "$stage"
-          # ditto preserves the bundle; staging it under a parent dir makes
-          # upload-artifact keep the ".app" folder instead of stripping it,
-          # so the downloaded zip unpacks to a single "Wallet Demo.app".
-          ditto "$app" "$stage/Wallet Demo.app"
-
-      - name: Upload iOS simulator artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: ios-simulator-app
-          path: build/ios/sim-artifact
-          if-no-files-found: error
-
-  ios_device:
-    name: iOS Device build (unsigned)
-    runs-on: macos-latest
-    needs: validate
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Cache pub packages
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~/.pub-cache
-          key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pub-
-
-      - name: Cache CocoaPods
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: |
-            ~/Library/Caches/CocoaPods
-            ios/Pods
-          key: ${{ runner.os }}-cocoapods-${{ hashFiles('ios/Podfile.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cocoapods-
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Report code-signing status
-        env:
-          # Secrets are referenced only to test for presence; their values are
-          # never printed. A real signed-IPA export would be wired here, gated
-          # behind these Secrets (see README -> iOS artifacts). Nothing secret
-          # is ever committed to this public repo.
-          HAS_SIGNING: ${{ secrets.IOS_CERTIFICATE_BASE64 != '' && secrets.IOS_PROVISIONING_PROFILE_BASE64 != '' }}
-        run: |
-          if [ "$HAS_SIGNING" = "true" ]; then
-            echo "iOS signing secrets are present, but signed export is not implemented in this workflow."
-            echo "Building UNSIGNED. Extend this job to import the secrets and export a signed .ipa."
-          else
-            echo "No iOS signing secrets configured -> building an UNSIGNED device app (technical artifact)."
-            echo "An unsigned build cannot be installed on a real device. See README -> iOS artifacts."
-          fi
-
-      - name: Build iOS device app (unsigned)
-        run: flutter build ios --release --no-codesign --dart-define-from-file=dart_defines.json
-
-      - name: Package device .app (keep the .app folder, not its contents)
-        run: |
-          set -euo pipefail
-          app="build/ios/iphoneos/Runner.app"
-          stage="build/ios/device-artifact"
-          rm -rf "$stage"
-          mkdir -p "$stage"
-          ditto "$app" "$stage/Wallet Demo.app"
-
-      - name: Upload iOS device artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: ios-device-build
-          path: build/ios/device-artifact
-          if-no-files-found: error
-
-  windows:
+  windows_x64:
     name: Windows x64
-    # Pinned to windows-2022 (VS 2022 / MSVC 17.x): windows-latest moved to
-    # VS 18 / MSVC 14.51, which turns local_auth_windows's <experimental/coroutine>
-    # usage into a hard STL1011 error. Temporary until local_auth ships a C++20
-    # <coroutine> Windows plugin (or we add the silence define).
-    runs-on: windows-2022
-    needs: validate
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+    needs: [plan, validate]
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/target-windows.yml
+    with:
+      arch: x64
+      # windows-2022 (VS 2022 / MSVC 17.x): windows-latest moved to VS 18 /
+      # MSVC 14.51, which turns local_auth_windows's <experimental/coroutine>
+      # usage into a hard STL1011 error.
+      runner: windows-2022
+      smoke: ${{ needs.plan.outputs.smoke == 'true' }}
 
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          channel: stable
-          cache: true
+  windows_arm64:
+    name: Windows arm64
+    needs: [plan, validate]
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/target-windows.yml
+    with:
+      arch: arm64
+      runner: windows-11-arm
+      smoke: ${{ needs.plan.outputs.smoke == 'true' }}
+      bring_up: true
 
-      - name: Cache pub packages
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~\AppData\Local\Pub\Cache
-          key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pub-
+  linux_x64:
+    name: Linux x64
+    needs: [plan, validate]
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/target-linux.yml
+    with:
+      arch: x64
+      runner: ubuntu-latest
+      smoke: ${{ needs.plan.outputs.smoke == 'true' }}
+      bring_up: true
 
-      - name: Install dependencies
-        run: flutter pub get
+  linux_arm64:
+    name: Linux arm64
+    needs: [plan, validate]
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/target-linux.yml
+    with:
+      arch: arm64
+      runner: ubuntu-24.04-arm
+      smoke: ${{ needs.plan.outputs.smoke == 'true' }}
+      bring_up: true
 
-      - name: Build Windows app
-        run: flutter build windows --release --dart-define-from-file=dart_defines.json
+  macos:
+    name: macOS
+    needs: [plan, validate]
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/target-macos.yml
+    with:
+      smoke: ${{ needs.plan.outputs.smoke == 'true' }}
+      bring_up: true
 
-      - name: Upload Windows artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: windows-x64
-          path: build/windows/x64/runner/Release
-          if-no-files-found: error
-
-  # Publish the APK as a GitHub Release once every platform built — on a pushed
-  # v* tag, or from a manual run on main with `release` ticked (gh then creates
-  # the tag at this commit). Mirrors the GitLab `release` job. Uses the
-  # preinstalled gh CLI with this job's token (no third-party action), and all
-  # inputs go through env vars.
+  # Runs only after every target workflow finished, and checks each smoke
+  # result itself: a target that could not prove itself blocks the release
+  # instead of being skipped. Uses the preinstalled gh CLI with this job's
+  # token; every input goes through env vars.
   release:
     name: GitHub release
-    if: startsWith(github.ref, 'refs/tags/v') || (inputs.release && github.ref == 'refs/heads/main')
+    if: needs.plan.outputs.release == 'true'
     runs-on: ubuntu-latest
-    needs: [android, ios_simulator, ios_device, windows]
+    needs: [plan, android, ios, windows_x64, windows_arm64, linux_x64, linux_arm64, macos]
     permissions:
       contents: write
       actions: read
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
-      - name: Create release with the APK
+      - name: Check smoke results and publish
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
           REF_TYPE: ${{ github.ref_type }}
-          REF_NAME: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          ANDROID_X86_64: ${{ needs.android.outputs.x86_64 }}
+          ANDROID_ARM64: ${{ needs.android.outputs.arm64 }}
+          IOS_SIMULATOR: ${{ needs.ios.outputs.simulator }}
+          WINDOWS_X64: ${{ needs.windows_x64.outputs.result }}
+          WINDOWS_ARM64: ${{ needs.windows_arm64.outputs.result }}
+          LINUX_X64: ${{ needs.linux_x64.outputs.result }}
+          LINUX_ARM64: ${{ needs.linux_arm64.outputs.result }}
+          MACOS_ARM64: ${{ needs.macos.outputs.arm64 }}
+          MACOS_X64: ${{ needs.macos.outputs.x64 }}
         run: |
           set -euo pipefail
-          version="$(sed -n 's/^version: *\([0-9][0-9.]*\).*/\1/p' pubspec.yaml)"
+          TAG="v$VERSION"
+          missing=""
+          row() { # target, result
+            case "$2" in
+              passed) echo "| $1 | ✅ запуск релизной сборки и сценарий в приложении |" ;;
+              no-kvm) echo "| $1 | ⚠️ не проверено: на раннере этой архитектуры нет KVM для эмулятора |" ;;
+              *) missing="$missing $1"; echo "| $1 | ❌ нет результата |" ;;
+            esac
+          }
+          {
+            echo "## Смок-тесты"
+            echo
+            echo "| Сборка | Проверка |"
+            echo "| --- | --- |"
+            row "Android x86_64" "$ANDROID_X86_64"
+            row "Android arm64-v8a" "$ANDROID_ARM64"
+            echo "| Android armeabi-v7a | ⚠️ не проверено: на GitHub нет 32-битных ARM-раннеров |"
+            row "iOS-симулятор" "$IOS_SIMULATOR"
+            echo "| iOS-устройство | ⚠️ не проверено: сборка без подписи, устройства на GitHub нет |"
+            row "Windows x64" "$WINDOWS_X64"
+            row "Windows arm64" "$WINDOWS_ARM64"
+            row "Linux x64" "$LINUX_X64"
+            row "Linux arm64" "$LINUX_ARM64"
+            row "macOS arm64" "$MACOS_ARM64"
+            row "macOS x64" "$MACOS_X64"
+          } > smoke.md
+          cat smoke.md
+          [ -z "$missing" ] || { echo "Smoke result missing for:$missing"; exit 1; }
+
+          for name in android-apk ios-simulator ios-device windows-x64 windows-arm64 linux-x64 linux-arm64 macos; do
+            gh run download "$RUN_ID" -n "$name" -D dist
+          done
+          p="mobile-wallet-demo-$VERSION"
+          mv dist/app-release.apk "dist/$p-android.apk"
+          mv dist/ios-simulator.zip "dist/$p-ios-simulator.zip"
+          mv dist/ios-device-unsigned.zip "dist/$p-ios-device-unsigned.zip"
+          mv dist/windows-x64.zip "dist/$p-windows-x64.zip"
+          mv dist/windows-arm64.zip "dist/$p-windows-arm64.zip"
+          mv dist/linux-x64.tar.gz "dist/$p-linux-x64.tar.gz"
+          mv dist/linux-arm64.tar.gz "dist/$p-linux-arm64.tar.gz"
+          mv dist/macos.zip "dist/$p-macos.zip"
+
+          # Notes: this version's CHANGELOG section, then the smoke table.
+          awk -v v="$VERSION" 'index($0, "## [" v "]") == 1 {f=1; next} f && /^## \[/ {exit} f' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "Release $TAG" > notes.md
+          { echo; cat smoke.md; } >> notes.md
+
           if [ "$REF_TYPE" = tag ]; then
-            TAG="$REF_NAME"
-            [ "$TAG" = "v$version" ] || { echo "Tag $TAG does not match pubspec version $version"; exit 1; }
             target=(--verify-tag)
           else
-            TAG="v$version"
             target=(--target "$SHA")
           fi
-          gh run download "$RUN_ID" -n android-apk -D dist
-          apk="dist/mobile-wallet-demo-${version}-android.apk"
-          mv dist/app-release.apk "$apk"
-          # Release notes = this version's CHANGELOG section, if present.
-          awk -v v="$version" 'index($0, "## [" v "]") == 1 {f=1; next} f && /^## \[/ {exit} f' CHANGELOG.md > notes.md
-          [ -s notes.md ] || echo "Release $TAG" > notes.md
-          gh release create "$TAG" "$apk" "${target[@]}" --title "$TAG" --notes-file notes.md
+          gh release create "$TAG" dist/"$p"-* "${target[@]}" --title "$TAG" --notes-file notes.md

@@ -1,0 +1,130 @@
+name: target · macOS
+
+# Called by ci.yml. Builds the universal (arm64 + x86_64) app on Apple Silicon,
+# then, on a smoke run, launches it and runs the in-app scenario on an Apple
+# Silicon runner and on an Intel runner.
+on:
+  workflow_call:
+    inputs:
+      smoke:
+        type: boolean
+        required: true
+      bring_up:
+        description: Tolerate failures while this target is being brought up
+        type: boolean
+        default: false
+    outputs:
+      arm64:
+        value: ${{ jobs.smoke_arm64.outputs.result }}
+      x64:
+        value: ${{ jobs.smoke_x64.outputs.result }}
+
+jobs:
+  build:
+    name: Build
+    runs-on: macos-latest
+    continue-on-error: ${{ inputs.bring_up }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: ./.github/actions/setup-flutter
+
+      - name: Build macOS app
+        run: flutter build macos --release --dart-define-from-file=dart_defines.json
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent "build/macos/Build/Products/Release/Wallet Demo.app" dist/macos.zip
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos
+          path: dist/macos.zip
+          if-no-files-found: error
+
+  smoke_arm64:
+    name: Smoke arm64
+    needs: build
+    if: inputs.smoke
+    runs-on: macos-latest
+    continue-on-error: true # bring-up
+    timeout-minutes: 45
+    outputs:
+      result: ${{ steps.result.outputs.result }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: ./.github/actions/setup-flutter
+
+      - name: Download the release build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh run download "$RUN_ID" -n macos -D dist
+          ditto -x -k dist/macos.zip dist
+
+      - name: Launch the release build
+        run: |
+          set -euo pipefail
+          app="dist/Wallet Demo.app"
+          exe="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
+          bash scripts/smoke/launch_check_desktop.sh "$app/Contents/MacOS/$exe"
+
+      - name: Scenario
+        run: flutter test integration_test/smoke_test.dart -d macos --dart-define-from-file=dart_defines.json
+
+      - id: result
+        run: echo "result=passed" >> "$GITHUB_OUTPUT"
+
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: smoke-macos-arm64
+          path: build/smoke
+          if-no-files-found: ignore
+
+  smoke_x64:
+    name: Smoke x64
+    needs: build
+    if: inputs.smoke
+    runs-on: macos-15-intel
+    continue-on-error: true # bring-up
+    timeout-minutes: 45
+    outputs:
+      result: ${{ steps.result.outputs.result }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: ./.github/actions/setup-flutter
+
+      - name: Download the release build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh run download "$RUN_ID" -n macos -D dist
+          ditto -x -k dist/macos.zip dist
+
+      - name: Launch the release build
+        run: |
+          set -euo pipefail
+          app="dist/Wallet Demo.app"
+          exe="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
+          bash scripts/smoke/launch_check_desktop.sh "$app/Contents/MacOS/$exe"
+
+      - name: Scenario
+        run: flutter test integration_test/smoke_test.dart -d macos --dart-define-from-file=dart_defines.json
+
+      - id: result
+        run: echo "result=passed" >> "$GITHUB_OUTPUT"
+
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: smoke-macos-x64
+          path: build/smoke
+          if-no-files-found: ignore

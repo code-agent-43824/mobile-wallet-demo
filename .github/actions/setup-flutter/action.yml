@@ -1,0 +1,55 @@
+name: Set up Flutter
+description: >
+  Latest Flutter stable plus the pub cache, on any runner. x64 runners use
+  subosito/flutter-action (release archives); ARM64 runners have no release
+  archive, so the stable branch is cloned and the tool fetches its own
+  host-architecture Dart SDK.
+
+runs:
+  using: composite
+  steps:
+    - if: runner.arch != 'ARM64'
+      uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+      with:
+        channel: stable
+        cache: true
+
+    - if: runner.arch == 'ARM64' && runner.os != 'Windows'
+      name: Clone Flutter stable (ARM64)
+      shell: bash
+      run: |
+        set -euo pipefail
+        dir="$RUNNER_TEMP/flutter"
+        git clone --depth 1 --branch stable https://github.com/flutter/flutter.git "$dir"
+        echo "$dir/bin" >> "$GITHUB_PATH"
+
+    - if: runner.arch == 'ARM64' && runner.os == 'Windows'
+      name: Clone Flutter stable (Windows ARM64)
+      shell: pwsh
+      run: |
+        $dir = Join-Path $env:RUNNER_TEMP 'flutter'
+        git clone --depth 1 --branch stable https://github.com/flutter/flutter.git $dir
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        Add-Content -Path $env:GITHUB_PATH -Value (Join-Path $dir 'bin')
+
+    - name: Cache pub packages
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ${{ runner.os == 'Windows' && '~\AppData\Local\Pub\Cache' || '~/.pub-cache' }}
+        key: ${{ runner.os }}-${{ runner.arch }}-pub-${{ hashFiles('pubspec.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-pub-
+
+    - if: runner.os == 'Windows'
+      name: Install dependencies
+      shell: pwsh
+      run: |
+        flutter --version
+        flutter pub get
+
+    - if: runner.os != 'Windows'
+      name: Install dependencies
+      shell: bash
+      run: |
+        flutter --version
+        flutter pub get

@@ -1,0 +1,90 @@
+name: target · Windows
+
+# Called by ci.yml once per architecture. Builds on a runner of that
+# architecture, then, on a smoke run, launches the release build and runs the
+# in-app scenario on the same kind of runner.
+on:
+  workflow_call:
+    inputs:
+      arch:
+        description: x64 or arm64
+        type: string
+        required: true
+      runner:
+        type: string
+        required: true
+      smoke:
+        type: boolean
+        required: true
+      bring_up:
+        description: Tolerate failures while this target is being brought up
+        type: boolean
+        default: false
+    outputs:
+      result:
+        value: ${{ jobs.smoke.outputs.result }}
+
+jobs:
+  build:
+    name: Build
+    runs-on: ${{ inputs.runner }}
+    continue-on-error: ${{ inputs.bring_up }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: ./.github/actions/setup-flutter
+
+      - name: Build Windows app
+        run: flutter build windows --release --dart-define-from-file=dart_defines.json
+
+      - name: Package
+        env:
+          ARCH: ${{ inputs.arch }}
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path "build/windows/$env:ARCH/runner/Release/*" -DestinationPath "dist/windows-$env:ARCH.zip"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-${{ inputs.arch }}
+          path: dist/windows-${{ inputs.arch }}.zip
+          if-no-files-found: error
+
+  smoke:
+    name: Smoke
+    needs: build
+    if: inputs.smoke
+    runs-on: ${{ inputs.runner }}
+    continue-on-error: true # bring-up
+    timeout-minutes: 45
+    outputs:
+      result: ${{ steps.result.outputs.result }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: ./.github/actions/setup-flutter
+
+      - name: Download the release build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          ARCH: ${{ inputs.arch }}
+        run: |
+          gh run download $env:RUN_ID -n "windows-$env:ARCH" -D dist
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Expand-Archive "dist/windows-$env:ARCH.zip" -DestinationPath dist/app
+
+      - name: Launch the release build
+        run: ./scripts/smoke/launch_check_windows.ps1 -Exe dist/app/WalletDemo.exe
+
+      - name: Scenario
+        run: flutter test integration_test/smoke_test.dart -d windows --dart-define-from-file=dart_defines.json
+
+      - id: result
+        run: Add-Content -Path $env:GITHUB_OUTPUT -Value "result=passed"
+
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: smoke-windows-${{ inputs.arch }}
+          path: build/smoke
+          if-no-files-found: ignore
