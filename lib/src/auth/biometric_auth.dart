@@ -36,11 +36,16 @@ abstract interface class BiometricAuthGateway {
   Future<void> authenticate({required String reason});
 }
 
+/// Desktop builds (Windows, Linux, macOS) are demos of the phone wallet:
+/// biometrics are simulated there, and cards and WalletConnect are absent.
+bool get isDesktopPlatform =>
+    Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+
 BiometricAuthGateway defaultBiometricAuthGateway() {
   if (Platform.isAndroid || Platform.isIOS) {
     return LocalAuthenticationGateway();
   }
-  if (Platform.isWindows) {
+  if (isDesktopPlatform) {
     return const SimulatedBiometricAuthGateway();
   }
   return const UnavailableBiometricAuthGateway();

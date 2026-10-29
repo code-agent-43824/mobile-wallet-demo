@@ -21,6 +21,11 @@ class FlutterSecureKeyValueStore implements SecureKeyValueStore {
               // installs. Keep a crash-safe backup until migration commits.
               migrateWithBackup: true,
             ),
+            // The data-protection keychain needs a keychain-access-group
+            // entitlement, which only a team-signed build carries; the
+            // released macOS app is ad-hoc signed, so it uses the login
+            // keychain.
+            mOptions: MacOsOptions(usesDataProtectionKeychain: false),
           );
 
   final FlutterSecureStorage _storage;

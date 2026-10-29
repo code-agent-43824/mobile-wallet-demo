@@ -207,7 +207,7 @@
   "biometricsTitle": "Biometrics after the PIN",
   "biometricsBodyAvailable": "Biometrics turn on once a PIN is set and stay a fast way in. The device's own system check is used.",
   "biometricsBodyUnavailable": "This device has no biometrics available, so we continue without them. The PIN remains the way to unlock.",
-  "biometricsBodySimulated": "On Windows biometric unlock is simulated for the demo. On a phone the system biometrics are used.",
+  "biometricsBodySimulated": "On a computer biometric unlock is simulated for the demo. On a phone the system biometrics are used.",
   "biometricsEnable": "Turn on biometrics",
   "biometricsEnableSimulated": "Turn on biometrics (simulated)",
   "biometricsSkip": "Not now",

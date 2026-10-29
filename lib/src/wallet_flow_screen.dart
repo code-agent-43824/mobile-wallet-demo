@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:collection';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -558,7 +557,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen>
       case WalletFlowStage.biometricPrompt:
         return _BiometricPromptStage(
           isAvailable: controller.biometricsAvailable,
-          isWindowsSimulation: Platform.isWindows,
+          isSimulated: isDesktopPlatform,
           onSkip: () => controller.completeBiometricChoice(false),
           onEnable: controller.biometricsAvailable
               ? () => controller.completeBiometricChoice(true)

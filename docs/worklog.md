@@ -45,6 +45,12 @@ Entry template:
      | Linux x64 / arm64 | ubuntu-latest / ubuntu-24.04-arm | те же раннеры под Xvfb со связкой ключей GNOME |
      | macOS (universal) | macos-latest | macos-latest (arm64) и Intel-раннер |
   4. `android-launch-check.yml` остаётся ручной диагностикой; его скрипт используется в смоке.
+- Сделано:
+  - Шаг 1 (платформы): добавлены `linux/` и `macos/`.
+    - Linux: бинарь `WalletDemo`, заголовок окна «Wallet Demo».
+    - macOS: продукт «Wallet Demo», entitlements `network.client` и `files.user-selected.read-only`, `MacOsOptions(usesDataProtectionKeychain: false)`.
+    - `isDesktopPlatform` включает имитацию биометрии на всех десктопах; текст «На компьютере вход по биометрии имитируется…» на RU и EN.
+    - Проверено локально: `flutter build linux --release` собирается, анализатор чист, `flutter test` 239/239. macOS здесь не собрать — проверит CI.
 
 ## 2026-10-29 — Переписать автора в опубликованной истории — branch main — done
 - Plan: по разрешению владельца заменить автора коммита с общими правилами на `coding-agent`, сохранить новые коммиты другого агента и обновить `main` только при совпадении ожидаемого удалённого SHA.

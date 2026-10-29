@@ -827,20 +827,20 @@ class _SeedPhraseStage extends StatelessWidget {
 class _BiometricPromptStage extends StatelessWidget {
   const _BiometricPromptStage({
     required this.isAvailable,
-    required this.isWindowsSimulation,
+    required this.isSimulated,
     required this.onSkip,
     required this.onEnable,
   });
 
   final bool isAvailable;
-  final bool isWindowsSimulation;
+  final bool isSimulated;
   final VoidCallback onSkip;
   final VoidCallback? onEnable;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final description = isWindowsSimulation
+    final description = isSimulated
         ? l10n.biometricsBodySimulated
         : isAvailable
         ? l10n.biometricsBodyAvailable
@@ -861,7 +861,7 @@ class _BiometricPromptStage extends StatelessWidget {
               onPressed: onEnable,
               icon: const Icon(Icons.fingerprint),
               label: Text(
-                isWindowsSimulation
+                isSimulated
                     ? l10n.biometricsEnableSimulated
                     : l10n.biometricsEnable,
               ),

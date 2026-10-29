@@ -41,8 +41,7 @@ WalletConnectService _defaultWalletConnectService() {
 final GlobalKey<NavigatorState> _appNavigatorKey = GlobalKey<NavigatorState>();
 
 /// The production [QrScanner]: live camera + file load on Android/iOS (via
-/// [CameraQrScanner]), file load only elsewhere (Windows x64, where camera
-/// plugins don't exist). Tests inject [FakeQrScanner].
+/// [CameraQrScanner]), file load only on the desktop builds. Tests inject [FakeQrScanner].
 QrScanner _defaultQrScanner() {
   if (Platform.isAndroid || Platform.isIOS) {
     return CameraQrScanner(navigatorKey: _appNavigatorKey);

@@ -8,7 +8,7 @@ This file contains project-specific commands, code structure, and pitfalls. The 
 
 ## Project map
 
-This is a Flutter EVM wallet for Android, iOS, and Windows. `lib/main.dart` enters `MobileWalletDemoApp` and `WalletFlowScreen`; the architecture map below identifies the domain layers and their testing seams. Current scope, version, and next work are recorded in `docs/development-plan.md`; physical-device evidence is in `docs/device-test-matrix.md`. Native Rutoken integration details are in `docs/nfc-pkcs11-integration-notes.md`.
+This is a Flutter EVM wallet for Android and iOS, with desktop builds for Windows (x64, arm64), Linux and macOS. `lib/main.dart` enters `MobileWalletDemoApp` and `WalletFlowScreen`; the architecture map below identifies the domain layers and their testing seams. Current scope, version, and next work are recorded in `docs/development-plan.md`; physical-device evidence is in `docs/device-test-matrix.md`. Native Rutoken integration details are in `docs/nfc-pkcs11-integration-notes.md`.
 
 ## Departures from AGENTS.md
 
@@ -32,7 +32,9 @@ dart format --output=none --set-exit-if-changed .  # CI's formatting gate
 
 flutter build apk --release                      # Android
 flutter build ios --simulator --debug            # iOS simulator
-flutter build windows --release                  # Windows x64
+flutter build windows --release                  # Windows (the host's architecture)
+flutter build linux --release                    # Linux (needs GTK, libsecret: scripts/smoke/install_linux_deps.sh)
+flutter build macos --release                    # macOS (universal)
 ```
 
 CI (`ci.yml`) runs `validate` (format check → analyze → test) and only then builds all three platforms. **`dart format` is an enforced gate** — unformatted code fails CI. Run `dart format .` before committing.
@@ -103,4 +105,5 @@ user-visible text goes into both ARB files (`lib/l10n/`), never inline; the pers
 - **`package_info_plus` override:** forced to ^10.2.2 because `reown_core`/`walletconnect_pay` cap it `<10` while 9.x applies KGP itself; 10.0.0 only broke win32/min-platform versions, not the Dart API. Drop it when Reown widens the constraint.
 - **Cards need an arm64 process (tech debt, owner is getting the other ABIs).** `libwtpkcs11ecp.so` ships for arm64-v8a only and the PC/SC bridge has no x86_64 build. Kotlin `WalletDemoApplication.isRutokenSupported` (`os.arch`) skips the transport, runtime and channel; Dart `isRutokenSupportedOnThisDevice` (`Abi.current()`) creates no adapter, so the card actions give way to a "not supported on this device" note. Both check the *process* ABI (not `Build.SUPPORTED_ABIS`, which lists arm64 on x86_64 images with ARM translation); keep them in step and drop both once the libraries exist.
 - **iOS needs the UIScene manifest.** `Info.plist`'s `UISceneConfigurations` (`$(PRODUCT_MODULE_NAME).SceneDelegate`, storyboard `Main`) is required by the Xcode 27 SDK; without it the app stops with SIGTRAP at launch. An unrelated plist rewrite dropped it once (`a011c2c`), so check it whenever the plist is regenerated.
+- **Desktop builds are demos of the phone wallet.** `isDesktopPlatform` (`auth/biometric_auth.dart`) covers Windows, Linux and macOS: biometrics are simulated, `app.dart` gives them no WalletConnect and the file QR scanner, and no card adapter exists there. On macOS the vault uses the login keychain (`MacOsOptions(usesDataProtectionKeychain: false)`): the data-protection keychain needs a team-signed build, and the released app is ad-hoc signed.
 - **Android vault persistence:** `flutter_secure_storage` 10.x (the override that once forced it is gone since `reown_core` 1.5 accepts ^10). Our store uses crash-safe v9→v10 migration with `resetOnError:false`; Android Auto Backup is disabled because keystore keys cannot safely restore with encrypted preferences.
