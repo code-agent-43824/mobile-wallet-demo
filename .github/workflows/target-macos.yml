@@ -78,6 +78,12 @@ jobs:
           exe="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
           bash scripts/smoke/launch_check_desktop.sh "$app/Contents/MacOS/$exe"
 
+      # The release build stored its backend choice in the login keychain;
+      # the scenario's debug build is signed differently and would wait on
+      # an access prompt for that item.
+      - name: Forget the release build's keychain items
+        run: bash scripts/smoke/reset_macos_keychain.sh
+
       - name: Scenario
         run: flutter test integration_test/smoke_test.dart -d macos --dart-define-from-file=dart_defines.json
 
@@ -120,6 +126,12 @@ jobs:
           app="dist/Wallet Demo.app"
           exe="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
           bash scripts/smoke/launch_check_desktop.sh "$app/Contents/MacOS/$exe"
+
+      # The release build stored its backend choice in the login keychain;
+      # the scenario's debug build is signed differently and would wait on
+      # an access prompt for that item.
+      - name: Forget the release build's keychain items
+        run: bash scripts/smoke/reset_macos_keychain.sh
 
       - name: Scenario
         run: flutter test integration_test/smoke_test.dart -d macos --dart-define-from-file=dart_defines.json
