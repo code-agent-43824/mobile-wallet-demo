@@ -61,6 +61,7 @@ recoverable provisioning and which supports the same own-send, WalletConnect, an
   crash/log-output review, which needs adb capture. The exact iOS vendor framework has been received and
   retained privately; Swift integration and physical iOS validation remain, with redistribution/build-delivery
   terms still unresolved.
+- **NEXT — релизный конвейер (2026-10-29, в работе):** каждая цель собирается на своём раннере, затем проходит смок на раннере той же архитектуры; релиз публикует все артефакты только после всех смоков. Добавляются Linux, macOS и Windows arm64. Ход работ — в `docs/worklog.md`.
 - **LATER:** broader device/platform integration tests, and only then additional chains/accounts if product
   scope changes. Not Phase 10 prerequisites. (Lock-on-open, coded domain errors and the add-card screen moved
   from here into v1.57.)
