@@ -16,10 +16,6 @@ on:
       smoke:
         type: boolean
         required: true
-      bring_up:
-        description: Tolerate failures while this target is being brought up
-        type: boolean
-        default: false
     outputs:
       result:
         value: ${{ jobs.smoke.outputs.result }}
@@ -28,7 +24,6 @@ jobs:
   build:
     name: Build
     runs-on: ${{ inputs.runner }}
-    continue-on-error: ${{ inputs.bring_up }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: ./.github/actions/setup-flutter
@@ -54,7 +49,6 @@ jobs:
     needs: build
     if: inputs.smoke
     runs-on: ${{ inputs.runner }}
-    continue-on-error: true # bring-up
     timeout-minutes: 45
     outputs:
       result: ${{ steps.result.outputs.result }}

@@ -9,10 +9,6 @@ on:
       smoke:
         type: boolean
         required: true
-      bring_up:
-        description: Tolerate failures while this target is being brought up
-        type: boolean
-        default: false
     outputs:
       arm64:
         value: ${{ jobs.smoke_arm64.outputs.result }}
@@ -23,7 +19,6 @@ jobs:
   build:
     name: Build
     runs-on: macos-latest
-    continue-on-error: ${{ inputs.bring_up }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: ./.github/actions/setup-flutter
@@ -53,7 +48,6 @@ jobs:
     needs: build
     if: inputs.smoke
     runs-on: macos-latest
-    continue-on-error: true # bring-up
     timeout-minutes: 45
     outputs:
       result: ${{ steps.result.outputs.result }}
@@ -102,7 +96,6 @@ jobs:
     needs: build
     if: inputs.smoke
     runs-on: macos-15-intel
-    continue-on-error: true # bring-up
     timeout-minutes: 45
     outputs:
       result: ${{ steps.result.outputs.result }}

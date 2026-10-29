@@ -64,8 +64,6 @@ jobs:
           fi
           smoke="$release"
           [ "$SMOKE_INPUT" = true ] && smoke=true
-          # Bring-up: smoke every push to main until each smoke job is green.
-          [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ] && smoke=true
           {
             echo "version=$version"
             echo "release=$release"
@@ -136,7 +134,6 @@ jobs:
       arch: arm64
       runner: windows-11-arm
       smoke: ${{ needs.plan.outputs.smoke == 'true' }}
-      bring_up: true
 
   linux_x64:
     name: Linux x64
@@ -149,7 +146,6 @@ jobs:
       arch: x64
       runner: ubuntu-latest
       smoke: ${{ needs.plan.outputs.smoke == 'true' }}
-      bring_up: true
 
   linux_arm64:
     name: Linux arm64
@@ -162,7 +158,6 @@ jobs:
       arch: arm64
       runner: ubuntu-24.04-arm
       smoke: ${{ needs.plan.outputs.smoke == 'true' }}
-      bring_up: true
 
   macos:
     name: macOS
@@ -173,7 +168,6 @@ jobs:
     uses: ./.github/workflows/target-macos.yml
     with:
       smoke: ${{ needs.plan.outputs.smoke == 'true' }}
-      bring_up: true
 
   # Runs only after every target workflow finished, and checks each smoke
   # result itself: a target that could not prove itself blocks the release

@@ -99,7 +99,6 @@ jobs:
     needs: build_simulator
     if: inputs.smoke
     runs-on: macos-latest
-    continue-on-error: true # bring-up
     timeout-minutes: 60
     outputs:
       result: ${{ steps.result.outputs.result }}

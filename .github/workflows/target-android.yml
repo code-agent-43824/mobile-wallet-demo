@@ -46,7 +46,6 @@ jobs:
     needs: build
     if: inputs.smoke
     runs-on: ubuntu-latest
-    continue-on-error: true # bring-up
     timeout-minutes: 60
     outputs:
       result: ${{ steps.result.outputs.result }}
@@ -97,7 +96,6 @@ jobs:
     needs: build
     if: inputs.smoke
     runs-on: ubuntu-24.04-arm
-    continue-on-error: true # bring-up
     timeout-minutes: 60
     outputs:
       result: ${{ steps.result.outputs.result }}
