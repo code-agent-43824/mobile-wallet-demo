@@ -56,6 +56,16 @@ Run on every supported mobile platform after secure-storage, auth, lifecycle, or
 `PARTIAL` is historical simulator evidence and must be replaced by physical-device evidence before making a
 platform hardware/security claim.
 
+### Real dApp over WalletConnect v2 — owner's run, 2026-10-29 (device and app version not recorded)
+
+| Check | Result | Observation |
+| --- | --- | --- |
+| dApp requires `eth_signTypedData` | FAIL | The method is unsupported: Approve stays blocked behind a red warning; a request for it gets an error and no card. |
+| `wallet_switchEthereumChain` to Mainnet | FAIL | Tapping «Switch network» silently closes the card; the dApp gets an unclear error (code 5) instead of a standard EIP-1193/EIP-3326 code. |
+| Pairing with a dApp whose relay connection died | FAIL | Pairing hangs silently; the wallet approves but no session appears, and nothing tells the user why. The cause is on the dApp side. |
+| Request left unanswered ~5 min | PASS | The dApp gets «Request expired. Please try again.» |
+| Transaction from another account | PASS | Approve is disabled with a clear explanation. |
+
 ## Phase 10 Rutoken gate
 
 Since v1.57 card errors are coded in Dart and worded without the vendor name, per the redesign's rule that
