@@ -18,6 +18,11 @@ Entry template:
 
 ---
 
+## 2026-10-29 — Общие правила кодинг-агентов — branch main — done
+- Plan: подключить точную копию `code-agent-43824/coding-rules/AGENTS.md`, добавить импорт в `CLAUDE.md` и убрать противоречащие общему своду повторы из проектных инструкций. Сохранить карту проекта и существующую историю работы. Настроить Git-автора OpenAI-агента по образцу других репозиториев владельца и проверить доступ через штатный Git-прокси.
+- Done: скопирован `AGENTS.md` из `coding-rules` на ревизии `eb51a74` без изменений; `CLAUDE.md` импортирует его, а Copilot-инструкция ссылается на общие правила и проектную карту без их повтора. Старое указание работать в feature-ветке удалено. Для этого checkout настроен Git-автор `coding-agent <266289290+code-agent-43824@users.noreply.github.com>` по образцу других проектов владельца; чтение `origin/main` через Git-прокси работает. `git diff --check` прошёл; код и зависимости не менялись.
+- Next / open: исторические `docs/development-plan.md` и `docs/worklog.md` пока сохраняют прежнюю структуру; перенос в шесть документов общего свода требует отдельной сверки содержания. Запуск приложения на устройстве относится к следующим кодовым задачам.
+
 ## 2026-10-27 — local_auth 3 (UIScene-compatible biometrics) — branch claude/friendly-hawking-hpbpbv — done (v1.59.0+70)
 - Plan (owner request; closes the plan's "Watch" item): `local_auth` ^2.3.0 → ^3.0.2, which brings
   `local_auth_darwin` 2.0.5 ("Improves compatibility with UIScene" since 2.0.2), `local_auth_android` 2.3.0

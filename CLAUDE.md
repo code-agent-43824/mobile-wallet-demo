@@ -2,51 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project overview
+@AGENTS.md
 
-Flutter demo of a mobile EVM crypto wallet targeting Android, iOS, and Windows x64. It supports the full onboarding/auth shell, an encrypted on-device key vault, read-only blockchain access (Ethereum Mainnet + Sepolia), and end-to-end EIP-1559 signing/sending. Android v1.51 includes a physically validated Rutoken NFC/PKCS#11 read/sign transport and recoverable provisioning, production backend registration, read-only adoption of an already provisioned compatible card, registered-address binding, biometric-gated PIN convenience, cancellable NFC discovery, stable PIN/timeout/NFC-loss errors, and a fail-closed platform-error boundary that never exposes raw vendor diagnostics to Dart. Startup restores only the software-retained public Rutoken profile without NFC; each private operation opens one fresh card/PIN session. The native transport startup mirrors the official demo: the PC/SC bridge attaches from a custom `Application.onCreate` before any Activity callbacks, then PKCS#11 follows the Activity lifecycle and a blocking `C_WaitForSlotEvent` listener drives token presence. The native crypto boundary is intentionally minimal and follows the supplied example: import one raw BIP32 master private key + chain code with `C_CreateObject`, find it, derive a public address key or per-operation EC private child, call raw `CKM_ECDSA`, destroy transient children, and close the session. Existing-card adoption never calls `C_CreateObject`; it persists only address/path and therefore cannot synthesize EIP-4527 account xpub metadata. The adapter does not query derived chain code or xpub. EC-point intake accepts/validates both compressed and uncompressed SEC1 values with or without the PKCS#11 DER OCTET STRING wrapper. UI copy lives in ARB files (`lib/l10n/app_ru.arb` is primary, `app_en.arb` mirrors it) with an in-app RU/EN switch; widget tests pin `Locale('ru')` and assert on the exact Russian strings.
+This file contains project-specific commands, code structure, and pitfalls. The imported `AGENTS.md` contains the shared working rules.
 
-`docs/development-plan.md` is the canonical roadmap and source of truth for scope and phase status. Phases 0–7 are complete (Phase 7 = the simulated external-device **custody** foundation; the simulation itself was removed in v1.53 once the real Rutoken backend existed). Phase 9 makes this a wallet-side WalletConnect receiver and is device-validated on Android through a confirmed Sepolia broadcast; v1.37 adds EIP-5792 capability discovery plus live simulation/gas/fee preflight. Phase 12 is complete in v1.38: the app is a MetaMask-compatible EIP-4527 QR signer for Mainnet/Sepolia transactions, with account export, multipart camera scan, decoded transaction preview, per-operation auth, and signature QR. v1.39 hardens dense live-camera QR recognition with full-frame analysis, high requested Android resolution, and Android auto-zoom. The earlier custom AirGap codec and outbound signer direction are removed. Phase 13 (v1.52–v1.54) is the Nocturne redesign: dark-only theme, four tabs (Кошелёк / Активность / Связи / Настройки), separate iOS/Android interaction patterns, onboarding variant B («Кошелёк за минуту»), and full RU/EN localization; v1.57 closes it with one confirmation sheet for every key/card operation and coded domain errors. Phase 14 (v1.55) lets the Rutoken backend hold several registered card profiles with one selected; every operation still binds to the selected card's address, v1.57 adds the «Новая карта» screen, and the two-card physical dogfood (14.5) is pending. v1.57 also adds optional lock-on-open. v1.58 restores the iOS scene manifest and runs card-less on non-arm64 Android. v1.59 moves biometrics to `local_auth` 3: the plugin shows no error dialogs, so `auth/biometric_auth.dart` maps every `LocalAuthExceptionCode` to the app's own coded failure.
+## Project map
 
-The current north star is a single-account EVM wallet whose next milestone is a real, non-exporting Rutoken
-custody backend for Android/iOS. Phase 10 requires a custody-contract redesign before native integration: a
-hardware backend must expose public account metadata and transient authenticated signing, never
-`WalletMaterial`/mnemonic/private-key material. v1.40 adds this library-independent seam:
-`key_storage/custody_backend.dart` defines public account/session/`RutokenNativeAdapter` contracts plus software-retained xpub metadata, while
-`auth/external_digest_signer.dart` turns raw device `r‖s` into low-s recoverable EVM signatures and byte-exact
-legacy/EIP-1559/message/AirGap output. v1.41 adds the official Android PC/SC + PKCS#11/JNA stack and Kotlin
-platform-channel adapter; v1.42 adds the official blocking slot-event listener, v1.43 moves transport attachment
-to `Application.onCreate`, v1.44 passes the vendor-required null pointer for the empty master derivation path, and
-v1.45 reads the official EC public-key object type and normalizes compressed/uncompressed `CKA_EC_POINT` values;
-v1.46 removes the unsupported derived-chain-code query and mirrors the reference private-child/raw-sign flow;
-v1.47 adds recoverable BIP-39/passphrase provisioning through only the reference `C_CreateObject` import and
-persists public account-xpub metadata; both paths are physically validated. v1.48 registers the real backend:
-provisioning selects it, cold start restores its public summary without NFC, and every signing transport receives
-the secret-free transient device signer. v1.49 can instead adopt an existing compatible key as a descriptor-only
-profile, rejects a card whose address differs from that profile, and can release its separately stored PIN only
-after system biometric authentication. v1.50 makes the Android NFC wait cancellable, maps stable sanitized native
-errors, detects a removed token before later operations, and preserves the primary operation failure if teardown
-also fails. The Android physical signing matrix passed on v1.51 (2026-08-17), including WalletConnect,
-AirGap, invalid PIN, cancellation, timeout, and different-card rejection. Mid-operation NFC loss displayed a
-generic error on v1.51; v1.55 classifies it by asking the slot-event listener whether the card is still present,
-but that fix has not been re-run on hardware. Physical crash/log-output review and the Swift/iOS implementation
-remain open. The exact
-`wtpkcs11ecp.xcframework` was received and retained privately, but its archive has no redistribution grant;
-do not commit it or expose it through public CI artifacts. See the NOW / NEXT / LATER section and Phase 10
-Definition of Done in `docs/development-plan.md`.
+This is a Flutter EVM wallet for Android, iOS, and Windows. `lib/main.dart` enters `MobileWalletDemoApp` and `WalletFlowScreen`; the architecture map below identifies the domain layers and their testing seams. Current scope, version, and next work are recorded in `docs/development-plan.md`; physical-device evidence is in `docs/device-test-matrix.md`. Native Rutoken integration details are in `docs/nfc-pkcs11-integration-notes.md`.
 
-Use `docs/device-test-matrix.md` for physical-device and live-service evidence; do not turn simulator or fake
-coverage into hardware/security claims.
+## Departures from AGENTS.md
 
-## Multi-agent working agreement
-
-This repo is worked on by multiple coding agents (Claude Code and others), sometimes in parallel — so **document first, then code, then record**:
-
-1. Before a chunk of work (even a small one), write the plan in `docs/worklog.md` (and update `docs/development-plan.md` if it's roadmap-level).
-2. Do the work.
-3. Record results **in the same change**: the worklog entry's *Done* + *Next / open*, the plan's status, and any docs that drifted.
-
-The next agent should be able to tell what was planned, what was done, and what's next **from the docs alone** — not the diff. `AGENTS.md` is the full agreement and cross-tool entry point; `docs/development-plan.md` is the source of truth for phase status; `docs/worklog.md` is the granular running log.
+- The existing `docs/development-plan.md` combines roadmap, current plan, and status; `docs/worklog.md` is the append-only worklog. These documents predate the shared six-document layout. Keep using them until their historical content can be migrated without duplicating or losing state. Do not add current status to this file.
 
 ## Commands
 
@@ -128,7 +94,6 @@ user-visible text goes into both ARB files (`lib/l10n/`), never inline; the pers
 ## Conventions & gotchas
 
 - **The app version is duplicated across several files — keep them in sync.** `pubspec.yaml` (`version:`) is the source; `lib/src/app_version.dart` (`appVersion`/`appVersionLabel`) must match, `test/widget_test.dart` asserts the on-screen `appVersionLabel`, and both `README.md` and the `docs/development-plan.md` NOW snapshot also state it. When bumping, update all of them. Project convention (per README) is to **bump the minor version with each functional step**.
-- **Commit messages** follow Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `style:`.
 - **UI text is in ARB; widget tests locate elements by the Russian strings** — keep both ARB files in step.
 - **Errors are codes, not sentences.** Domain/infrastructure code (`key_storage/`, `qr/`, `walletconnect/`, `airgap/`, `transactions/`, `auth/`) throws its exception type with `.coded(AppErrorCode.x, {args})` (`lib/src/errors/app_error.dart`); `describeError` (`lib/src/error_text.dart`) is the only place that turns a failure into text. A new failure = a new code + copy in both ARBs + its arm in the exhaustive switch (a missing arm fails to compile; `test/error_text_test.dart` checks both languages). Protocol parse failures use the existing `…Malformed…` codes with an English `detail`. Text sent *to dApps* uses `DappErrorText` (English), never the UI bundle. Uncoded constructors are only for text that comes from outside the app (an RPC node, the relay).
 - Keep `docs/development-plan.md` phase status in sync when completing roadmap items (existing `docs:` commits do this).
