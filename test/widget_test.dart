@@ -8,6 +8,7 @@ import 'package:mobile_wallet_demo/src/auth/biometric_auth.dart';
 import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
 import 'package:mobile_wallet_demo/src/key_storage/custody_backend.dart';
+import 'package:mobile_wallet_demo/src/app_version.dart';
 import 'package:mobile_wallet_demo/src/key_storage/phone_secure_vault.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
 import 'package:mobile_wallet_demo/src/transactions/transaction_service.dart';
@@ -291,7 +292,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Wallet Demo'), findsOneWidget);
-    expect(find.text('v1.59.0+70'), findsOneWidget);
+    expect(find.text(appVersionLabel), findsOneWidget);
     // Onboarding variant B: no storage picker on the first screen — the
     // backend follows from which action is taken.
     expect(find.text('Кошелёк за минуту'), findsOneWidget);
