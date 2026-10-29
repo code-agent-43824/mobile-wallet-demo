@@ -63,6 +63,11 @@ Entry template:
     - Общая установка Flutter вынесена в `.github/actions/setup-flutter`: на ARM64 Flutter клонируется из ветки stable.
     - Режим отладки: смок на каждом push в `main`, смок-джобы и сборки новых платформ помечены `continue-on-error`.
     - actionlint чист; работу конвейера проверит первый прогон.
+  - Первый прогон (`5a3d003`, run 225):
+    - Сборка, запуск релизной сборки и сценарий прошли: Android x86_64, iOS-симулятор, Windows x64, Linux x64, Linux arm64.
+    - На `ubuntu-24.04-arm` нет `/dev/kvm`: эмулятор Android arm64 там не запустить, итог `no-kvm`.
+    - Windows arm64: на `windows-11-arm` стоит VS 18 (MSVC 14.51), и `local_auth_windows` падает на `<experimental/coroutine>` (STL1011). Исправление — `_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS` в `windows/CMakeLists.txt`.
+    - macOS: release-сборка падает в gen_snapshot на `_Rect` из `_window_macos.dart` Flutter — это flutter/flutter#191575 (дубликат #188060), обхода нет. Следующий прогон проверит, ломается ли так и чистый шаблон `flutter create`.
 
 ## 2026-10-29 — Переписать автора в опубликованной истории — branch main — done
 - Plan: по разрешению владельца заменить автора коммита с общими правилами на `coding-agent`, сохранить новые коммиты другого агента и обновить `main` только при совпадении ожидаемого удалённого SHA.
