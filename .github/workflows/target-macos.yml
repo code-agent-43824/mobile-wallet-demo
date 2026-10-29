@@ -28,6 +28,16 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: ./.github/actions/setup-flutter
 
+      # Bring-up probe for flutter/flutter#191575 (gen_snapshot rejects the
+      # windowing FFI structs): does a fresh template app hit it too?
+      - name: Probe a template app
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          flutter create --platforms=macos "$RUNNER_TEMP/probe"
+          cd "$RUNNER_TEMP/probe"
+          flutter build macos --release
+
       - name: Build macOS app
         run: flutter build macos --release --dart-define-from-file=dart_defines.json
 
