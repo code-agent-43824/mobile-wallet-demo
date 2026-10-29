@@ -1021,10 +1021,7 @@ class WalletFlowController extends ChangeNotifier {
   /// it on re-asks for the wallet PIN — the DEK is unwrapped once and stored
   /// behind biometrics — turning it off just drops the stored secret. The
   /// card keeps its own read-only summary, so this is never called for it.
-  Future<void> setBiometricsFromSettings(
-    bool enabled, {
-    String? pin,
-  }) async {
+  Future<void> setBiometricsFromSettings(bool enabled, {String? pin}) async {
     final backend = activeBackend;
     if (backend is! KeyStorageBackend) {
       throw const BiometricUnavailableFailure();
