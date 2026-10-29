@@ -18,7 +18,7 @@ Entry template:
 
 ---
 
-## 2026-10-29 — WalletConnect v2: находки прогона с реальным dApp — branch main — in progress
+## 2026-10-29 — WalletConnect v2: находки прогона с реальным dApp — branch main — done (в коде; ждёт повторного прогона с dApp)
 - Контекст: владелец прогнал кошелёк с реальным dApp через WalletConnect v2 (устройство и версия не указаны). Нашлись три проблемы; две проверки прошли (просроченный запрос получает «Request expired. Please try again.», транзакция от чужого аккаунта блокирует Approve с объяснением). Результаты записаны в `docs/device-test-matrix.md`.
 - Причины в коде:
   1. `eth_signTypedData` (без суффикса) нет в `WalletConnectV2RequestCodec.supportedMethods`. Если dApp требует этот метод, `WalletConnectNamespacePolicy` бросает `wcUnsupportedNamespaces` и Approve заблокирован. Сам запрос получает «not supported» без карточки.
@@ -37,6 +37,12 @@ Entry template:
     - `WalletConnectInboundCoordinator.switchChain` сначала переключает сессию, потом отвечает `null`. На любой исход отвечает dApp, а сбой пробрасывает в UI: карточка уходит, причина видна в баннере, успех подтверждает «Приложение переключено на сеть …».
     - `respondError` получил обязательный код `DappErrorCode`: 4902 — неизвестная сеть, 4200 — неподдерживаемый метод, 4100 — чужой или не подключённый аккаунт и заблокированный кошелёк, −32602 — неверные параметры, −32603 — внутренний сбой; 5000 остаётся только для отказа пользователя.
     - Найдено попутно: общий `catch` в `handleRequest` отвечал dApp ошибкой, но для UI запрос считался выполненным — отсюда «немое» закрытие карточки.
+  - Пункт 3:
+    - `WalletFlowController(walletConnectResponseTimeout:)`, по умолчанию 30 с. Если после `pair` за это время нет предложения (или `pair` сам не вернулся), показывается `wcPairingNoResponse` («dApp не ответил… обновите страницу и отсканируйте новый QR-код»).
+    - `approveSession` без подтверждения за то же время даёт `wcApproveNoResponse`; предложение сбрасывается.
+    - `FakeWalletConnectService` получил `proposeOnPair` и `acknowledgeApproval` для тестов.
+  - Локально: анализатор чист, `flutter test` 250/250.
+- Next / open: повторить прогон с реальным dApp (строки «Real dApp over WalletConnect v2» в `docs/device-test-matrix.md`): обязательный `eth_signTypedData`, переключение на Mainnet (dApp должен перейти на сеть, кошелёк — показать подтверждение), dApp с «протухшей» страницей (через 30 с — подсказка обновить страницу).
 
 ## 2026-10-29 — Релизный конвейер: сборка всех целей → смок на своей архитектуре → релиз — branch main — in progress
 - Контекст: на GitHub никогда не было стадии запуска собранных артефактов: `ci.yml` только собирает, а `android-launch-check.yml` запускается вручную и только для Android. Падение iOS при запуске в v1.58 ушло в релиз именно поэтому.

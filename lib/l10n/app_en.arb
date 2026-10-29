@@ -824,5 +824,7 @@
         "type": "String"
       }
     }
-  }
+  },
+  "errWcPairingNoResponse": "The dApp did not answer the pairing. Reload the dApp page and scan a new QR code.",
+  "errWcApproveNoResponse": "The dApp did not confirm the connection: its page seems to have lost the WalletConnect link. Reload it and connect again."
 }

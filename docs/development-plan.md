@@ -62,7 +62,7 @@ recoverable provisioning and which supports the same own-send, WalletConnect, an
   retained privately; Swift integration and physical iOS validation remain, with redistribution/build-delivery
   terms still unresolved.
 - **NEXT — релизный конвейер (2026-10-29, в работе):** каждая цель собирается на своём раннере, затем проходит смок на раннере той же архитектуры; релиз публикует все артефакты только после всех смоков. Добавляются Linux, macOS и Windows arm64. Ход работ — в `docs/worklog.md`.
-- **NEXT — WalletConnect: находки прогона с реальным dApp (2026-10-29, в работе):** поддержка `eth_signTypedData`, честное переключение сети (`chainChanged`, `updateSession`, коды EIP-1193/3326), таймауты пейринга и подтверждения с понятной подсказкой. Ход работ — в `docs/worklog.md`, наблюдения — в `docs/device-test-matrix.md`.
+- **NEXT — WalletConnect: находки прогона с реальным dApp (2026-10-29, исправлено в коде, ждёт повторного прогона):** поддержка `eth_signTypedData`, честное переключение сети (`chainChanged`, `updateSession`, коды EIP-1193/3326), таймауты пейринга и подтверждения с понятной подсказкой. Ход работ — в `docs/worklog.md`, наблюдения — в `docs/device-test-matrix.md`.
 - **LATER:** broader device/platform integration tests, and only then additional chains/accounts if product
   scope changes. Not Phase 10 prerequisites. (Lock-on-open, coded domain errors and the add-card screen moved
   from here into v1.57.)

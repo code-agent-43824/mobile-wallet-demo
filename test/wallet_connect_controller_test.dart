@@ -63,6 +63,7 @@ void main() {
     TransactionBroadcaster? transactionBroadcaster,
     NonceProvider? nonceProvider,
     QrScanner qrScanner = const UnavailableQrScanner(),
+    Duration walletConnectResponseTimeout = const Duration(seconds: 30),
   }) async {
     final controller = WalletFlowController(
       store: store ?? InMemorySecureKeyValueStore(),
@@ -72,6 +73,7 @@ void main() {
       transactionBroadcaster: transactionBroadcaster,
       nonceProvider: nonceProvider,
       qrScanner: qrScanner,
+      walletConnectResponseTimeout: walletConnectResponseTimeout,
     );
     await controller.loadInitialState();
     controller.goToCreateWallet();
@@ -245,6 +247,62 @@ void main() {
       await service.dispose();
     },
   );
+
+  test(
+    'a pairing with no proposal tells the user to reload the dApp',
+    () async {
+      final service = FakeWalletConnectService(proposeOnPair: false);
+      final controller = await buildUnlocked(
+        service,
+        walletConnectResponseTimeout: const Duration(milliseconds: 50),
+      );
+
+      await controller.pairWalletConnect(uri: 'wc:demo@2');
+      expect(controller.errorMessage, isNull);
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+
+      expect(controller.errorMessage, contains('Обновите страницу dApp'));
+
+      controller.dispose();
+      await service.dispose();
+    },
+  );
+
+  test('a proposal in time cancels the pairing watch', () async {
+    final service = FakeWalletConnectService();
+    final controller = await buildUnlocked(
+      service,
+      walletConnectResponseTimeout: const Duration(milliseconds: 50),
+    );
+
+    await controller.pairWalletConnect(uri: 'wc:demo@2');
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+
+    expect(controller.pendingProposal, isNotNull);
+    expect(controller.errorMessage, isNull);
+
+    controller.dispose();
+    await service.dispose();
+  });
+
+  test('an approval the dApp never acknowledges is reported', () async {
+    final service = FakeWalletConnectService(acknowledgeApproval: false);
+    final controller = await buildUnlocked(
+      service,
+      walletConnectResponseTimeout: const Duration(milliseconds: 50),
+    );
+    await controller.pairWalletConnect(uri: 'wc:demo@2');
+    await pumpEventQueue();
+    expect(controller.pendingProposal, isNotNull);
+
+    await controller.approvePendingProposal();
+
+    expect(controller.pendingProposal, isNull);
+    expect(controller.errorMessage, contains('не подтвердил подключение'));
+
+    controller.dispose();
+    await service.dispose();
+  });
 
   test('chain switch does not unlock the vault or require a PIN', () async {
     final service = FakeWalletConnectService();

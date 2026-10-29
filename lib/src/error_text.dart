@@ -89,6 +89,8 @@ String describeAppError(
     AppErrorCode.wcInvalidUri => l10n.errWcInvalidUri,
     AppErrorCode.wcProposalExpired => l10n.errWcProposalExpired,
     AppErrorCode.wcRelayNoSession => l10n.errWcRelayNoSession,
+    AppErrorCode.wcPairingNoResponse => l10n.errWcPairingNoResponse,
+    AppErrorCode.wcApproveNoResponse => l10n.errWcApproveNoResponse,
     AppErrorCode.wcUnsupportedNamespaces => l10n.errWcUnsupportedNamespaces(
       arg('chains'),
       arg('methods'),

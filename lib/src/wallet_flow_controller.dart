@@ -63,8 +63,10 @@ class WalletFlowController extends ChangeNotifier {
     RutokenNativeAdapter? rutokenNativeAdapter,
     AppLocalizations? messages,
     DateTime Function()? now,
+    Duration walletConnectResponseTimeout = const Duration(seconds: 30),
   }) : _messages = messages ?? lookupAppLocalizations(const Locale('ru')),
        _now = now ?? DateTime.now,
+       _walletConnectResponseTimeout = walletConnectResponseTimeout,
        _store = store,
        _walletConnectService = walletConnectService,
        _walletConnectPreflight = walletConnectPreflight,
@@ -144,6 +146,7 @@ class WalletFlowController extends ChangeNotifier {
     _walletConnectProposalSub = _walletConnectService.sessionProposals.listen((
       proposal,
     ) {
+      _pairingWatch?.cancel();
       _pendingProposal = proposal;
       _notify();
     });
@@ -202,6 +205,15 @@ class WalletFlowController extends ChangeNotifier {
   final TransactionService _transactionService;
   final TransactionBroadcaster _transactionBroadcaster;
   final NonceProvider _nonceProvider;
+
+  /// How long the dApp gets to send its proposal after pairing, and to
+  /// acknowledge an approved session. A dApp page whose relay link died
+  /// answers neither, and the user is told to reload it instead of waiting.
+  final Duration _walletConnectResponseTimeout;
+
+  /// Fires when a pairing produced no proposal in time.
+  Timer? _pairingWatch;
+
   late final StreamSubscription<WalletConnectSessionProposal>
   _walletConnectProposalSub;
   late final StreamSubscription<List<WalletConnectSession>>
@@ -363,6 +375,7 @@ class WalletFlowController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _pairingWatch?.cancel();
     unawaited(_walletConnectProposalSub.cancel());
     unawaited(_walletConnectSessionsSub.cancel());
     unawaited(_walletConnectRequestSub.cancel());
@@ -1064,9 +1077,28 @@ class WalletFlowController extends ChangeNotifier {
   /// stream and surfaces as [pendingProposal].
   Future<void> pairWalletConnect({required String uri}) async {
     await _runGuarded(() async {
-      await _walletConnectService.pair(uri: uri);
+      _pairingWatch?.cancel();
+      await _walletConnectService
+          .pair(uri: uri)
+          .timeout(_walletConnectResponseTimeout, onTimeout: _pairingTimedOut);
+      if (_pendingProposal != null) {
+        return;
+      }
+      _pairingWatch = Timer(_walletConnectResponseTimeout, () {
+        if (_pendingProposal == null) {
+          _errorMessage = describeAppError(
+            _messages,
+            AppErrorCode.wcPairingNoResponse,
+          );
+          _notify();
+        }
+      });
     });
   }
+
+  Never _pairingTimedOut() => throw const WalletConnectServiceException.coded(
+    AppErrorCode.wcPairingNoResponse,
+  );
 
   /// Approves [pendingProposal], binding this wallet's account (CAIP-10) across
   /// each requested chain. No-op when there is no pending proposal or no wallet.
@@ -1080,10 +1112,17 @@ class WalletFlowController extends ChangeNotifier {
       final accounts = proposal.requiredChains
           .map((chain) => '$chain:$address')
           .toList();
-      await _walletConnectService.approveSession(
-        proposal: proposal,
-        accounts: accounts,
-      );
+      try {
+        await _walletConnectService
+            .approveSession(proposal: proposal, accounts: accounts)
+            .timeout(_walletConnectResponseTimeout);
+      } on TimeoutException {
+        // The proposal is spent either way; a fresh QR is the way back.
+        _pendingProposal = null;
+        throw const WalletConnectServiceException.coded(
+          AppErrorCode.wcApproveNoResponse,
+        );
+      }
       _pendingProposal = null;
       _walletConnectSessions = _walletConnectService.activeSessions;
     });

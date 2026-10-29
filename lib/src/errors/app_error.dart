@@ -84,6 +84,13 @@ enum AppErrorCode {
   wcProposalExpired,
   wcRelayNoSession,
 
+  /// The dApp sent no session proposal after pairing (its relay link is
+  /// likely dead).
+  wcPairingNoResponse,
+
+  /// The dApp never acknowledged an approved session.
+  wcApproveNoResponse,
+
   /// Args: `chains`, `methods`.
   wcUnsupportedNamespaces,
 

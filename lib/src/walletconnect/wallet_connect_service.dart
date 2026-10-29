@@ -293,8 +293,18 @@ class UnavailableWalletConnectService implements WalletConnectService {
 /// it with [simulateProposal] / [simulateRequest] and inspect [respondedResults]
 /// / [respondedErrors]. [pair] auto-emits a proposal so flows are exercisable.
 class FakeWalletConnectService implements WalletConnectService {
-  FakeWalletConnectService({DateTime Function()? now})
-    : _now = now ?? _defaultNow;
+  FakeWalletConnectService({
+    DateTime Function()? now,
+    this.proposeOnPair = true,
+    this.acknowledgeApproval = true,
+  }) : _now = now ?? _defaultNow;
+
+  /// False simulates a dApp whose relay link died: pairing succeeds but no
+  /// proposal ever arrives.
+  final bool proposeOnPair;
+
+  /// False simulates a dApp that never acknowledges an approved session.
+  final bool acknowledgeApproval;
 
   static DateTime _defaultNow() => DateTime.now().toUtc();
 
@@ -334,6 +344,9 @@ class FakeWalletConnectService implements WalletConnectService {
       throw const WalletConnectServiceException.coded(
         AppErrorCode.wcInvalidUri,
       );
+    }
+    if (!proposeOnPair) {
+      return;
     }
     // Simulate the relay delivering a proposal shortly after pairing.
     simulateProposal(
@@ -393,6 +406,9 @@ class FakeWalletConnectService implements WalletConnectService {
     required WalletConnectSessionProposal proposal,
     required List<String> accounts,
   }) async {
+    if (!acknowledgeApproval) {
+      return Completer<WalletConnectSession>().future;
+    }
     final session = WalletConnectSession(
       topic: 'topic-${proposal.id}',
       peer: proposal.peer,

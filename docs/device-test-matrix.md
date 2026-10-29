@@ -66,6 +66,9 @@ platform hardware/security claim.
 | Request left unanswered ~5 min | PASS | The dApp gets «Request expired. Please try again.» |
 | Transaction from another account | PASS | Approve is disabled with a clear explanation. |
 
+The three failures are fixed in code on 2026-10-29 (`dfe7a6c`, `65ebf9b` and the timeout commit after them) and need
+the same dApp run again before they count as PASS.
+
 ## Phase 10 Rutoken gate
 
 Since v1.57 card errors are coded in Dart and worded without the vendor name, per the redesign's rule that
