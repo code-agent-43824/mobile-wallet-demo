@@ -41,7 +41,7 @@ Entry template:
     - `WalletFlowController(walletConnectResponseTimeout:)`, по умолчанию 30 с. Если после `pair` за это время нет предложения (или `pair` сам не вернулся), показывается `wcPairingNoResponse` («dApp не ответил… обновите страницу и отсканируйте новый QR-код»).
     - `approveSession` без подтверждения за то же время даёт `wcApproveNoResponse`; предложение сбрасывается.
     - `FakeWalletConnectService` получил `proposeOnPair` и `acknowledgeApproval` для тестов.
-  - Локально: анализатор чист, `flutter test` 250/250.
+  - Локально: анализатор чист, `flutter test` 249/249.
 - Next / open: повторить прогон с реальным dApp (строки «Real dApp over WalletConnect v2» в `docs/device-test-matrix.md`): обязательный `eth_signTypedData`, переключение на Mainnet (dApp должен перейти на сеть, кошелёк — показать подтверждение), dApp с «протухшей» страницей (через 30 с — подсказка обновить страницу).
 
 ## 2026-10-29 — Релизный конвейер: сборка всех целей → смок на своей архитектуре → релиз — branch main — in progress
@@ -110,6 +110,10 @@ Entry template:
     - сценарий на macOS (arm64 и x64) 2 минуты висит на загрузке. Причина: при первом старте release-сборка пишет выбор бэкенда в связку ключей, а debug-сборка сценария подписана иначе, и чтение этой записи ждёт системного запроса доступа;
     - исправление: `scripts/smoke/reset_macos_keychain.sh` удаляет записи `flutter_secure_storage_service` между запуском и сценарием;
     - снимок экрана на Intel-раннере пустой (видимо, у `screencapture` нет разрешения на запись экрана); на проверку это не влияет.
+  - Шестой прогон (`ad10b1a`, run 231):
+    - сценарий на macOS дошёл до шага «Пока без биометрии» и упал с `PlatformException -34018` («A required entitlement isn't present»);
+    - причина в `flutter_secure_storage_darwin` 0.3.2: `delete` пробует ещё и synchronizable-связку, а для отсутствующего ключа без entitlement iCloud-связки возвращает её `-34018` вместо «не найдено». Отказ от биометрии удаляет секрет, которого нет, — это сломало бы и выпущенное приложение для macOS;
+    - исправление: `FlutterSecureKeyValueStore.delete` удаляет только существующий ключ (тест `test/secure_key_value_store_test.dart`).
 
 ## 2026-10-29 — Переписать автора в опубликованной истории — branch main — done
 - Plan: по разрешению владельца заменить автора коммита с общими правилами на `coding-agent`, сохранить новые коммиты другого агента и обновить `main` только при совпадении ожидаемого удалённого SHA.

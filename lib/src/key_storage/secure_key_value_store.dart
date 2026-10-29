@@ -40,9 +40,16 @@ class FlutterSecureKeyValueStore implements SecureKeyValueStore {
     return _storage.write(key: key, value: value);
   }
 
+  /// Deletes only what exists. On macOS the plugin also tries the iCloud
+  /// (synchronizable) keychain, which an ad-hoc signed build may not touch;
+  /// for an absent key that attempt's -34018 is what the plugin reports, so
+  /// disabling biometrics that were never on failed.
   @override
-  Future<void> delete(String key) {
-    return _storage.delete(key: key);
+  Future<void> delete(String key) async {
+    if (await _storage.read(key: key) == null) {
+      return;
+    }
+    await _storage.delete(key: key);
   }
 }
 
