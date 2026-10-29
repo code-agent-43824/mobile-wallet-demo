@@ -1017,6 +1017,29 @@ class WalletFlowController extends ChangeNotifier {
     });
   }
 
+  /// Settings toggle for biometric quick unlock (phone vault only). Turning
+  /// it on re-asks for the wallet PIN — the DEK is unwrapped once and stored
+  /// behind biometrics — turning it off just drops the stored secret. The
+  /// card keeps its own read-only summary, so this is never called for it.
+  Future<void> setBiometricsFromSettings(
+    bool enabled, {
+    String? pin,
+  }) async {
+    final backend = activeBackend;
+    if (backend is! KeyStorageBackend) {
+      throw const BiometricUnavailableFailure();
+    }
+    if (enabled && (pin == null || pin.isEmpty)) {
+      throw VaultFailure(_messages.errorBiometricsNoPin);
+    }
+    await _runBusy(_messages.busySavingPinBiometrics, () async {
+      await backend.setBiometricUnlockEnabled(enabled: enabled, pin: pin ?? '');
+      _biometricsEnabled = enabled;
+      _material = null;
+      activeBackend.lock();
+    });
+  }
+
   /// The biometric way through the locked screen. For a card this releases
   /// the stored card PIN — proof enough of who is holding the phone — and
   /// drops it at once, so no NFC tap is needed.

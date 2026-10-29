@@ -215,13 +215,6 @@ class _PinEntryPanelState extends State<_PinEntryPanel> {
         ),
         const SizedBox(height: NocturneSpacing.x8),
         _PinDots(length: _pin.length),
-        const SizedBox(height: NocturneSpacing.x8),
-        _PinKeypad(style: style, onDigit: _append, onBackspace: _backspace),
-        const SizedBox(height: NocturneSpacing.x6),
-        OutlinedButton(
-          onPressed: _pin.isEmpty ? null : _submit,
-          child: Text(widget.confirmLabel ?? l10n.authConfirmAction),
-        ),
         if (widget.biometricsOffered) ...[
           const SizedBox(height: NocturneSpacing.x3),
           TextButton.icon(
@@ -230,6 +223,13 @@ class _PinEntryPanelState extends State<_PinEntryPanel> {
             label: Text(l10n.unlockWithBiometrics),
           ),
         ],
+        const SizedBox(height: NocturneSpacing.x8),
+        _PinKeypad(style: style, onDigit: _append, onBackspace: _backspace),
+        const SizedBox(height: NocturneSpacing.x6),
+        OutlinedButton(
+          onPressed: _pin.isEmpty ? null : _submit,
+          child: Text(widget.confirmLabel ?? l10n.authConfirmAction),
+        ),
         if (widget.onCancel case final VoidCallback cancel) ...[
           const SizedBox(height: NocturneSpacing.x3),
           TextButton(onPressed: cancel, child: Text(l10n.actionCancel)),

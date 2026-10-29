@@ -58,6 +58,8 @@
   "settingsKeyAccess": "Key access",
   "settingsKeyAccessViewOnly": "View only",
   "settingsBiometrics": "Biometrics",
+  "settingsBiometricsBody": "Unlock the wallet with your fingerprint instead of typing the PIN.",
+  "settingsBiometricsEnableReason": "Enter the wallet PIN to turn on biometric unlock.",
   "settingsOn": "On",
   "settingsOff": "Off",
   "settingsSwitchWallet": "Switch wallet",

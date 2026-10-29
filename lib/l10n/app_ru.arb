@@ -34,6 +34,8 @@
   "settingsKeyAccess": "Доступ к ключу",
   "settingsKeyAccessViewOnly": "Только просмотр",
   "settingsBiometrics": "Биометрия",
+  "settingsBiometricsBody": "Разблокировка кошелька отпечатком пальца вместо ввода PIN-кода.",
+  "settingsBiometricsEnableReason": "Введите PIN-код кошелька, чтобы включить биометрический вход.",
   "settingsOn": "Включена",
   "settingsOff": "Выключена",
   "settingsSwitchWallet": "Переключить кошелёк",

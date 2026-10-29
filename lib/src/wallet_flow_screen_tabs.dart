@@ -135,8 +135,10 @@ class _SettingsTab extends StatelessWidget {
     required this.backendLabel,
     required this.currentBackendId,
     required this.biometricsEnabled,
+    required this.biometricsAvailable,
     required this.isHardwareCustody,
     required this.lockOnOpenEnabled,
+    required this.onBiometricsChanged,
     required this.onLockOnOpenChanged,
     required this.onLock,
     required this.onRefresh,
@@ -152,8 +154,13 @@ class _SettingsTab extends StatelessWidget {
   final String backendLabel;
   final String currentBackendId;
   final bool biometricsEnabled;
+  final bool biometricsAvailable;
   final bool isHardwareCustody;
   final bool lockOnOpenEnabled;
+
+  /// Toggles biometric quick unlock. Turning it on carries the wallet PIN
+  /// from the confirmation sheet; turning it off needs no PIN.
+  final Future<void> Function(bool enabled, {String? pin}) onBiometricsChanged;
   final Future<void> Function(bool enabled) onLockOnOpenChanged;
   final VoidCallback onLock;
   final Future<void> Function() onRefresh;
@@ -188,10 +195,23 @@ class _SettingsTab extends StatelessWidget {
           value: l10n.settingsKeyAccessViewOnly,
         ),
         const SizedBox(height: NocturneSpacing.x3),
-        _SummaryTile(
-          label: l10n.settingsBiometrics,
-          value: biometricsEnabled ? l10n.settingsOn : l10n.settingsOff,
-        ),
+        if (isHardwareCustody)
+          _SummaryTile(
+            label: l10n.settingsBiometrics,
+            value: biometricsEnabled ? l10n.settingsOn : l10n.settingsOff,
+          )
+        else
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: biometricsEnabled,
+            // Without biometrics on the device the switch stays off and dimmed;
+            // the reason is on the subtitle, not in an error toast.
+            onChanged: biometricsAvailable
+                ? (enabled) => _toggleBiometrics(context, enabled)
+                : null,
+            title: Text(l10n.settingsBiometrics),
+            subtitle: Text(l10n.settingsBiometricsBody),
+          ),
         const SizedBox(height: NocturneSpacing.x3),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
@@ -239,6 +259,45 @@ class _SettingsTab extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// Toggles biometric quick unlock from Settings. Turning it off is a single
+  /// call; turning it on first asks for the wallet PIN in a sheet — the vault
+  /// unwraps the key once and stores it behind biometrics.
+  Future<void> _toggleBiometrics(BuildContext context, bool enabled) async {
+    if (!enabled) {
+      await onBiometricsChanged(false);
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    final style = PlatformStyle.of(context);
+    final pin = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: NocturneColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: style.sheetBorderRadius),
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: NocturneSpacing.x6,
+            right: NocturneSpacing.x6,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+          ),
+          child: _PinEntryPanel(
+            title: l10n.settingsBiometrics,
+            reason: l10n.settingsBiometricsEnableReason,
+            confirmLabel: l10n.biometricsEnable,
+            biometricsOffered: false,
+            onPin: (pin) => Navigator.of(sheetContext).pop(pin),
+            onBiometrics: () {},
+            onCancel: () => Navigator.of(sheetContext).pop(),
+          ),
+        ),
+      ),
+    );
+    if (pin != null && pin.isNotEmpty) {
+      await onBiometricsChanged(true, pin: pin);
+    }
   }
 
   /// Language picker. Each option is written in its own language, so it stays
