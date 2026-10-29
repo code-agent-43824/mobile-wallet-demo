@@ -51,6 +51,11 @@ Entry template:
     - macOS: продукт «Wallet Demo», entitlements `network.client` и `files.user-selected.read-only`, `MacOsOptions(usesDataProtectionKeychain: false)`.
     - `isDesktopPlatform` включает имитацию биометрии на всех десктопах; текст «На компьютере вход по биометрии имитируется…» на RU и EN.
     - Проверено локально: `flutter build linux --release` собирается, анализатор чист, `flutter test` 239/239. macOS здесь не собрать — проверит CI.
+  - Шаг 2 (сценарий и скрипты):
+    - `integration_test/smoke_test.dart` (dev-зависимость `integration_test`).
+    - `scripts/smoke/`: `linux_session.sh` (Xvfb + D-Bus + разблокированная связка ключей GNOME; с пустым паролем она ждёт ввода в окне, поэтому пароль непустой), `launch_check_desktop.sh` (Linux/macOS), `launch_check_windows.ps1`, `launch_check_ios_simulator.sh`, `install_linux_deps.sh`.
+    - `scripts/android_launch_check.sh` принимает `APK`/`OUT_DIR` и снимает скриншот.
+    - Проверено локально на Linux под Xvfb: сценарий проходит за 8 с, релизная сборка живёт 15 с на экране приветствия. Скрипты для Windows, macOS и iOS здесь не запустить — проверит CI.
 
 ## 2026-10-29 — Переписать автора в опубликованной истории — branch main — done
 - Plan: по разрешению владельца заменить автора коммита с общими правилами на `coding-agent`, сохранить новые коммиты другого агента и обновить `main` только при совпадении ожидаемого удалённого SHA.

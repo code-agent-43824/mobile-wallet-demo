@@ -12,13 +12,14 @@
 #   2. flutter build apk --debug --dart-define-from-file=dart_defines.json
 #   3. MODE=debug bash scripts/android_launch_check.sh
 #
-# Env knobs: MODE (debug|profile|release, default debug), WATCH_SECONDS (20).
+# Env knobs: MODE (debug|profile|release, default debug), APK (default: the
+# MODE build's path), OUT_DIR (build/launch-logs), WATCH_SECONDS (20).
 set -uo pipefail
 
 MODE="${MODE:-debug}"
 PKG="com.example.mobile_wallet_demo"
-APK="build/app/outputs/flutter-apk/app-${MODE}.apk"
-OUT_DIR="build/launch-logs"
+APK="${APK:-build/app/outputs/flutter-apk/app-${MODE}.apk}"
+OUT_DIR="${OUT_DIR:-build/launch-logs}"
 FULL_LOG="$OUT_DIR/logcat-full.txt"
 CRASH_LOG="$OUT_DIR/logcat-crash.txt"
 WATCH_SECONDS="${WATCH_SECONDS:-20}"
@@ -74,6 +75,9 @@ for i in $(seq 1 "$WATCH_SECONDS"); do
   fi
   sleep 1
 done
+
+echo "== Screenshot =="
+adb exec-out screencap -p > "$OUT_DIR/screenshot.png" 2>/dev/null || echo "  (no screenshot)"
 
 echo "== Dumping logs =="
 adb logcat -d -v time > "$FULL_LOG" 2>/dev/null || true
