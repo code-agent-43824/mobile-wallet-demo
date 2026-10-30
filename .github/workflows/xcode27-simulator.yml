@@ -1,0 +1,30 @@
+name: Xcode 27 simulator smoke
+
+# Runs the same isolated simulator check documented for a local Mac. The
+# standard macos-latest image uses Xcode 26, so this preview runner is explicit.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Build, launch and restore wallet
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: ./.github/actions/setup-flutter
+
+      - name: Xcode 27 simulator smoke
+        run: bash scripts/smoke/xcode27_simulator.sh
+
+      - name: Save simulator evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: xcode27-simulator-smoke
+          path: build/smoke/xcode27-*/
+          if-no-files-found: warn
+          retention-days: 14
