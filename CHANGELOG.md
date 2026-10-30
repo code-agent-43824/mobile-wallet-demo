@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.60.0] - 2026-10-30
+
 ### Added
 
 - Сборки для компьютеров: Windows x64 и arm64, Linux x64 и arm64, macOS (universal). Ограничения те же, что

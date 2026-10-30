@@ -37,7 +37,7 @@ Current factual status of the project:
 milestone is an optional Rutoken custody backend for Android/iOS whose signing keys stay non-exporting after
 recoverable provisioning and which supports the same own-send, WalletConnect, and EIP-4527 AirGap flows.
 
-- **NOW — v1.59.0+70:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
+- **NOW — v1.60.0+72:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
   MetaMask-compatible EIP-4527 AirGap, per-operation authentication, hardened QR scanning, and the
   Rutoken custody/signature foundation, physically validated Android read/sign/provisioning, and the registered
   production backend are built. A compatible pre-provisioned card can be adopted read-only without rewriting its
@@ -49,6 +49,8 @@ recoverable provisioning and which supports the same own-send, WalletConnect, an
   the iOS scene manifest (a launch blocker on the Xcode 27 SDK) and runs without cards, instead of crashing,
   where the card libraries cannot load. v1.59 moves biometrics to `local_auth` 3 (UIScene-compatible on iOS) and
   words lockout and not-enrolled failures itself, since the plugin no longer shows system error dialogs.
+  v1.60 adds desktop builds (Windows arm64, Linux x64/arm64, macOS) and a GitHub release pipeline that smoke-tests
+  each build on a runner of its own architecture before publishing anything.
 - **NEXT — Phase 10 completion:** the deferred physical matrix was executed in full on v1.51.0+62
   (Nothing Phone 3a / Android 16, 2026-08-17) and **Android now passes every required row except one**:
   Rutoken-backed WalletConnect `personal_sign`/EIP-712/transaction, EIP-4527 AirGap export + live-camera scan +
@@ -61,7 +63,6 @@ recoverable provisioning and which supports the same own-send, WalletConnect, an
   crash/log-output review, which needs adb capture. The exact iOS vendor framework has been received and
   retained privately; Swift integration and physical iOS validation remain, with redistribution/build-delivery
   terms still unresolved.
-- **NEXT — релизный конвейер (2026-10-29, готов; первый выпуск через него — v1.60.0):** каждая цель собирается на своём раннере, затем проходит смок на раннере той же архитектуры; релиз публикует все артефакты только после всех смоков. Добавляются Linux, macOS и Windows arm64. Ход работ — в `docs/worklog.md`.
 - **NEXT — WalletConnect: находки прогона с реальным dApp (2026-10-29, исправлено в коде, ждёт повторного прогона):** поддержка `eth_signTypedData`, честное переключение сети (`chainChanged`, `updateSession`, коды EIP-1193/3326), таймауты пейринга и подтверждения с понятной подсказкой. Ход работ — в `docs/worklog.md`, наблюдения — в `docs/device-test-matrix.md`.
 - **LATER:** broader device/platform integration tests, and only then additional chains/accounts if product
   scope changes. Not Phase 10 prerequisites. (Lock-on-open, coded domain errors and the add-card screen moved
@@ -836,6 +837,10 @@ possible, since the owner has a second card.
   alignment check ignores 32-bit libs
 - `v1.59` — `local_auth` 3.0.2 (`local_auth_darwin` 2.0.5 is UIScene-compatible): `LocalAuthException` codes map to
   cancel / unavailable / a new «биометрия заблокирована» lockout message / failure
+- `v1.60` — desktop builds (Windows x64/arm64, Linux x64/arm64, macOS universal; the Windows limits apply); the
+  release pipeline in `ci.yml` (per-target workflows, smoke on a same-architecture runner, release only after every
+  smoke); WalletConnect fixes from the real-dApp run (`eth_signTypedData`, chain switch with `chainChanged` and
+  EIP-1193/3326 codes, pairing/approval timeouts)
 
 ## Current non-goals and validation limits
 - no iOS hardware-device SDK implementation yet; Android physical signing passed on v1.51, while the v1.55
