@@ -3,11 +3,14 @@
 # that the built simulator app launches and stays alive, then runs the in-app
 # scenario from a clean install.
 #
-#   bash scripts/smoke/ios_simulator_smoke.sh <path/to/App.app>
+#   bash scripts/smoke/ios_simulator_smoke.sh <path/to/App.app> [simulator-udid]
 set -euo pipefail
 
 app="$1"
-udid="$(xcrun simctl list devices available -j | python3 -c '
+if [ "$#" -ge 2 ]; then
+  udid="$2"
+else
+  udid="$(xcrun simctl list devices available -j | python3 -c '
 import json, sys
 devices = json.load(sys.stdin)["devices"]
 for runtime in sorted(devices, reverse=True):
@@ -19,6 +22,7 @@ for runtime in sorted(devices, reverse=True):
             sys.exit(0)
 sys.exit("no available iPhone simulator")
 ')"
+fi
 echo "== Booting simulator $udid =="
 xcrun simctl boot "$udid" 2>/dev/null || true
 xcrun simctl bootstatus "$udid" -b
@@ -26,5 +30,4 @@ xcrun simctl bootstatus "$udid" -b
 bash scripts/smoke/launch_check_ios_simulator.sh "$app" "$udid"
 bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")"
 xcrun simctl uninstall "$udid" "$bundle_id" || true
-flutter test integration_test/smoke_test.dart -d "$udid" \
-  --dart-define-from-file=dart_defines.json
+dart scripts/smoke/persistence_smoke.dart "$udid"

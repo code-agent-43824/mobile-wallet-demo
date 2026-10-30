@@ -79,7 +79,7 @@ jobs:
         run: bash scripts/smoke/reset_macos_keychain.sh
 
       - name: Scenario
-        run: flutter test integration_test/smoke_test.dart -d macos --dart-define-from-file=dart_defines.json
+        run: dart scripts/smoke/persistence_smoke.dart macos
 
       - id: result
         run: echo "result=passed" >> "$GITHUB_OUTPUT"
@@ -127,7 +127,7 @@ jobs:
         run: bash scripts/smoke/reset_macos_keychain.sh
 
       - name: Scenario
-        run: flutter test integration_test/smoke_test.dart -d macos --dart-define-from-file=dart_defines.json
+        run: dart scripts/smoke/persistence_smoke.dart macos
 
       - id: result
         run: echo "result=passed" >> "$GITHUB_OUTPUT"

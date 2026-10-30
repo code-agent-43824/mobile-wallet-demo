@@ -71,7 +71,7 @@ jobs:
         run: ./scripts/smoke/launch_check_windows.ps1 -Exe dist/app/WalletDemo.exe
 
       - name: Scenario
-        run: flutter test integration_test/smoke_test.dart -d windows --dart-define-from-file=dart_defines.json
+        run: dart scripts/smoke/persistence_smoke.dart windows
 
       - id: result
         run: Add-Content -Path $env:GITHUB_OUTPUT -Value "result=passed"

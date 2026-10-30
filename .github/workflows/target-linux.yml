@@ -78,7 +78,7 @@ jobs:
         run: bash scripts/smoke/linux_session.sh bash scripts/smoke/launch_check_desktop.sh dist/WalletDemo/WalletDemo
 
       - name: Scenario
-        run: bash scripts/smoke/linux_session.sh flutter test integration_test/smoke_test.dart -d linux --dart-define-from-file=dart_defines.json
+        run: bash scripts/smoke/linux_session.sh dart scripts/smoke/persistence_smoke.dart linux
 
       - id: result
         run: echo "result=passed" >> "$GITHUB_OUTPUT"

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Выпускной smoke на iOS-симуляторе и настольных системах проверяет восстановление того же
+  адреса после перезапуска приложения. Для локального прогона на Xcode 27 добавлена команда
+  `scripts/smoke/xcode27_simulator.sh`.
+
 ## [1.60.0] - 2026-10-30
 
 ### Added

@@ -11,4 +11,5 @@ OUT_DIR="${OUT_DIR:-build/smoke}" WATCH_SECONDS="${WATCH_SECONDS:-30}" APK="$apk
 adb uninstall com.example.mobile_wallet_demo >/dev/null 2>&1 || true
 flutter test integration_test/smoke_test.dart \
   -d "${ANDROID_SERIAL:-emulator-5554}" \
+  --plain-name 'a new wallet reaches the dashboard' \
   --dart-define-from-file=dart_defines.json
