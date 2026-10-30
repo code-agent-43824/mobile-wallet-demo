@@ -1,11 +1,11 @@
 # NFC / PKCS#11 hardware-signer integration notes (Phase 10 reference)
 
 > **Audience:** coding agents maintaining the PKCS#11/NFC custody signer.
-> Read it together with `docs/development-plan.md` (Phase 10) and `AGENTS.md`.
+> Read it together with `docs/ROADMAP.md` (Phase 10 exit criteria), `docs/STATUS.md` and `AGENTS.md`.
 >
 > **Status:** reference and historical implementation notes from v1.46–v1.47.
 > The selectable Android backend and physical provisioning validation were completed later;
-> current status and remaining hardware checks are in `docs/development-plan.md` and
+> current status and remaining hardware checks are in `docs/STATUS.md` and
 > `docs/device-test-matrix.md`. Every constant/recipe below is cross-checked against the **two
 > official Aktiv-Soft / Rutoken demo wallets** (iOS Swift + Android Kotlin) and
 > the vendor C headers they ship — see Provenance.
@@ -458,7 +458,7 @@ local-secret contract by copying token secrets into app memory.
 - **10.6 — UX and iOS:** real tap/PIN/progress/cooldown/retry UI, removal of mock controls, then the equivalent
   vendor iOS adapter and physical-device matrix.
 
-The authoritative exit criteria are in `docs/development-plan.md`. In particular, success/error/cancel/NFC-loss
+The authoritative exit criteria are in `docs/ROADMAP.md`. In particular, success/error/cancel/NFC-loss
 must all close the authenticated session. No seed or private key may enter logs, errors, or long-lived Dart
 models; provisioning is the narrow exception for transient software generation/import and mandatory one-time backup.
 ## 10. Open questions to confirm on a real token
@@ -489,4 +489,4 @@ path convention = caller ORs `0x80000000` = §5.3.)
 - This repo: `key_storage/external_device_demo_backend.dart`,
   `key_storage/external_device_pkcs11.dart`, `auth/wallet_operation_auth.dart`,
   `transactions/transaction_service.dart` (`assembleSignedTransfer`),
-  `docs/development-plan.md` (Phase 10).
+  `docs/archive/development-plan-through-v1.60.md` (Phase 10 history).

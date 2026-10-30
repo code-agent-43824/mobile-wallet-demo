@@ -93,7 +93,7 @@ Add exact token model, firmware, SDK version, device/OS, and issue/evidence link
 | Cancel, wrong PIN, timeout, NFC loss, SDK error | PARTIAL v1.51 | BLOCKED | Physical cancel, timeout, and one invalid-PIN attempt passed on 2026-08-17; the next valid operation passed. Card removal mid-operation tears down correctly but reported a generic error instead of `rutoken_nfc_lost` on v1.51; the v1.55 presence-based fix needs a hardware RETEST; blocked-PIN and arbitrary SDK-error paths have automated coverage only, not physical evidence. |
 | Secret-containment review | PARTIAL v1.51 | BLOCKED | Static source/tests confirm public-profile separation, mutable provisioning-buffer clearing, no native secret logging, and fixed generic platform errors that discard raw vendor diagnostics; physical crash/log-output review remains. |
 
-Phase 10 is complete only when the corresponding Definition of Done in `docs/development-plan.md` and every
+Phase 10 is complete only when the corresponding exit criteria in `docs/ROADMAP.md` and every
 required row above pass on physical Android; iOS support is complete only after its equivalent column passes.
 
 ## Phase 14 two-card gate (14.5)

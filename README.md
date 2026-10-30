@@ -1,136 +1,22 @@
 # mobile-wallet-demo
 
-Flutter-демо single-account EVM-кошелька с рабочим phone vault, WalletConnect и
-MetaMask-совместимым AirGap signer.
+Flutter-демо EVM-кошелька с хранилищем телефона, WalletConnect и
+MetaMask-совместимым AirGap. Объём продукта и критерии этапов описаны в дорожной карте.
 
-**Сейчас:** v1.60 поддерживает Mainnet/Sepolia, локальные переводы, wallet-side WalletConnect,
-EIP-4527/BC-UR AirGap и авторизацию на каждую операцию. Реальный Android Rutoken backend
-может создать/импортировать ключ либо без перезаписи принять уже готовую совместимую карту:
-read-only профиль загружается без NFC, адрес каждой поднесённой карты сверяется с профилем,
-а PIN после явного согласия можно заменить системной биометрией смартфона. На телефоне можно
-зарегистрировать несколько карт и переключаться между ними. Интерфейс — тёмная тема Nocturne,
-четыре вкладки, русский и английский языки (включая тексты ошибок); каждая подпись проходит в одной
-шторке: PIN → подпись или касание карты → результат. По желанию приложение запрашивает PIN при открытии.
-Библиотеки карты есть только под arm64-v8a, поэтому на эмуляторах x86_64 и 32-битных телефонах приложение
-работает без карт (временно, до библиотек под эти ABI).
-**Следующий milestone:** физически перепроверить исправление потери NFC и пройти dogfood на двух картах,
-затем перенести доказанный контур на iOS. Подробная карта NOW / NEXT / LATER — в
-[`docs/development-plan.md`](docs/development-plan.md).
-Live/native release evidence is tracked separately in
-[`docs/device-test-matrix.md`](docs/device-test-matrix.md).
-
-## Что уже есть
-
-- Flutter-проект с платформами: Android, iOS, Windows x64/arm64, Linux x64/arm64, macOS
-- Базовый Secure Vault foundation для phone backend
-- Полноценный onboarding/auth shell:
-  - welcome screen
-  - выбор create / import
-  - обязательный PIN setup
-  - one-time seed display flow
-  - biometric choice flow
-  - реальный biometric unlock на Android/iOS
-  - имитация biometric unlock на Windows
-  - locked / unlocked app states
-- Read-only EVM foundation:
-  - Ethereum Mainnet + Sepolia
-  - публичный RPC provider layer с fallback
-  - чтение native balance
-  - чтение latest base fee
-  - чтение token balances через публичный explorer API
-  - чтение recent transaction history
-  - локальный кэш последнего успешного snapshot для offline/fallback сценария
-  - подготовка перевода: asset selection, address validation, amount entry, gas preview
-  - локальная подпись prepared transaction
-  - загрузка nonce через публичный RPC
-  - RPC broadcaster abstraction для raw transaction submission
-  - UI-состояния отправки: pending / success / failure
-  - post-submit transaction tracking без блокировки UI
-  - retry/replacement flow с автоматическим gas bump для underpriced ошибок
-  - ручное обновление данных
-- Контракты для `KeyStorageBackend`, модель выбора backend и совместимый signing/auth foundation под будущий внешний hardware backend
-- Rutoken-ready custody foundation: secret-free account/session/native-adapter contracts, software-retained public
-  xpub metadata, provisioning seams, raw `r‖s` normalization/recovery и byte-compatible EIP-155/EIP-1559/message signing
-- Реальный Android Rutoken transport spike: официальный NFC PC/SC + PKCS#11/JNA stack, лицензированный ARM64
-  `libwtpkcs11ecp.so`, lifecycle/session teardown, derivation публичного адреса и дочернего ключа строго как в
-  официальном примере, raw `CKM_ECDSA` и безопасная диагностика физического устройства из welcome screen;
-  xpub/chain code у токена не запрашиваются
-- Recoverable Rutoken provisioning: импорт существующей BIP-39 seed/passphrase либо генерация 24 слов в
-  приложении с обязательным подтверждением offline backup; на карту записываются только raw BIP32 master key +
-  chain code через показанный в официальном примере `C_CreateObject`, а на телефоне сохраняются только публичные
-  account-xpub metadata
-- Production Rutoken backend: после provisioning он становится активным кошельком, восстанавливает публичный
-  адрес после cold start без карты и направляет own-send, WalletConnect transaction/message/EIP-712 и EIP-4527
-  AirGap через один transient NFC/PIN signer без `WalletMaterial`
-- Existing-card + biometric PIN flow: готовый совместимый Рутокен регистрируется по публичному адресу/пути без
-  `C_CreateObject`; xpub остаётся опциональным, каждая карта сверяется с зарегистрированным адресом, а после
-  первого успешного PIN-сеанса приложение один раз предлагает сохранить PIN в отдельном biometric-gated
-  secure storage для последующих операций через системную биометрию
-- Android Rutoken lifecycle hardening: ожидание NFC можно отменить из progress overlay; timeout, неверный/
-  заблокированный PIN и потеря карты имеют стабильные безопасные сообщения; первичная ошибка операции не
-  маскируется вторичной ошибкой teardown
-- Несколько карт (Phase 14): список зарегистрированных карт с адресом и серийным номером, выбор активной,
-  «Забыть карту» и отдельный экран «Новая карта» (подключить готовую, создать ключ, записать seed-фразу);
-  каждая операция по-прежнему привязана к адресу выбранной карты
-- Интерфейс Nocturne (Phase 13): тёмная тема, четыре вкладки (Кошелёк / Активность / Связи / Настройки),
-  раздельные паттерны iOS и Android, онбординг «Кошелёк за минуту»; единое подтверждение операций
-  (PIN → подпись/касание карты → результат в одной шторке)
-- Защита при открытии (опционально, в «Настройках»): экран блокировки при запуске и после минуты в фоне;
-  телефонный кошелёк открывается PIN или биометрией, карта — PIN и касанием (без подписи)
-- WalletConnect v2 wallet-side flow: QR pairing, queued inbound transaction/message/typed-data requests,
-  `wallet_switchEthereumChain` для Mainnet/Sepolia, бесшумный EIP-5792 `wallet_getCapabilities` и локальная
-  подпись после RPC-симуляции/безопасного gas+fee preview
-- MetaMask-compatible AirGap signer (EIP-4527/BC-UR): публичный `crypto-hdkey` QR для добавления аккаунта,
-  single/multipart camera scan транзакции (full-frame, high-resolution + Android auto-zoom), проверяемый
-  Mainnet/Sepolia preview и `eth-signature` QR после PIN
-- Android vault persistence: crash-safe migration/current secure-storage implementation, synchronous durable writes,
-  recovery from a stale backend-selection record и отключённый Auto Backup для keystore-зашифрованных данных
-- Русская и английская локализация интерфейса: язык берётся из настроек приложения, затем из системного,
-  иначе русский; переключатель — в разделе «Настройки»
-- Unit- и widget-тесты для ключевых flow
-- GitHub Actions для сборки, проверки запуска и публикации артефактов; основной CI/CD — во внутреннем GitLab (SAST, тесты,
-  Android APK, Pages, релизы по тегам)
-- Артефакты iOS / Windows без двойной упаковки
+Текущее состояние и версия — в [STATUS](docs/STATUS.md), ближайшие действия — в
+[PLAN](docs/PLAN.md), этапы продукта — в [ROADMAP](docs/ROADMAP.md). Результаты
+проверок на устройствах и живых сервисах — в
+[матрице проверок](docs/device-test-matrix.md).
 
 ## Версионирование
 
-- Текущая версия: `v1.60.0+72`
-- По договорённости в этом проекте дальше повышаем minor-версию с каждым функциональным шагом
-
-## Что покрывает текущий этап
-
-- архитектурный skeleton проекта
-- secure vault foundation
-- onboarding/auth shell
-- генерация новой BIP-39 seed phrase
-- импорт существующей seed phrase
-- one-time показ seed-фразы после создания нового кошелька
-- хранение seed в зашифрованном виде
-- derivation первого EVM-адреса (`m/44'/60'/0'/0/0`)
-- read-only dashboard без авторизации; PIN/биометрия запрашиваются для каждой private-key операции
-- biometric unlock после PIN setup: реальный на Android/iOS, имитационный на Windows
-- выбор между Ethereum Mainnet и Sepolia
-- read-only чтение нативного баланса и base fee из публичных RPC
-- fallback между несколькими RPC endpoints
-- read-only чтение token balances из публичного explorer layer
-- read-only экран recent transaction history
-- локальный cache fallback для последнего успешного blockchain snapshot
-- send preparation screen с address validation, amount entry, asset selection и preview gas/fee
-- локальная EIP-1559 подпись native/ERC-20 transfer после свежего auth flow на каждую операцию
-- загрузка nonce через public RPC перед подписанием
-- raw transaction submission abstraction с публичным RPC broadcaster
-- видимые UI-состояния отправки: pending / success / failure
-- post-submit transaction tracking без блокировки отправочного UI
-- retry/replacement flow с повышением gas price при underpriced reject
-- foundation для multi-backend runtime: selection model + backend-compatible signing/auth contracts
-- реальный Rutoken backend вместо прежней симуляции внешнего устройства (симуляция удалена в v1.53)
-- security hardening: DEK-схема хранения seed (PIN не персистится), биометрия через отдельный gated secret store, PBKDF2 600k + lockout после серии неверных PIN
-- transaction-layer cleanup: общий базовый signer, запас по base fee, тесты на failure-отправку и реконсиляцию nonce
+Источник версии приложения — `pubspec.yaml` (`version`). По договорённости с каждым
+функциональным шагом повышается минорная версия. История выпусков — в [CHANGELOG](CHANGELOG.md).
 
 ## Артефакты CI
 
-Workflow публикует артефакты сборки. Релиз v1.60.0 содержит восемь файлов с префиксом
-`mobile-wallet-demo-1.60.0-`:
+Workflow публикует артефакты сборки. Релиз содержит восемь файлов с префиксом
+`mobile-wallet-demo-<version>-`:
 
 - Android: `android.apk`;
 - iOS Simulator: `ios-simulator.zip` — внутри `Wallet Demo.app`;

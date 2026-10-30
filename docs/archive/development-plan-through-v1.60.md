@@ -1,0 +1,865 @@
+# Архив плана до v1.60
+
+Снимок перенесён без сокращений 2026-10-30. Ниже — исходный текст на момент миграции;
+упоминания «current», «NOW» и «NEXT» являются историческими. За текущим состоянием
+обращайтесь к [`../STATUS.md`](../STATUS.md), за действиями — к [`../PLAN.md`](../PLAN.md),
+за направлением — к [`../ROADMAP.md`](../ROADMAP.md).
+
+---
+
+# Mobile Wallet Demo — Development Plan
+
+This file is the canonical development plan for the project. Use it as the source of truth while implementing future tasks.
+
+## Status snapshot
+
+Current factual status of the project:
+- ✅ CI builds Android, iOS Simulator/Device, Windows x64/arm64, Linux x64/arm64 and macOS on GitHub Actions;
+  the v1.60.0 release ran smoke checks on the supported runner architectures. The GitLab
+  pipeline runs blocking SAST, tests, an Android APK build, Pages and tag releases. Since v1.56 CI follows the latest Flutter
+  stable instead of a pinned version; the Android build uses Flutter's AGP 9 template flags, with
+  `android.builtInKotlin=false` kept only for `walletconnect_pay`
+- ✅ Phase 0 is effectively completed
+- ✅ Phase 1 is implemented as a user-facing flow
+- ✅ Phase 2 is implemented, including real biometric integration on Android/iOS and a Windows demo simulation path
+- ✅ Phase 3 is implemented
+- ✅ Phase 4 is implemented
+- ✅ Phase 5 is implemented
+- ✅ Phase 6 is implemented end-to-end, including retry/replacement handling and post-submit transaction lifecycle tracking
+- ✅ Phase 7 is completed as a foundation layer: backend selection model, backend-compatible signing/auth contracts, demo external-device runtime path, mock device lifecycle, and mock PKCS#11 session/operation contracts are in place; real NFC SDK integration is intentionally still out of scope for this phase
+- ✅ Phase 8 — only the WC v2 codec (`WalletConnectV2RequestCodec`) and the vault `TransactionService.assembleSignedTransfer` seam survive. The obsolete custom AirGap codec was removed in Phase 12.5; the **outbound** direction originally shipped by Phase 8 was removed in chunk 9.0
+- ✅ Phase 9 (real **wallet-side** inbound signing — WalletConnect v2 + AirGap — plus a connections screen and an incoming-request approval flow) is **feature-complete**. WalletConnect is device-validated on Android through a confirmed Sepolia broadcast; AirGap now uses the MetaMask-compatible EIP-4527 / BC-UR implementation completed in Phase 12
+- 🟡 Phase 10 is **in progress**: library-independent custody/EVM assembly, physically validated Android
+  read/sign/provisioning and production-backend wiring are implemented. The full Android signing matrix
+  (WalletConnect, EIP-4527 AirGap, different-card rejection, invalid PIN, cancel/timeout) passed owner dogfood on
+  v1.51.0+62; the NFC-loss categorization fix shipped in v1.55.0+66 awaits its hardware rerun, and the physical
+  log/crash review and iOS remain
+- ✅ Phase 11 is complete: read-only app open plus fresh authentication for every private-key operation
+- ✅ Phase 12 is complete: MetaMask-compatible EIP-4527 / BC-UR AirGap signer
+- ✅ Phase 13 (Nocturne redesign + RU/EN localization) is complete in v1.57.0+68: the 13.5 deviation is closed
+  (one sheet walks PIN → signing/tap → result) and domain errors are coded, so the English UI is whole
+- 🟡 Phase 14 (multiple registered cards) is built and CI green (14.1–14.4 in v1.55, the «Новая карта» screen in
+  v1.57); 14.5, the physical two-card dogfood, is the remaining exit criterion
+
+## Direction
+
+**North star:** Wallet Demo is a single-account EVM wallet with a production-like phone vault. The next
+milestone is an optional Rutoken custody backend for Android/iOS whose signing keys stay non-exporting after
+recoverable provisioning and which supports the same own-send, WalletConnect, and EIP-4527 AirGap flows.
+
+- **NOW — v1.60.0+72:** phone-vault custody, Mainnet/Sepolia reads and sends, wallet-side WalletConnect,
+  MetaMask-compatible EIP-4527 AirGap, per-operation authentication, hardened QR scanning, and the
+  Rutoken custody/signature foundation, physically validated Android read/sign/provisioning, and the registered
+  production backend are built. A compatible pre-provisioned card can be adopted read-only without rewriting its
+  key; every later card is bound to the registered address; an explicit one-time opt-in can keep the PIN in a
+  separate biometric-gated secret store; and Android NFC discovery is cancellable with stable sanitized
+  PIN/timeout/NFC-loss errors and primary-failure-preserving teardown. Every signature and card operation
+  walks one sheet (PIN → signing or card tap → result), failures are coded and read in RU or EN, another card
+  is added from its own «Новая карта» screen, and an optional lock-on-open privacy screen exists. v1.58 restores
+  the iOS scene manifest (a launch blocker on the Xcode 27 SDK) and runs without cards, instead of crashing,
+  where the card libraries cannot load. v1.59 moves biometrics to `local_auth` 3 (UIScene-compatible on iOS) and
+  words lockout and not-enrolled failures itself, since the plugin no longer shows system error dialogs.
+  v1.60 adds desktop builds (Windows arm64, Linux x64/arm64, macOS) and a GitHub release pipeline that smoke-tests
+  each build on a runner of its own architecture before publishing anything.
+- **NEXT — Phase 10 completion:** the deferred physical matrix was executed in full on v1.51.0+62
+  (Nothing Phone 3a / Android 16, 2026-08-17) and **Android now passes every required row except one**:
+  Rutoken-backed WalletConnect `personal_sign`/EIP-712/transaction, EIP-4527 AirGap export + live-camera scan +
+  signature return, different-card rejection (a second card is now available), and invalid-PIN handling all pass,
+  with both Sepolia broadcasts verified on-chain (`0xe22d7a84…47e5`, `0x9ff1e06b…5a6e`). Two items remain:
+  (1) the NFC-loss classification defect — removing the card mid-operation reported the generic native error
+  instead of the specified message. **A fix shipped in v1.55.0+66 and needs the negative-path rerun**: the
+  native layer no longer pattern-matches the vendor diagnostic but asks the slot-event listener whether the
+  card is still present, which is the fact the user needs whatever the library called it; (2) the physical
+  crash/log-output review, which needs adb capture. The exact iOS vendor framework has been received and
+  retained privately; Swift integration and physical iOS validation remain, with redistribution/build-delivery
+  terms still unresolved.
+- **NEXT — WalletConnect: находки прогона с реальным dApp (2026-10-29, исправлено в коде, ждёт повторного прогона):** поддержка `eth_signTypedData`, честное переключение сети (`chainChanged`, `updateSession`, коды EIP-1193/3326), таймауты пейринга и подтверждения с понятной подсказкой. Ход работ — в `docs/worklog.md`, наблюдения — в `docs/device-test-matrix.md`.
+- **LATER:** broader device/platform integration tests, and only then additional chains/accounts if product
+  scope changes. Not Phase 10 prerequisites. (Lock-on-open, coded domain errors and the add-card screen moved
+  from here into v1.57.)
+- **Tech debt — cards on other ABIs (owner, v1.58):** `libwtpkcs11ecp.so` ships for arm64-v8a only and the
+  PC/SC bridge has no x86_64 build, so x86_64 emulators and 32-bit phones run card-less: the transport, the
+  runtime and the channel are skipped unless the process runs as arm64 (Kotlin `os.arch`, Dart `Abi.current()`),
+  and the card actions give way to «Аппаратные карты на этом устройстве пока не поддерживаются.». The owner is
+  obtaining the vendor libraries for the other ABIs; with them, drop the gate and run the card rows there.
+
+History is preserved in the phase sections and `docs/worklog.md`; the operational source of truth is the
+NOW / NEXT / LATER summary above plus the Phase 10 exit criteria below.
+
+Completed deliverables so far:
+- ✅ project module structure started (`auth`, `key_storage`)
+- ✅ interfaces for key storage backends
+- ✅ placeholder external-device backend contract
+- ✅ phone secure vault foundation:
+  - BIP-39 seed generation
+  - seed import
+  - encrypted-at-rest seed storage
+  - first EVM address derivation
+  - PIN unlock session primitive
+- ✅ unit tests for create/import/unlock flow
+- ✅ read-only RPC foundation for Ethereum Mainnet and Sepolia
+- ✅ read-only wallet experience with token balances, history, and local cache fallback
+- ✅ transfer preparation flow with preview-only validation and gas estimation
+- ✅ local EIP-1559 signing for native / ERC-20 prepared transfers
+- ✅ public-RPC nonce loading for send flow
+- ✅ raw transaction submission abstraction with public RPC broadcaster
+- ✅ send flow UI states: pending / success / failure
+
+Implemented near-term UX/security items:
+- ✅ onboarding UI flow
+- ✅ one-time seed phrase display screen
+- ✅ biometric enable flow (real platform integration on Android/iOS, simulated path on Windows)
+- ✅ locked / uninitialized app shell states
+
+## Core architectural decision
+
+For the phone-based wallet backend we will **not** model the wallet as a literal non-exportable Secure Enclave key, because that conflicts with the product requirement to:
+- generate a seed phrase and show it once for backup;
+- import a seed phrase.
+
+Instead we use a **Phone Secure Vault** model:
+- seed is generated or imported in app logic;
+- seed is encrypted at rest;
+- encryption keys are protected by platform secure hardware where available;
+- PIN is mandatory;
+- biometrics may be enabled only after PIN setup and act as a convenience unlock path;
+- one PIN prompt per high-level signing operation.
+
+This keeps the UX compatible with future support for an external NFC hardware signer.
+
+## Product scope agreed so far
+
+### Wallet lifecycle
+- Create wallet inside the app
+- Show seed phrase once for backup
+- Import wallet from seed phrase
+
+### Networks for first functional version
+- Ethereum Mainnet
+- Ethereum Sepolia testnet
+
+### Security model
+- Mandatory PIN for wallet usage
+- Biometrics can be enabled only after PIN setup
+- PIN is required for operations with the private key
+- Within one operation, ask for PIN only once
+- Biometric unlock is routed through a dedicated biometric secret store (`key_storage/biometric_secret_store.dart`): the seed is encrypted under a random DEK, the PIN is never persisted, no usable key is co-located with the seed ciphertext, PBKDF2 runs at 600k iterations, and repeated wrong PINs trigger a temporary lockout. Full hardware-bound biometric key release (native keystore) remains follow-up hardening.
+
+### Hardware custody path (Phase 10; Android implemented, iOS pending)
+- Replace the current simulation with a non-exporting Rutoken backend
+- The user chooses one custody backend:
+  - phone secure vault;
+  - external hardware device
+- Both backends expose the same public-account and signing capabilities, but not the same secret-bearing API:
+  - phone vault may unlock local material for its internal signer;
+  - hardware custody exposes public account metadata and authenticated signing sessions only;
+  - a real hardware backend must never return a mnemonic or private key to Dart.
+- If the user uses only one backend, they have only one PIN source:
+  - phone PIN for phone vault;
+  - device PIN for external device
+
+### Blockchain access
+- Connect through public caching servers/providers
+- Support manual refresh from blockchain
+- Show:
+  - token balances
+  - estimated gas
+  - recent transaction history
+- Allow sending assets by entering:
+  - destination address
+  - amount
+- Gas should be estimated automatically
+
+### Implemented protocol integrations
+- WalletConnect v2 wallet-side pairing and inbound transaction/message/EIP-712 signing
+- MetaMask-compatible EIP-4527 / BC-UR AirGap account export and transaction signing
+
+## Implementation principles
+
+1. Start from simple read-safe functionality, then move to signing and sending.
+2. Keep code simple and readable.
+3. Build around stable interfaces first, especially for key storage backends.
+4. Separate UI, domain logic, security/auth, blockchain access, and storage.
+5. Every project change should be committed, pushed, and validated via GitHub Actions.
+
+## Recommended architecture
+
+### Main modules
+- `auth` — PIN, biometric unlock, operation auth context
+- `wallet_core` — wallet domain models and use cases
+- `key_storage` — backend contracts and implementations
+- `blockchain` — RPC/indexer providers, balances, fees, history
+- `transactions` — transaction building, preview, signing, sending
+- `ui` — screens, navigation, presentation state
+
+### Key interfaces to design early
+- `KeyStorageBackend`
+- `AuthGate`
+- `WalletRepository`
+- `BlockchainProvider`
+- `TokenBalanceService`
+- `HistoryService`
+- `TransactionService`
+
+### As built (reality vs. the recommendation above)
+The shipped code deliberately consolidated the recommendation, so a new agent should not expect to find all of the modules/interfaces above:
+- Modules under `lib/src/`: `auth/`, `airgap/`, `blockchain/`, `key_storage/`, `qr/`, `transactions/`, and
+  `walletconnect/`, plus UI files under `wallet_flow_screen*.dart`. There is no separate `wallet_core/` or
+  `ui/` directory.
+- Domain state and actions live in the widget-free `WalletFlowController`; `WalletFlowScreen` is a thin
+  listener/composition root and the `part` files hold presentation widgets.
+- `KeyStorageBackend`, `BlockchainProvider`, and `TransactionService` exist as designed. `AuthGate` / `WalletRepository` / `TokenBalanceService` / `HistoryService` were **not** created as separate interfaces: auth is split across `BiometricAuthGateway` + `WalletOperationAuthorizer`, and token/history reads are folded into `BlockchainProvider.loadSnapshot` (`WalletChainSnapshot`).
+- Treat `CLAUDE.md` as the detailed map of the current code; this section distinguishes the original aspiration
+  from the present layout.
+
+## Development roadmap
+
+## Phase 0 — architectural skeleton
+Goal: create clean module boundaries before feature growth.
+
+Status: ✅ Completed
+
+Deliverables:
+- [x] project module structure
+- [x] interfaces for key storage backends
+- [x] app flow skeleton
+- [x] placeholder external-device backend contract
+
+## Phase 1 — onboarding and local auth
+Goal: establish secure user entry flow.
+
+Status: ✅ Completed
+
+Deliverables:
+- [x] welcome screen
+- [x] choice: create wallet / import seed
+- [x] mandatory PIN setup and confirmation
+- [x] optional biometric enable after PIN setup
+- [x] app state for locked/uninitialized wallet
+
+Out of scope:
+- blockchain reads
+- transfers
+- token logic
+
+## Phase 2 — phone secure vault
+Goal: implement the first real wallet backend.
+
+Status: ✅ Completed (foundation, create/import UX, seed display, PIN unlock, real mobile biometrics and Windows demo simulation path are implemented)
+
+Deliverables:
+- [x] BIP-39 seed generation
+- [x] one-time seed phrase display flow
+- [x] seed import flow
+- [x] encrypted storage of seed
+- [x] address derivation for EVM
+- [x] unlock flow protected by PIN / biometrics (real biometric auth on Android/iOS, simulated biometric auth on Windows)
+
+## Phase 3 — EVM network foundation
+Goal: connect to blockchain in read-only mode.
+
+Status: ✅ Completed
+
+Deliverables:
+- [x] Ethereum Mainnet config
+- [x] Sepolia config
+- [x] public RPC provider layer with fallback strategy
+- [x] native balance retrieval
+- [x] base fee / gas estimate retrieval
+- [x] network metadata handling
+
+## Phase 4 — read-only wallet experience
+Goal: first useful user-facing wallet release without send risk.
+
+Status: ✅ Completed
+
+Deliverables:
+- [x] wallet home screen
+- [x] address display
+- [x] current network switch/display
+- [x] native and token balances
+- [x] manual refresh
+- [x] recent transaction history screen
+- [x] local cache for last loaded blockchain state
+
+## Phase 5 — transfer preparation
+Goal: prepare safe transaction composition before enabling send.
+
+Status: ✅ Completed
+
+Deliverables:
+- [x] send screen
+- [x] address validation
+- [x] amount entry
+- [x] asset selection
+- [x] automatic gas estimation
+- [x] transaction preview screen
+
+## Phase 6 — signing and sending
+Goal: enable real blockchain operations.
+
+Status: ✅ Completed (end-to-end send flow with real retry/replacement handling, post-submit transaction tracking, and non-blocking lifecycle UX implemented)
+
+Deliverables:
+- [x] one auth prompt per operation (domain-layer signing flow contract)
+- [x] transaction signing
+- [x] transaction submission
+- [x] pending/success/failure status handling
+- [x] basic nonce/error handling through public RPC lookup and surfaced failures
+- [x] advanced nonce/error hardening with retry logic (replacement tx, stale nonce reconciliation, richer RPC-specific recovery)
+- [x] post-submit transaction tracking with TransactionTracker
+- [x] gas price increase mechanism for underpriced transaction replacement
+- [x] UI integration for transaction status and replacement notifications
+
+## Phase 7 — external NFC device foundation
+Goal: keep a clean future path without implementing device SDK now.
+
+Status: ✅ Completed (foundation layer finished without real SDK; this phase now has selection, auth/signing, lifecycle, and mock PKCS#11 session/operation contracts for an external-device path)
+
+Deliverables:
+- [x] abstract backend contract for external hardware
+- [x] storage-backend selection model
+- [x] compatible signing/auth flow contracts
+- [x] simulated external-device UX/runtime path without real SDK
+- [x] mock device lifecycle: availability, reconnect, session disconnect, error states
+- [x] mock PKCS#11 session/operation contracts
+- [x] no real NFC implementation yet
+
+## Phase 8 — future extension points (superseded)
+Goal: reserve clean extension paths for WalletConnect v2 + AirGap.
+
+Status: ⚠️ **Superseded / role-corrected.** Phase 8 originally shipped (chunks A–F, v1.11–v1.16) in the **outbound** role — this app *requesting* a signature from an external WalletConnect/AirGap signer. That is the wrong role: the wallet must *receive* and approve signing requests. The outbound transport/session/registry/connectors and the "Подписать через" send-flow option were **removed in chunk 9.0 (v1.17)**. The wallet-side integration is **Phase 9**.
+
+What survives Phase 8 for the next agent (kept, still used):
+- `WalletConnectV2RequestCodec` (`walletconnect/wallet_connect_v2.dart`) — the WalletConnect wire/field mapping. The custom Phase-8 AirGap payload mapping was superseded and removed by Phase 12.5.
+- `TransactionService.assembleSignedTransfer` — build a `SignedTransfer` from raw signed bytes without duplicating crypto.
+- The external-device demo (`key_storage/external_device_demo_backend.dart` + `external_device_pkcs11.dart`) is the **custody** precedent for Phase 10 (where the key lives + tap/PIN confirmation) — distinct from this transport axis; it is *not* a signing transport.
+
+## Phase 9 — Wallet-side inbound signing (WalletConnect v2 + AirGap) + connections screen
+Goal: make this app a **real wallet** that *receives* signing requests. Two transports bring requests in:
+- **WalletConnect v2** (online): external dApps pair with the wallet over the relay, send `eth_sendTransaction` / `eth_signTransaction` / `personal_sign` / `eth_signTypedData_v4`, and the wallet approves and signs with the on-device vault.
+- **AirGap** (offline): the wallet scans a request QR from an air-gapped companion (or acts as the offline signer), signs, and returns a response QR.
+
+Both surface through a dedicated **Connections screen** (status, active sessions, inspect/disconnect, new connection) and a shared **incoming-request approval sheet** (request details → Approve/Reject → vault sign → respond).
+
+This corrects the Phase 8 role: Phase 8 modelled the *outbound* direction (the app requesting a signature from an external signer). The product is wallet-side, so **9.0** removes that and **9.1+** build the inbound integration, reusing the Phase 8 codecs.
+
+Status: ✅ **Feature-complete (chunks 9.0–9.9).** 9.0–9.1 done (v1.18); 9.3 done; **9.4 done** (9.4a DI/controller WC seam + screen/request approval, v1.20–v1.21); 9.5–9.8 done (AirGap, QR, EIP-191, EIP-712, v1.22–v1.26); **9.2 done** (real `ReownWalletConnectService`, v1.27); **9.9 done** (live camera QR, v1.28–v1.29). WalletConnect is now **device-validated on Android through a confirmed Sepolia broadcast** (v1.36: connect, transaction approval/sign/broadcast, per-op PIN, request queue, and cold-start vault persistence). v1.37 adds EIP-5792 capability discovery and safe simulated contract previews. The MetaMask-compatible Phase 12 AirGap path was owner-dogfooded end to end in v1.38; v1.39 hardens its intermittent Android camera recognition.
+
+### Owner verification
+- **AirGap inbound, end-to-end** (passed on Android, 2026-07-22) — MetaMask imported the EIP-4527 account, Wallet Demo scanned and signed a Sepolia transaction request, and MetaMask accepted the returned signature; the owner reported the transaction appeared to broadcast. The request QR decoded reliably from a saved screenshot but only after several live-camera attempts, motivating the v1.39 camera hardening. The exact transaction hash was not recorded.
+
+### Two axes (do not conflate)
+- **Transport axis (this phase):** how a signing request *arrives* — WalletConnect (online relay) or AirGap (offline QR). The wallet still signs with whatever custody backend is active.
+- **Custody axis (Phase 10):** *where the key lives and how the user confirms* — phone vault (PIN/biometric) or external NFC device (tap + device PIN). Inbound requests compose with either custody backend.
+
+### Dependencies & prerequisites
+- WalletConnect: `reown_walletkit` (official Reown/WalletConnect Flutter wallet SDK; formerly `walletconnect_flutter_v2`). Pin a version; `flutter pub get`.
+- A WalletConnect Cloud **project ID** via `--dart-define=WC_PROJECT_ID=…`. This public client id is intentionally
+  committed in `dart_defines.json`; builds still show a clear "not configured" state when the define is absent.
+- Relay (`wss://relay.walletconnect.org`) reachable — depends on the environment network policy; live pairing is manual/dogfood, automated tests use the fake service.
+- QR input: **file load on all platforms** (`file_selector` + `image` + `zxing2`, pure-Dart decode — works on Windows) **+ live camera** on Android/iOS (`mobile_scanner`, with an overlay-only aim guide + torch). v1.39 analyzes the full frame, requests 1920×1080 on Android, and enables Android auto-zoom. No Windows camera — file load is the only path there.
+- Navigation: the app is one `WalletFlowScreen` state machine with no routes; this phase introduces a route (or a new stage) for the Connections screen.
+
+### Architecture
+- `WalletConnectService` — an abstract interface injected through `MobileWalletDemoApp` like every other dependency (real impl default; `FakeWalletConnectService` for tests/DI). Surface: `init`, `pair(uri)`, `approveSession`/`rejectSession(proposal)`, `disconnect(topic)`, `activeSessions` + a sessions `Stream`, an incoming-requests `Stream`, and `respond(requestId, result|error)`.
+- Inbound request models: a session proposal, active-session info (dApp name/url/icon, chains, accounts, connected-at), and an incoming `SigningRequest` (method + params + originating session).
+- Request → signing: parse `eth_sendTransaction` / `eth_signTransaction` params, preflight transaction calls,
+  then authenticate once for that operation and sign via the summary-bound active custody backend. Phase 11
+  supersedes the earlier five-minute-session design: every private-key request gets fresh PIN/biometric or
+  device tap+PIN authorization, and the backend is relocked in `finally`. Broadcast `eth_sendTransaction` via
+  the existing broadcaster; message and typed-data requests use the same per-operation policy.
+- AirGap inbound: export the account via `crypto-hdkey`, scan an EIP-4527 `eth-sign-request`, verify the offline transaction preview, sign through the active backend, and display the `eth-signature` QR.
+- Connections screen: a status banner; a list of active sessions (dApp name/url/icon, chains, accounts, connected-at); tap → details; disconnect; "New connection" (paste/scan a `wc:` URI). Navigation entry from the unlocked dashboard.
+
+### Chunk breakdown (each chunk: plan → code → record, per AGENTS.md)
+- **9.0** — *cleanup*: remove the inverted Phase 8 **outbound** code (transport/session/registry/connectors + "Подписать через"); keep the codecs (`WalletConnectV2RequestCodec`, `AirGapPayloadCodec`) and `assembleSignedTransfer`. No new feature; tests trimmed to the codecs. ✅ done (v1.17)
+- **9.1** — `WalletConnectService` interface + inbound models (`WalletConnectPeer` / `…SessionProposal` / `…Session` / `…Request`) + `FakeWalletConnectService` + `UnavailableWalletConnectService` (shippable default) + unit tests. Pure Dart, no SDK. ✅ done (v1.18). *(The `reown_walletkit` dep + `WC_PROJECT_ID` config + DI wiring moved to 9.2, where the real impl consumes them.)*
+- **9.2** — real SDK impl (`ReownWalletConnectService`) behind the interface: init, pair, proposal approve/reject,
+  session list + streams, respond, disconnect. ✅ complete and device-validated (v1.27–v1.36): Android owner
+  dogfood confirmed pairing, requests, per-operation authorization, and a Sepolia transaction broadcast. The
+  original dependency/toolchain probe and integration detail remain in `docs/worklog.md`.
+- **9.3** — incoming request → vault signing: WC method parsing (inverse codec), the request→sign→respond flow, broadcast for `eth_sendTransaction`. ✅ done on the fake (`WalletConnectV2RequestCodec.decodeTransactionRequest`, `TransactionService.prepareInboundTransaction`, `WalletConnectInboundCoordinator`); the user-facing approval sheet is folded into 9.4b.
+- **9.4a** — DI + controller seam: inject `WalletConnectService` through `MobileWalletDemoApp` → `WalletFlowScreen` → `WalletFlowController` (default `UnavailableWalletConnectService`); the controller subscribes to the proposal/session streams and exposes `isWalletConnectAvailable` / `walletConnectSessions` / `pendingProposal` + actions `pairWalletConnect` / `approvePendingProposal` / `rejectPendingProposal` / `disconnectWalletConnectSession`; controller tests on the fake. ✅ done (no UI yet).
+- **9.4b** — Connections screen: `WalletFlowStage.connections` + the screen (status chips, "new connection" `wc:` URI field, the session-proposal approval card, the active-session list with disconnect) + a navigation entry ("Подключения (WalletConnect)") from the unlocked dashboard + widget tests (pair→approve→disconnect, back). ✅ done (v1.20). *The **incoming-request** approval sheet (driving `WalletConnectInboundCoordinator` from the controller on `requests`) is a follow-up — see 9.4c.*
+- **9.4c** — incoming-request approval sheet: the controller subscribes to `WalletConnectService.requests` (→
+  `pendingRequest`), the Connections screen shows a request card, and approval drives
+  `WalletConnectInboundCoordinator`; reject returns `respondError`. ✅ done (v1.21). Phase 11 later replaced
+  the original held-material behavior with fresh per-operation authorization.
+- **9.5** — AirGap inbound: decode an `airgap-tx:` request → sign with the active backend → encode the `airgap-sig:` response. ✅ done (v1.22): `AirGapInboundCoordinator` (decode → `prepareInboundTransaction` → sign → `encodeResponse`; offline, so no nonce lookup/broadcast) + a Connections-screen "AirGap" section (paste request → «Подписать офлайн» → response payload to copy/show back) + coordinator/controller/widget tests. *Camera scan (`mobile_scanner`) of the request/response QR is deferred to the QR chunk (9.6); this is paste-based.*
+- **9.7** — message signing: `personal_sign` / `eth_sign` (EIP-191). ✅ done (v1.25): codec `isMessageSignMethod`/`decodeMessageRequest`, `signPersonalMessage` on `TransactionService` + the signer (web3dart), a `WalletConnectInboundCoordinator` message branch (verify account → sign → respond with the 65-byte signature), and the request card shows the decoded message.
+- **9.8** — EIP-712 typed-data signing: `eth_signTypedData_v4` / `_v3`. ✅ done (v1.26): pure-Dart `walletconnect/eip712.dart` (`Eip712Encoder` — domain/struct hashing with nested structs + arrays → the 32-byte digest), `TransactionService.signDigest` + `WalletTransactionSigner.signDigest` (raw secp256k1 via web3dart `sign`, low-s), codec `isTypedDataMethod`/`decodeTypedDataRequest`, a coordinator typed-data branch, and a `primaryType @ domain` summary in the request card. Validated against the canonical EIP-712 "Mail" vector (digest + signature generated with reference `eth-account`).
+- **9.6** — QR for WalletConnect pairing + AirGap + incoming-request sheet polish. ✅ done. v1.23: the `QrScanner` seam (`qr/qr_scanner.dart` — interface + `UnavailableQrScanner` + `FakeQrScanner`) injected through `MobileWalletDemoApp` → controller; request-card polish (sender line). v1.24: the seam grows two sources (camera vs file load) and `FileQrScanner` (`qr/file_qr_scanner.dart`) becomes the production default — **real QR load from an image file on every platform** (`file_selector` picker + pure-Dart `image`+`zxing2` decode via `ZxingQrImageDecoder`), the only option on Windows; "Загрузить … из файла" buttons fill the `wc:`/`airgap-tx:` fields. Decode test against a committed PNG fixture + controller/widget tests. *The live **camera** impl (`mobile_scanner`) lands in **9.9** (v1.28); file load + paste are the cross-platform paths and the only ones on Windows.*
+- **9.9** — live **camera** QR scan (`mobile_scanner`). ✅ done (v1.28). **9.9a** (probe): added `mobile_scanner: ^7.2.0` dep-only and confirmed CI green on all 4 platforms (iOS = pure-Swift Vision, deployment target 12.0 ≤ app's 13.0, no heavy pod; Android = standard Google Maven MLKit, no flavor dimension, minSdk 23 already satisfied; Windows excluded as unsupported). **9.9b** (integration): `qr/camera_qr_scanner.dart` — `CameraQrScanner` adds `scanWithCamera` (full-screen `MobileScanner`, QR-only + `noDuplicates`, pops the first `rawValue`) and delegates `loadFromFile` to a composed `FileQrScanner`; pushed via a global `navigatorKey` on `MaterialApp` (the seam has no `BuildContext`). DI selects it on Android/iOS (file-only `FileQrScanner` elsewhere). iOS `NSCameraUsageDescription` added; Android `CAMERA` permission comes from the plugin manifest. Unit test covers availability + file delegation + the no-navigator error path (the live widget can't run headless). **9.9c** (polish, v1.29): a scan-window overlay (`ScanWindowOverlay`, centred square — detection initially limited to it) + a torch toggle (`controller.toggleTorch()`, reflecting the live `TorchState`). **v1.39 hardening:** keeps a larger guide only as an overlay, restores full-frame detection, requests 1920×1080 on Android, and enables ML Kit auto-zoom for dense BC-UR QRs.
+
+### Deliverables
+- [x] 9.0 cleanup (remove outbound, keep codecs)
+- [x] `WalletConnectService` abstraction + `FakeWalletConnectService` (+ `UnavailableWalletConnectService` default; real-impl DI deferred to 9.2)
+- [x] real `reown_walletkit` implementation (init / pair / sessions / disconnect) — `ReownWalletConnectService`, v1.27; device-validated for connect/disconnect/`personal_sign`
+- [x] incoming-request → vault signing + `respond` (logic on the fake: `WalletConnectInboundCoordinator`; approval-sheet UI wired in 9.4c, v1.21)
+- [x] Connections screen (9.4a DI + controller WC seam; 9.4b screen: status / new connection / proposal approval / sessions + disconnect / dashboard entry)
+- [x] AirGap inbound (original v1.22 custom format superseded; production path is EIP-4527/BC-UR in Phase 12, v1.38)
+- [x] QR-code pairing for WalletConnect (`QrScanner` seam v1.23; all-platform **file load** v1.24 via `FileQrScanner`/`file_selector`/`image`/`zxing2`; live **camera** v1.28–v1.29 via `CameraQrScanner`/`mobile_scanner` on Android/iOS; v1.39 full-frame/high-resolution/auto-zoom hardening + overlay guide + torch)
+- [x] message + typed-data signing (`personal_sign`/`eth_sign` v1.25; EIP-712 `eth_signTypedData_v4`/`_v3` v1.26)
+- [x] tests + docs (per-chunk unit/widget tests on the fake; docs kept in sync)
+
+### Ongoing validation boundaries
+- Live relay reachability and `reown_walletkit` API/toolchain changes remain external risks; keep the dependency
+  pinned and repeat pairing dogfood after upgrades.
+- Keep approved WalletConnect chains aligned with `blockchain/network_config.dart`.
+- Camera permission/focus behavior and live QR recognition remain physical-device checks.
+- Deterministic flow tests use fakes; record live coverage in `docs/device-test-matrix.md`.
+
+### Optional follow-ups (deferred — not blockers; Phase 9 is feature-complete)
+Owner decision (2026-06-16): finish these later, on demand. Recorded so they aren't lost.
+- **`wallet_switchEthereumChain` / `wallet_addEthereumChain`** — `wallet_switchEthereumChain` is done in v1.36
+  for the owner's Uniswap dogfood (Mainnet + Sepolia); `wallet_addEthereumChain` remains deferred because the
+  wallet exposes only its built-in network catalog.
+- **Inbound request queue** — done in v1.36 after live Android dogfood showed timing-dependent request/vault
+  failures; requests are queued and approval is serialized, so a later Uniswap/React request cannot overwrite
+  the one currently shown or being handled.
+- **Proposal namespace validation** — done in v1.37: unsupported required chains/methods reject approval;
+  unsupported optional chains/methods are omitted from the approved namespace instead of being advertised.
+- **Uniswap / EIP-5792 hardening (done, v1.37)** — auto-answer authorized
+  `wallet_getCapabilities` probes without UI/PIN, filter approved namespaces to the methods/chains the wallet
+  actually implements, replace fixed inbound gas/fee fallbacks with live RPC estimation, and show a simulated
+  contract-call preview before vault authentication.
+
+### Non-goals (this phase)
+- non-EVM chains; a full dApp browser; push notifications for background requests; bespoke session persistence beyond what the SDK provides; custody/NFC changes (those are Phase 10).
+
+## Phase 10 — Real Rutoken custody backend
+Goal: replace the simulated external-device path with an optional Rutoken backend whose signing keys remain
+non-exporting after provisioning and which composes with every existing signing transport while keeping the
+phone-vault path unchanged. Provisioning must preserve recoverability using only the demonstrated import primitive:
+support importing an existing BIP-39 backup and generating a new mnemonic in software for mandatory one-time
+backup confirmation before importing its raw BIP32 master key + chain code. A backup-less mode is deferred.
+
+Status: 🟡 In progress. Phase 10.1–10.2 are complete in v1.40. The Android 10.0/10.3 transport implemented in
+v1.46 is physically validated for discovery, login, public derivation, raw signing, and teardown. Phase 10.4
+recoverable provisioning in v1.47 is physically validated for both existing-backup import and new recoverable
+creation, including the expected EVM address. v1.48 registers the production backend and routes every existing
+signing transport through its transient native session. v1.49 adds existing-card adoption, registered-address
+binding, and biometric-gated PIN convenience. v1.50 adds cancellable Android NFC discovery, stable native failure
+categories, pre-operation card-presence checks, and teardown error precedence. v1.51 prevents unknown raw native
+diagnostics from crossing the platform channel or reaching Dart error text. Android physical WalletConnect,
+AirGap, wrong-PIN, cancellation, timeout, and different-card checks passed on 2026-08-17. Mid-operation NFC-loss
+categorization is fixed in code in v1.55 (presence-based, not vendor-text-based) and awaits its hardware rerun;
+real crash/log-output inspection, iOS implementation and physical validation remain.
+
+> **Reference:** `docs/nfc-pkcs11-integration-notes.md` contains the vendor mechanisms, native-stack setup,
+> Ethereum corrections, and physical-device questions. The existing demo adapter is a test double, not an
+> interface that the real SDK must preserve.
+
+### Required architecture
+- Separate public account data from local secret material. Use an `AccountDescriptor` for the token-derived
+  address/path and keep optional account xpub metadata in software from provisioning; keep `WalletMaterial`
+  local to the phone vault.
+- Have the active backend provide a transient authenticated `WalletTransactionSigner` (or equivalent signer
+  session). A real hardware backend never returns mnemonic, seed, or private key to Dart.
+- Model account-xpub/`crypto-hdkey` export as an explicit software capability backed by public metadata retained
+  during provisioning. The minimal native adapter must not query undocumented derived chain-code/xpub attributes.
+- Keep authentication per operation. Open the NFC/device session, verify the device PIN, perform exactly the
+  approved operation, and tear the session down on success, error, or cancellation.
+- Keep custody independent from transport: own-send, WalletConnect, and AirGap all request a signer from the
+  selected backend.
+
+### Chunk breakdown
+Small, reviewable steps; each chunk records plan and result in `docs/worklog.md`:
+- **10.0 — DONE ON ANDROID (v1.46):** the exact Android v1.1 artifacts are vendored with
+  license/checksum and the platform-channel approach is implemented. The welcome-screen diagnostic exercises
+  token discovery, session login, public address derivation, raw signing, and teardown without changing the master key.
+  Owner dogfood confirms that v1.46 detects the NFC token, logs in, derives the address public key, returns a raw
+  64-byte `CKM_ECDSA` signature, and tears the session down successfully. NFC APDUs remain owned by the vendor
+  PC/SC bridge.
+- **10.1 — DONE (v1.40; native boundary corrected v1.46):** secret-free `WalletAccountDescriptor`, account-level public-xpub data,
+  `CustodySigningSession`, `WalletCustodyBackend`, and typed `RutokenNativeAdapter` contracts for session,
+  public account, raw signing, generation, import, and guaranteed close. For Rutoken, EIP-4527 account export
+  consumes public metadata retained by software during provisioning; it is not a native xpub-read operation.
+- **10.2 — DONE (v1.40):** `ExternalDigestWalletTransactionSigner` + `EvmSignatureAssembler` validate raw
+  64-byte `r‖s`, enforce secp256k1 bounds/EIP-2 low-s, recover y-parity against the expected address, and build
+  byte-identical EIP-155/EIP-1559 transactions plus personal/raw-digest/AirGap signatures. Fake native-session
+  tests prove local parity and idempotent/error-path teardown.
+- **10.3 — DONE FOR THE ANDROID READ/SIGN PATH (v1.46):** official rtpcscbridge 1.4.0 + pkcs11wrapper 4.3.1 +
+  pkcs11jna 4.2.0 + JNA 5.17.0, ARM64 `libwtpkcs11ecp.so`, serialized Kotlin lifecycle/session/login,
+  public-key read, per-operation derived signing keys, raw `CKM_ECDSA`, MethodChannel adapter,
+  and success/error/Activity-stop teardown. The first v1.41 device run found that polling `C_GetSlotList` never
+  activated NFC discovery even though the official demo worked on the same phone/token; v1.42 now mirrors the
+  official concurrent blocking `C_WaitForSlotEvent` listener plus initial slot snapshot, but detection still
+  timed out. The remaining startup mismatch was transport attachment from inside Activity creation; v1.43 now
+  mirrors `RutokenDemoWalletApplication` and attaches the bridge in `Application.onCreate` before the first
+  Activity lifecycle callback; owner dogfood confirms discovery now works. The next v1.43 failure exposed another
+  exact reference mismatch: its empty `DerivationPath()` contains a null `LongArray?`, while Wallet Demo passed a
+  non-null zero-length array that JNA could not allocate. v1.44 uses the vendor nullable representation, retains
+  the `CKK_VENDOR_BIP32` filter so the companion EdDSA key is ignored, and gives a provisioning-specific message
+  for an empty token. Owner dogfood on v1.44 passed that boundary and returned `CKA_EC_POINT`, which exposed an
+  overly narrow Dart assumption that every token emits an uncompressed 65-byte point. v1.45 now derives the
+  official `Pkcs11EcPublicKeyObject`, reads `getEcPointAttributeValue`, and validates/normalizes both compressed
+  33-byte and uncompressed 65-byte SEC1 points, either raw or DER OCTET STRING-wrapped. Owner dogfood on v1.45
+  then reached `CKR_KEY_TYPE_INCONSISTENT`: the app was querying a derived account chain-code attribute that the
+  supplied example never reads. v1.46 removes that operation from the native contract and mirrors the reference
+  signing path exactly: derive `Pkcs11EcPrivateKeyObject` with the demonstrated template, sign the software-built
+  32-byte digest with plain `CKM_ECDSA`, and destroy the child in `finally`. Owner dogfood confirms the complete
+  v1.46 diagnostic succeeds. Cancellation, NFC-loss, and precise PIN error mapping remain hardening work.
+- **10.4 — DONE AND PHYSICALLY VALIDATED (v1.47):** both owner-required UX paths use the
+  reference example's `C_CreateObject` import only: (a) derive the raw BIP32 master + chain code from an existing
+  BIP-39 mnemonic/passphrase in short-lived software buffers, or (b) generate a new mnemonic in software, require
+  one-time backup display/confirmation, derive the same raw inputs, and import them. Do not expose backup-less
+  creation or invoke undocumented token generation/export behavior. Persist the public account xpub/chain-code
+  metadata needed for AirGap at provisioning time; do not query it from the token during normal operation. The
+  native path refuses a token that already contains a BIP32 master, verifies the imported address against the
+  software reference, and tears the session down unconditionally. Owner Android dogfood confirms both importing
+  an existing seed phrase and generating a new recoverable wallet succeed and return the expected address.
+- **10.5 — ANDROID PHYSICAL SIGNING MATRIX PASSED (v1.51, 2026-08-17):** own-send, WalletConnect transaction,
+  `personal_sign` and EIP-712, and EIP-4527 AirGap signing passed with a real card. Both WalletConnect and
+  AirGap Sepolia broadcasts were verified on-chain; see `docs/device-test-matrix.md`. iOS remains unimplemented.
+- **10.5a — DONE IN v1.49; CARD SWAP PHYSICALLY PASSED IN v1.51:** adopt a compatible card that already has a BIP-32 master without calling
+  `C_CreateObject`; persist its public address/path as the wallet profile and keep xpub metadata optional. Verify
+  each later NFC session resolves to that registered address. After the first successful PIN use, offer an
+  explicit one-time choice to store the card PIN in a separate biometric-gated secret store; a later biometric
+  operation must authenticate through the platform prompt before the PIN is released to the transient native
+  session. A declined offer is remembered for that account, and neither public profile nor logs contain the PIN.
+  Owner v1.49 dogfood passed ready-card adoption, biometric opt-in/release, and a Sepolia send. The second-card
+  rejection was physically confirmed on 2026-08-17; the registered card still worked afterwards.
+- **10.6 — ANDROID CODE HARDENING IN v1.51; NFC-LOSS FIX IN v1.55 AWAITS RERUN; LOG REVIEW OPEN; iOS PENDING:** Android provides cancellable NFC discovery,
+  stable sanitized PIN/timeout/NFC-loss errors, card-presence checks, primary-failure-preserving teardown, and
+  fixed generic platform errors that do not surface raw vendor diagnostics. Physical cancellation, timeout,
+  and invalid-PIN handling passed; on v1.51 mid-operation card removal reported the generic error rather than the
+  specific NFC-loss message. v1.55 classifies a failed operation by asking the slot-event listener whether the
+  card is still present; that fix has not been physically re-run. The physical crash/log-output review has not
+  been performed.
+  Port the proven shared contracts to the vendor iOS stack and run the same physical-device matrix. The public
+  Rutoken SDK release 15.05.2026 contains signed generic `rtpkcs11ecp.xcframework` and `RtPcsc.xcframework`,
+  but header inspection confirms that it does **not** expose the wallet-only BIP32 mechanisms. The compatible
+  cards require the distinct `wtpkcs11ecp.xcframework` used by the official iOS crypto-wallet demo. The owner
+  supplied the exact v2.17.8 framework on 2026-07-29 with device and simulator slices plus matching BIP32 headers;
+  it is retained privately and is not committed. The supplied archive contains no redistribution notice, so
+  clarify packaging/CI terms before placing the proprietary framework in the public repository. Do not
+  substitute the generic provider or hand-roll Core NFC/APDUs.
+
+### Definition of Done
+- During normal use and signing, seed/private key never leave the token; logs, errors, persisted platform-channel
+  payloads, and long-lived Dart models contain no secret material. Provisioning is the explicit narrow exception:
+  both imported and newly generated mnemonic material are handled transiently in software for the explicit
+  provisioning flow. Neither path persists plaintext backup material after confirmation.
+- Address, derivation path, software-retained account xpub/chain-code metadata, and signatures match independent
+  reference vectors.
+- Device signatures are byte-compatible with the local EVM assembly rules, including low-s and recovery id.
+- Each operation requires one explicit tap/session plus one device-PIN authorization; no authorization leaks
+  into the next operation.
+- Session teardown is verified for success, rejection, SDK error, timeout, NFC loss, and user cancellation.
+- Own-send, WalletConnect transaction/message/typed-data, and AirGap transaction pass on a physical Android
+  device; the equivalent iOS matrix passes before iOS support is declared complete.
+- Fakes/unit tests remain green, and a maintained manual device matrix covers secure storage, live RPC, Reown
+  relay, camera QR, NFC, and platform lifecycle boundaries (`docs/device-test-matrix.md`).
+
+### Non-goals
+- Reimplementing vendor NFC/APDU framing in Dart.
+- Offering backup-less/non-extractable wallet generation before a separate recovery policy is designed.
+- Claiming guaranteed memory zeroization for Dart `String` values. The phone-vault implementation releases
+  references and relocks after each operation, but the Dart runtime cannot guarantee immediate zeroization.
+- Additional chains, accounts, or hardware vendors before the Rutoken milestone passes its exit criteria.
+
+## Phase 11 — Authenticate per operation, not on app open
+Goal: keep viewing the wallet independent from custody authentication: opening the app shows the read-only
+dashboard, while every private-key operation gets fresh authorization.
+
+Owner decisions (2026-06-16):
+- **Open → read-only dashboard, no auth.** Address + balances + history render from `getWalletSummary()` (public address, stored in plaintext) + the blockchain snapshot — no key derivation, no card.
+- **Each private-key operation authenticates EVERY time** (no 5-min session reuse): PIN or biometric for
+  `PhoneSecureVault`; "tap + device PIN" for `ExternalDeviceDemoBackend`. The backend is unlocked transiently
+  for the operation, references are released, and `lock()` runs immediately afterward. This reduces exposure
+  but does not guarantee zeroization of immutable Dart strings.
+- The three key ops: send a transaction, approve an inbound WalletConnect request, sign an offline AirGap request. Reject/clear stay auth-free.
+
+Status: ✅ done + **device-validated on iOS sim** (v1.32–v1.33): the per-op PIN prompt works well; a silent-approve gap (the controller swallowed non-`VaultFailure`/WC/AirGap errors) was fixed in v1.33 (`_runGuarded` catch-all).
+
+### Chunks
+- **11.1** — state machine: `loadInitialState` (and the post-onboarding end states) land on the read-only dashboard (the `unlocked` stage, repurposed) instead of `locked`; the dashboard renders from `summary` with no held material. The `locked` stage + `_LockedStage` + `unlockWallet`/`lockWallet` are **kept** (unused by default) for the deferred lock-on-open toggle below.
+- **11.2** — per-op auth core: `_withFreshlyUnlockedMaterial({pin, useBiometrics})` (unlock → op → `lock()` in a `finally`) + an `_OperationAuthSheet` (PIN + optional biometric) shown by the widget before each key op.
+- **11.3** — rewire the three signing paths (send / WC-approve / AirGap-sign) to authenticate-on-demand; drop the held-`material` assumptions; update tests.
+
+### Deferred at the end of Phase 11 (recorded per owner request)
+- **Optional "lock app on open" toggle** — the privacy setting was deferred in Phase 11 and built in v1.57, reusing the retained `locked` stage. It is off by default.
+- **External-device session-management UX** — post-Phase-11 the demo device is locked at rest (no PKCS#11 session), so the dashboard's "ping session" / "read address via PKCS#11" buttons surface a "No active device session" banner until a signing op briefly opens one. Demo-path nicety: either hide those controls until a session exists, or have them open a session on demand. (Phase 10 will revisit the real device lifecycle anyway.)
+
+## Phase 12 — AirGap over EIP-4527 / Keystone BC-UR (MetaMask-compatible signer)
+Goal: make the AirGap path interoperate with **real online wallets** (MetaMask, OneKey, …) instead of the bespoke `airgap-tx:`/`airgap-sig:` format. The app is **always the offline signer** ("QR-based hardware wallet"): the online wallet is watch-only / has internet, builds the unsigned tx and shows a QR; the app scans it, signs offline (phone vault or external NFC device), and shows a signature QR back; the online wallet broadcasts. No app↔wallet link except QR. Owner decision (2026-06-16): MetaMask-compatible; **no app↔app interop**; signer role only.
+
+Protocol: **ERC/EIP-4527** over **BC-UR** (CBOR + bytewords + multipart fountain QR) — the Keystone standard MetaMask adopted. New deps `cbor` + `bc_ur` (both pure Dart). The old custom-format AirGap (chunk 9.5) is **superseded** and gets removed/rewired by this phase.
+
+CDDL keys (from EIP-4527): `eth-sign-request` map = {1: request-id (UUID, CBOR tag 37), 2: sign-data (bytes), 3: data-type (1 legacy-RLP / 2 EIP-712 / 3 raw-bytes=personal_sign/EIP-191 / 4 EIP-2718 typed-tx incl. EIP-1559), 4: chain-id (int, default 1), 5: derivation-path (crypto-keypath, tag 304), 6: address (20 bytes, opt), 7: origin (text, opt)}. `eth-signature` = {1: request-id, 2: signature (65-byte r‖s‖v), 3: origin?}. `crypto-keypath` (tag 304) = {1: components [index,bool,…], 2: source-fingerprint uint32, 3: depth}. `crypto-hdkey` (UR type; CBOR tag 303 only when nested) for a derived **public** key = {3: key-data (33-byte compressed pubkey), 4: chain-code (32), 5: use-info `#6.305(coininfo {1: type=60 ETH, 2: network=0 mainnet})`, 6: origin (crypto-keypath), 8: parent-fingerprint uint32, 9: name (opt), 10: note (opt)}; is-master(1) / is-private(2) / children(7) are omitted for a public account export.
+
+Two interactions (app = signer):
+1. **Pairing**: app shows a **bare `crypto-hdkey`** UR QR (account-level xpub: pubkey + chain code + origin path + master fingerprint) → online wallet adds the account watch-only and derives addresses `M/0/i` (index 0 = the app's own address). Single-account "BIP44 Standard" form; the multi-key `crypto-account` container (Bitcoin / Ledger-Live) is not used.
+2. **Signing**: online wallet shows an `eth-sign-request` UR → app decodes, signs by data-type, returns an `eth-signature` UR.
+
+### Chunks
+- **12.1 — DONE** — deps probe + pure-Dart `Eip4527Codec`: encode/decode `eth-sign-request` / `eth-signature` (+ `crypto-keypath`) over `cbor`+`bc_ur`, **validated against Keystone test vectors** (recorded in the worklog). CI-only, no device.
+- **12.2 — DONE** — sign path: `Eip4527InboundCoordinator` (`lib/src/airgap/eip4527_inbound.dart`) decodes an `eth-sign-request` → branches on data-type → signs via the active backend's `WalletTransactionSigner` → `eth-signature` UR. `signPersonalMessage` for raw-bytes (3), `signDigest` over the `Eip712Encoder` digest for EIP-712 (2), and `signDigest` over `keccak256(signData)` for tx types (1 legacy / 4 typed) — **not** `signPreparedTransfer` (we only have the serialized unsigned tx). The returned **`v` differs by data-type**: personal/EIP-712 keep `recId+27`; typedTransaction → `recId` (EIP-1559 y-parity); legacy → `recId+chainId*2+35` (EIP-155) — per MetaMask's keystone-airgapped-keyring source (see worklog 2026-06-17 for sources). Rejects a request whose pinned `address` ≠ this wallet. Tests recover each sig back to the wallet address. **Legacy (type-1) EIP-155 v flagged for on-device MetaMask verification.** No version bump (not yet wired to UI).
+- **12.3 — DONE** — account export (pairing): `Eip4527Codec.encodeHdKey`/`decodeHdKey` + `CryptoHDKey`/`CoinInfo` models, and `AccountExportDeriver` (`lib/src/airgap/account_export.dart`) deriving a **bare `crypto-hdkey`** from a mnemonic at `m/44'/60'/0'` (pubkey + chain code + ETH use-info + origin path w/ master fingerprint + parent fingerprint) via bip32/bip39. The vault already exposes the mnemonic (`WalletMaterial`), so no vault change was needed. Tests: byte-exact fields for the Hardhat seed, a UR regression-pin, encode/decode round-trip, wrong-type rejection, and the decisive correctness check — reconstruct the watch-only node from only the exported pubkey+chaincode, derive `M/0/0`, and confirm it reproduces the `0xf39Fd6…2266` leaf. CI-only, no UI yet, no version bump. **Dogfood lever** if MetaMask rejects the bare hdkey: wrap in `crypto-account` and/or add `note:"account.standard"` (codec already supports both).
+- **12.4 — DONE (v1.38)** — static/animated multipart BC-UR QR output, camera sequence assembly with progress, authenticated `crypto-hdkey` account export, transaction request scan/file load, strict Mainnet/Sepolia address/path/chain validation, decoded RLP preview (recipient/value/nonce/gas/max fee/calldata), per-operation sign, and `eth-signature` response QR. Initial UI is deliberately transaction-only: EIP-1559 on both chains and legacy EIP-155 on Mainnet; message/typed-data AirGap UI remains out of scope.
+- **12.5 — DONE (v1.38)** — removed the superseded `AirGapPayloadCodec` / `AirGapInboundCoordinator`, paste UI, and their tests; synchronized architecture/docs/version.
+
+### Validation
+- Codec + sign path: Keystone/EIP-4527 test vectors in CI (no device).
+- End-to-end: owner dogfoods with **MetaMask** (add the app as a QR-based hardware wallet → sign a Mainnet/Sepolia ETH transaction → broadcast).
+
+## Phase 13 — Nocturne UI redesign + RU/EN localization
+Goal: turn the functional prototype UI into a designed product UI, as the intermediate step toward a separate
+production wallet (`docs/future-production-wallet-technical-brief.md`). Network scope stays Mainnet + Sepolia.
+
+Source of truth: the owner's Claude Design handoff package (kept out of the repo; its substance is captured
+here). It contains the **Nocturne** design system (`styles.css` tokens + written guidance), a reusable
+`Экран кошелька` artboard that is the single source for markup/states, a full prototype with the platform and
+data-state switchers, and a before/after snapshot of the current Flutter UI.
+
+**Nocturne in one line:** a quiet, compact, dark-only interface — ground `#161826`, surface `#232532`, text
+`#e9e9ed`, one blurple accent `#9184d9` used as a line and a glow rather than a flood; Inter at weight 500;
+radii 4/8/14; a deliberately dense 0.7× spacing scale; **outlined** primary actions, never filled; Phosphor
+icons; no pure black or white; elevation is a hairline edge plus ambient darkness.
+
+### Owner decisions (2026-08-18)
+- **Onboarding = variant B** ("Кошелёк за минуту"): create the phone wallet immediately; offer to connect a
+  card and strengthen protection later. (Variants A — custody choice first — and C — a three-slide primer —
+  were not chosen.)
+- **Full iOS/Android separation**, as the design specifies: Apple HIG patterns on iOS (44pt bar, large titles,
+  blurred tab bar, 14px sheets, circular keypad keys, a text back label) and Material 3 on Android (56dp app
+  bar, navigation bar with a pill indicator, 28px sheets, 16dp keys, icon-only back).
+- **Windows x64** is not covered by the design package: it reuses the same theme and the mobile layout,
+  centred and width-limited (460px) rather than getting a bespoke desktop design.
+- **Dark only** — the package defines no light palette, and deriving one would drift from the brand.
+- **RU + EN localization**, Russian primary.
+
+### Structural changes the redesign makes
+1. The single scrolling screen becomes **four tabs**: Кошелёк / Активность / Связи / Настройки.
+2. The hardware key is the hero of the flows; externally it is called **«карта» / «устройство»** — the vendor
+   name stays in the source and never appears in the UI.
+3. One confirmation pattern for every signature: **PIN → pulsing NFC tap overlay → result (pending →
+   confirmed)**.
+4. WalletConnect and AirGap are stated in plain language; AirGap becomes a **three-step wizard with a progress
+   bar** instead of EIP-4527/BC-UR jargon.
+5. Technical data (RPC endpoint, nonce, gas limit, PKCS#11 session) moves out of the main UI into a separate
+   **«Подробности»** developer sheet.
+6. The build marker becomes a **thin strip that occupies layout space** under the status bar, so it can never
+   cover an interactive element.
+7. Modelled states: skeleton loading, offline-cache banner, empty wallet, pending→confirmed, and a five-minute
+   PIN lockout after five wrong attempts.
+
+### Chunks
+- **13.1 — DONE (v1.53.0+64)** — foundation: `design/nocturne.dart` tokens, `design/app_theme.dart` (dark
+  `ThemeData`), `design/platform_style.dart` (the iOS/Android/desktop pattern seam), bundled Inter (400/500/600,
+  OFL, Cyrillic verified), `flutter_localizations` + `lib/l10n/*.arb` + the resolution callback, and the build
+  strip. The existing screens inherit the dark theme unchanged — they carry **no hard-coded colours**, which is
+  what makes a theme-first rollout safe.
+- **13.2 — DONE (CI green)** — the app shell: `design/app_shell.dart` renders the four-tab navigation with the
+  iOS and Android pattern sets kept fully separate, `ChainDataController` lifts the network/snapshot/loading
+  state so more than one tab can render it (preserving the v1.34 race guard), and `WalletFlowScreen` splits into
+  a tabbed main app and the untouched full-screen onboarding. Activity and Settings are real tabs, and the
+  technical rows moved into a «Подробности» sheet per design decision 5.
+- **13.3 — DONE (CI green)** — the Кошелёк tab: network chip, balance hero, quick actions, asset list, and the
+  skeleton / empty / offline-cache states. `_UnlockedStage` retired; its device controls and key-access line moved
+  to Настройки, its technical rows to «Подробности». Two real defects surfaced and were fixed rather than
+  papered over: an empty tab after leaving Связи, and the tabs not rebuilding on chain-data changes. The UI
+  locale is pinned to Russian until 13.6, since most copy is still inline.
+- **13.4 — DONE (CI green)** — operations and the unified confirmation: a PIN keypad for every private-key
+  operation (and off the system keyboard), the transfer form moved into a send sheet, a pulsing card-tap
+  affordance driven by an explicit `isAwaitingCard`, and the design's five-minute PIN lockout stated in readable
+  units. Step order untouched, so Phase 10 evidence stands; owner re-runs one card signature to confirm.
+- **13.5 — DONE (CI green)** — Связи in plain language: the WalletConnect request card states what is asked,
+  in named networks and native units rather than method names, chain ids and wei; AirGap became a three-step
+  wizard with progress and the design's copy, dropping the protocol vocabulary. The stacked-sheets deviation
+  (form → PIN → tap → result as separate sheets under the busy overlay) was closed in v1.57: the send sheet
+  walks form → review → PIN → signing → result itself, and every other key or card operation uses one shared
+  confirmation sheet with the same steps.
+- **13.6 — DONE (CI green)** — full RU/EN localization and the language switch. Every user-visible string in
+  `wallet_flow_screen*.dart` now comes from `lib/l10n/app_ru.arb` / `app_en.arb` (~270 keys). The two
+  `ChangeNotifier`s hold no `BuildContext`, so the bundle is **injected** like every other collaborator —
+  optional constructor argument, defaulting to Russian, re-pointed by the screen in `didChangeDependencies`
+  (the owner chose this over a parallel message table). The Russian pin is gone: the app honours a stored
+  choice, then the system locale, then Russian, and Настройки carries the picker (Как в системе / Русский /
+  English), persisted in the app's key/value store. Translating each screen kept surfacing developer register
+  in the product — "CKM_ECDSA вернул сырую подпись", "Rutoken backend недоступен в этой сборке", "Симулируем
+  транзакцию через RPC…", "Анимированный BC-UR: 3/7", `Backend` / `Locked` / `Biometrics enabled` on the lock
+  screen — all rewritten for the person holding the phone. The vendor name left the UI entirely: the backend
+  catalogue's label is now an internal identifier and the UI derives what it shows from the backend *kind*.
+  `MobileWalletDemoApp` became stateful to hold the choice, which also stopped it re-creating the store, the
+  RPC transport and the blockchain provider on every rebuild.
+  **Closed in v1.57:** the domain/infrastructure error strings were the part left; they now carry
+  `AppErrorCode`s (`lib/src/errors/app_error.dart`) and `describeError` (`lib/src/error_text.dart`) reads them
+  in the active language.
+- **13.7 — DONE (CI green)** — onboarding variant B: «Кошелёк за минуту» replaces the storage-backend question,
+  three actions choose the backend implicitly, and the card's actions are disclosed only after the user says
+  they have one. Backend ids resolve from the catalogue by kind. Copy stranded by the simulation's removal
+  (create/import "external backend" branches) went with it.
+
+### Constraints
+- **Do not change the Rutoken step structure.** The card flows (create/import/backup, PIN entry, the NFC wait
+  with its cancel action) passed the physical Phase 10 matrix on v1.51.0+62; restyling them is fine, but
+  reordering or re-scoping the steps invalidates that evidence and forces a re-dogfood.
+- UI copy moves into ARB files as each chunk lands. Widget tests assert user-visible copy, so they are updated
+  in the same change; the test harness pins the locale so assertions stay deterministic.
+
+### Deferred (recorded by the design package, not built here)
+- A 24-word recovery screen (only the happy create/import path exists today).
+- Arbitrary message signing shown in the UI (EIP-712 is modelled only as transactions in the prototype).
+- Push notification on transfer confirmation instead of in-app polling.
+- Matching the neutral «карта»/«устройство» wording to the real SKU and legal copy before release.
+
+## Phase 14 — Multiple cards
+Goal: let the wallet hold **several registered cards**, each with its own address, and switch between them the
+way it switches storage backends today. Requested by the owner 2026-08-18 while dogfooding the redesign.
+
+Status: 🟡 In progress — 14.1–14.4 are built and CI green; 14.5 (physical two-card dogfood) is the remaining
+exit criterion and needs the owner's hardware.
+
+### Starting point before 14.1–14.4
+At the start of Phase 14, "which wallet" and "which backend" were the same question: the switcher selected a
+**backend id**, and the Rutoken backend stored one registered profile. Several cards would be several wallets
+*inside one backend*, which the model could not represent:
+- the profile store held a single `WalletAccountDescriptor`, and `hasWallet()` meant "is one registered";
+- provisioning refused a second card outright («На телефоне уже зарегистрирован другой Рутокен»);
+- every operation asserted the presented card matched *the* registered address — the binding that was
+  physically validated in Phase 10 and must not be loosened by accident;
+- `switchActiveWallet` resolved a backend, not a profile.
+
+The Android layer already returned the card's serial in the open-session result. Dart started reading it
+in 14.2, so identifying cards in the picker needed no new native code.
+
+### Chunks
+- **14.1 — DONE (CI green)** — model: the profile store holds a list of card profiles plus a `selectedId`
+  instead of one inline record, and the loaders the custody backend calls resolve the selected one. Schemas 1
+  and 2 migrate on read, so an install that registered a card before v1.55 keeps it, still selected, without
+  touching the token. A profile is keyed by its lowercased address — two cards holding the same key are the
+  same wallet, and unlike the serial an address exists for profiles registered before serials were read. Two
+  properties preserved deliberately: `pending` still means "half-written, not usable" (excluded from listings,
+  never selectable), and re-provisioning the selected card clears the selection until the write completes. An
+  unknown schema now throws rather than reading as absent, so a downgrade cannot truncate a newer format.
+- **14.2 — DONE (CI green)** — serial: `RutokenRuntime` always returned `tokenSerial`/`tokenLabel`/`tokenModel`
+  from `openSession` and Dart discarded them; they now reach `RutokenNativeSession` and are recorded on the
+  profile. Missing or blank values read as null rather than failing the session — token identity is
+  descriptive, not load-bearing. Adopting an already-registered card records its serial without disturbing the
+  retained account xpub.
+- **14.3 — DONE (CI green)** — provisioning: adopting a card the phone does not know adds a profile instead of
+  throwing «На телефоне уже зарегистрирован другой Рутокен»; a card it does know keeps everything it has. The
+  adopted card becomes the selected one. The binding is unchanged and now has its own test: each operation
+  still binds to exactly one card, because `_verifyRegisteredAccount` compares against the *selected* profile.
+  That is deliberate — auto-switching to whichever card was tapped would let a transfer previewed against one
+  wallet's balance and nonce complete as another's.
+- **14.4 — DONE (CI green)** — switcher: Настройки lists the phone vault plus each registered card with its
+  address and serial, ticking the selected profile rather than the backend. Adds «Забыть карту» (drops only
+  the phone's record; the card keeps its key) with a fallback to another card → the phone vault → onboarding,
+  and «Подключить ещё карту», which runs the same PIN prompt and NFC wait as the first one.
+  **Found and fixed here, outside the chunk's scope but not worth leaving:**
+  `PhoneSecureVault.createWallet`/`importWallet` silently replaced an existing wallet's seed. Onboarding never
+  reached them in that state, but the switcher's empty-slot row leads to the welcome screen, which put a
+  fresh-seed button a few taps from a wallet in use. Both now refuse when a wallet exists.
+- **14.5** — physical dogfood on two cards: switch, sign with each, and confirm a card still cannot sign for
+  the other's address.
+
+### Not covered by 14.1–14.4
+- ~~A dedicated "add card" screen~~ — built in v1.57: «Подключить ещё карту» and the switcher's empty card row
+  open «Новая карта», which offers the three card actions (and the card check) but never phone-vault creation,
+  leaves the active wallet alone until a card is connected, and is where create/import return on «Назад».
+- Card profiles have no user-assigned names (owner's call: serial + address is enough).
+
+### Constraint
+The registered-address binding is a security property with physical evidence behind it (Phase 10, v1.51). Any
+change here re-opens that row of `docs/device-test-matrix.md` and needs a fresh two-card dogfood — which is now
+possible, since the owner has a second card.
+
+## Suggested release sequence
+- `v0.3` — architecture skeleton + secure vault foundation
+- `v0.4` — onboarding/auth shell + create/import UI + one-time seed display flow
+- `v0.5` — Ethereum Mainnet + Sepolia read-only balances
+- `v0.6` — tokens + history + local cache
+- `v0.7` — send form + gas estimation + preview
+- `v0.8` — signing foundation + raw transaction submission abstraction
+- `v0.9` — visible send flow states + nonce lookup + end-to-end submit wiring
+- `v1.0` — complete biometric unlock
+- `v1.1` — first transaction tracking and advanced error hardening pass
+- `v1.2` — initial Phase 6 completion attempt
+- `v1.3` — real replacement flow, gas bump, and non-blocking lifecycle UX
+- `v1.4` — backend selection model + backend-compatible signing/auth contracts for future external signer flow
+- `v1.5` — simulated external-device runtime path and separate UX branch for Phase 7
+- `v1.6` — mock device lifecycle: online/offline, reconnect, session disconnect, and error-state handling
+- `v1.7` — mock PKCS#11 session/operation contracts and logical completion of Phase 7 foundation
+- `v1.8` — phone-vault security hardening: DEK-based at-rest scheme, PIN never persisted, biometric secret moved to a dedicated gated store
+- `v1.9` — PBKDF2 raised to 600k with failed-unlock lockout; transaction-layer cleanup (shared signer base, removed misleading defaults, `LocalTransactionService` rename), base-fee headroom; added send-failure and nonce-reconciliation tests
+- `v1.10` — at-rest vault payload schema validation + defensive parsing (resilient startup); `wallet_flow_screen.dart` split into part files; cross-agent docs (`AGENTS.md`, `docs/worklog.md`) and the document-first working agreement
+- `v1.11`–`v1.16` — Phase 8 (chunks A–F): an **outbound** WC v2 + AirGap remote-signing model (async signing seam, a remote-signing session/transport, WC/AirGap demo connectors, a "Подписать через" send option) plus the codecs `WalletConnectV2RequestCodec` / `AirGapPayloadCodec` and `assembleSignedTransfer`. The outbound direction was the wrong role and was removed in v1.17; only the codecs + `assembleSignedTransfer` were kept
+- `v1.17` — Phase 9 chunk 9.0 (role correction): removed the inverted Phase 8 **outbound** remote-signing code (transport/session/registry/connectors + "Подписать через"); kept the reusable codecs (`WalletConnectV2RequestCodec`, `AirGapPayloadCodec`) and `assembleSignedTransfer`
+- `v1.18` — Phase 9 chunk 9.1: wallet-side `WalletConnectService` inbound seam — interface + models + `FakeWalletConnectService` + `UnavailableWalletConnectService` default + unit tests (pure Dart; real SDK + DI deferred to 9.2)
+- `v1.19` — refactor (acts on `docs/repo-review.md` #1): extracted a widget-free `WalletFlowController` (`ChangeNotifier`) out of `WalletFlowScreen` — the state machine + all domain actions; the screen is now a thin listener. No behavior change; adds `wallet_flow_controller_test.dart`
+- `v1.20` — Phase 9 chunk 9.4 (Connections screen, on the fake): 9.4a wired the `WalletConnectService` seam through `MobileWalletDemoApp` → `WalletFlowScreen` → `WalletFlowController` (proposal/session streams + pair/approve/reject/disconnect actions); 9.4b added the `WalletFlowStage.connections` screen (status chips, `wc:` URI pairing, session-proposal approval card, active sessions + disconnect) and the dashboard entry, plus controller + widget tests. Still on `FakeWalletConnectService` (real `reown_walletkit` is 9.2)
+- `v1.21` — Phase 9 chunk 9.4c: incoming-request approval sheet. The controller subscribes to `WalletConnectService.requests` (→ `pendingRequest`) and gains `approvePendingRequest` (builds the active backend's signer → `WalletConnectInboundCoordinator` → sign + broadcast/respond) / `rejectPendingRequest` (`respondError`); the Connections screen renders a request card (method/chain/to/value). Controller + widget tests on the fake
+- `v1.22` — Phase 9 chunk 9.5: AirGap inbound. `AirGapInboundCoordinator` (decode `airgap-tx:` → `prepareInboundTransaction` → sign → `encodeResponse` `airgap-sig:`; offline — no nonce lookup/broadcast) + controller `signAirGapRequest`/`clearAirGapResponse` + a Connections-screen AirGap section (paste-based). Coordinator + controller + widget tests. Camera QR scan deferred to 9.6
+- `v1.23` — Phase 9 chunk 9.6: the `QrScanner` seam (`qr/qr_scanner.dart`: interface + `UnavailableQrScanner` default + `FakeQrScanner`) injected through `MobileWalletDemoApp` → `WalletFlowController`; gated scan entry points on the Connections screen that fill the `wc:`/`airgap-tx:` paste fields; request-card sender line. Scanner + controller + widget tests
+- `v1.24` — Phase 9 chunk 9.6 (real QR file load, all platforms): the seam grows two sources (`isCameraScanAvailable`/`scanWithCamera` vs `isFileLoadAvailable`/`loadFromFile`); `FileQrScanner` (`qr/file_qr_scanner.dart`) is the production default — picks an image via `file_selector` and decodes the QR purely in Dart (`image` + `zxing2` → `ZxingQrImageDecoder`), so it works on **every** platform incl. Windows (the only option there). Live camera stays deferred. "Загрузить из файла" buttons on the Connections screen; decode test against a committed PNG fixture + controller/widget tests
+- `v1.25` — Phase 9 chunk 9.7 (message signing): `personal_sign` / `eth_sign` (EIP-191) end-to-end on the fake. `WalletConnectV2RequestCodec` gains `isMessageSignMethod` + `decodeMessageRequest` (handles the `[message,address]` vs `[address,message]` order, hex/utf8 message); `TransactionService.signPersonalMessage` + `WalletTransactionSigner.signPersonalMessage` (web3dart `signPersonalMessageToUint8List`); `WalletConnectInboundCoordinator` gains a message branch; the request card renders the decoded message. Codec + coordinator + controller tests
+- `v1.26` — Phase 9 chunk 9.8 (EIP-712 typed-data signing): `eth_signTypedData_v4`/`_v3`. New pure-Dart `walletconnect/eip712.dart` (`Eip712Encoder.encode` → the 32-byte `keccak256(0x1901‖domainSep‖hashStruct)` digest; nested structs + arrays); `TransactionService.signDigest` (raw secp256k1 over a digest via web3dart `sign`, low-s) + `WalletTransactionSigner.signDigest`; codec `isTypedDataMethod`/`decodeTypedDataRequest`; a `WalletConnectInboundCoordinator` typed-data branch; the request card shows a `primaryType @ domain` summary. Validated against the canonical EIP-712 "Mail" vector (digest `0xbe609aee…` + signature, generated with reference `eth-account`)
+- `v1.27` — Phase 9 chunk 9.2 (real `reown_walletkit`): toolchain blockers resolved, service integrated and
+  DI-selected on configured mobile builds; later Android dogfood through v1.36 validated the real relay and a
+  Sepolia transaction broadcast. Fakes and coordinator tests cover deterministic logic; live relay remains a
+  manual/device boundary
+- `v1.28` — Phase 9 chunk 9.9 (live camera QR scan): 9.9a probe (dep-only `mobile_scanner: ^7.2.0`) → CI green on all 4 platforms (iOS pure-Swift Vision, deployment target 12.0; Android standard-Maven MLKit, no flavor dimension; Windows excluded). 9.9b `qr/camera_qr_scanner.dart` (`CameraQrScanner`: full-screen `MobileScanner` QR-only/`noDuplicates` → first `rawValue`; `loadFromFile` delegates to a composed `FileQrScanner`; pushed via a global `navigatorKey` on `MaterialApp`), DI-selected on Android/iOS (file-only elsewhere), iOS `NSCameraUsageDescription`. Unit test: availability + file delegation + no-navigator error path
+- `v1.29` — Phase 9 chunk 9.9c (camera polish): a centred-square scan window (`ScanWindowOverlay` dims the surround + draws a rounded border; detection limited to the window via `MobileScanner.scanWindow`) and an AppBar torch toggle (`controller.toggleTorch()` via a `ValueListenableBuilder` on the controller's `TorchState`, hidden when unavailable). Records the 9.2 owner dogfood (connect/disconnect + `personal_sign` validated on device; tx pending test funds) and reconciles the plan/CLAUDE.md/worklog to Phase 9 = feature-complete
+- `v1.38` — Phase 12 completion: MetaMask-compatible EIP-4527/BC-UR AirGap account export, animated multipart QR scanning, Mainnet/Sepolia transaction preview and signing, signature QR, and removal of the custom `airgap-tx:` implementation
+- `v1.39` — Android camera QR hardening after AirGap dogfood: analyze the full frame instead of a 70% crop, request a 1920×1080 stream, enable ML Kit auto-zoom, enlarge the overlay-only aim guide, and regression-test the scanner configuration
+- `v1.40` — Phase 10.1–10.2 library-independent Rutoken foundation: non-exporting custody/native-adapter
+  contracts, public account-xpub export, raw `r‖s` validation/low-s/recovery, and byte-identical legacy,
+  EIP-1559, personal/digest, and AirGap signing on a fake native adapter
+- `v1.41`–`v1.46` — Android Rutoken PC/SC + PKCS#11 transport, then physical-device corrections that reproduce
+  the supplied example's application lifecycle, slot events, nullable root path, EC-point handling, and minimal
+  public-derive/raw-`CKM_ECDSA` signing boundary
+- `v1.47` — two recoverable Android provisioning flows: existing BIP-39 mnemonic/passphrase import or new
+  24-word software generation with mandatory backup confirmation; reference `C_CreateObject` only, public
+  account-xpub metadata persisted, empty-token guard and address verification
+- `v1.48` — register the real `rutoken_nfc` backend: upgrade existing v1.47 public metadata without NFC,
+  select it after provisioning, restore its read-only summary at cold start, and route own-send, WalletConnect,
+  and EIP-4527 AirGap through one fresh secret-free NFC/PIN signer per operation
+- `v1.49` — adopt an already provisioned compatible Rutoken without modifying its key, support a descriptor-only
+  profile when account xpub is unavailable, reject a different card at signing time, and offer a one-time
+  biometric-gated PIN opt-in for later private operations
+- `v1.50` — make Android Rutoken NFC discovery explicitly cancellable; map stable sanitized cancellation,
+  timeout, invalid/locked PIN and NFC-loss errors; detect a removed card before subsequent session operations;
+  preserve the primary signing/account failure if teardown also reports; add source-level secret-containment and
+  controller/native-adapter lifecycle regressions
+- `v1.51` — fail closed on unknown Rutoken native failures: the Android channel emits a fixed generic message and
+  Dart ignores raw vendor message/details; source and adapter regressions pin the no-diagnostic-leak boundary
+- `v1.52` — Phase 13.1 Nocturne foundation: dark theme tokens, platform-style seam, bundled Inter, ARB scaffolding,
+  build strip
+- `v1.53` — Phase 13.2–13.5 four-tab shell and redesigned flows; the simulated external-device backend is removed
+- `v1.54` — Phase 13.6–13.7: full RU/EN localization with the language switch, onboarding variant B
+- `v1.55` — Phase 14.1–14.4 multiple registered cards (profile list + selection, token serial, switcher, «Забыть
+  карту»); presence-based mid-operation NFC-loss classification
+- `v1.56` — toolchain release: latest Flutter stable (unpinned, 3.47.8 at release), app module in built-in-Kotlin
+  form, `package_info_plus` 10 override so only `walletconnect_pay` still applies KGP, obsolete
+  `flutter_secure_storage` override dropped, GitHub release job (`v*` tag or manual `release` run on main)
+- `v1.57` — Phase 13 close-out and three LATER items: domain failures carry `AppErrorCode`s read in RU/EN at the
+  UI edge (dApp-facing JSON-RPC errors fixed English, biometric dialog text localized, history labels as data);
+  one confirmation sheet walks PIN → signing/tap → result (13.5); the «Новая карта» screen; optional
+  lock-on-open (lock screen on start and after a minute in the background; card unlock = PIN + tap, no signing)
+- `v1.58` — launch fixes: the iOS `UISceneConfigurations` block is back (lost in `a011c2c`; required by the
+  Xcode 27 SDK), Android runs card-less instead of crashing where the process is not arm64, and the 16 KB
+  alignment check ignores 32-bit libs
+- `v1.59` — `local_auth` 3.0.2 (`local_auth_darwin` 2.0.5 is UIScene-compatible): `LocalAuthException` codes map to
+  cancel / unavailable / a new «биометрия заблокирована» lockout message / failure
+- `v1.60` — desktop builds (Windows x64/arm64, Linux x64/arm64, macOS universal; the Windows limits apply); the
+  release pipeline in `ci.yml` (per-target workflows, smoke on a same-architecture runner, release only after every
+  smoke); WalletConnect fixes from the real-dApp run (`eth_signTypedData`, chain switch with `chainChanged` and
+  EIP-1193/3326 codes, pairing/approval timeouts)
+
+## Current non-goals and validation limits
+- no iOS hardware-device SDK implementation yet; Android physical signing passed on v1.51, while the v1.55
+  mid-operation NFC-loss fix awaits its hardware rerun and physical crash/log-output inspection remains open
+- no additional chains beyond Ethereum Mainnet and Sepolia in the initial AirGap UI
+- no multi-chain support beyond Ethereum Mainnet and Sepolia yet
+- **single-account by design** (audit decision): one EVM address per wallet, derived at `m/44'/60'/0'/0/0`
+  (Phase 14 lets several cards each be such a wallet); HD-account discovery / multiple accounts are out of scope — Phase 9 WalletConnect sessions expose this one account (`eip155:*:<address>`)
+- **localization**: RU + EN via ARB since Phase 13.6 (Russian primary; widget tests pin `Locale('ru')`); since v1.57
+  domain failures are coded and translated at the UI edge, with protocol detail (RLP, BC-UR, EIP-712) left as an
+  untranslated technical suffix; JSON-RPC errors sent to dApps are English by design
+- **test fidelity**: deterministic tests use in-memory fakes; secure storage, public RPC, Reown relay, camera,
+  and future NFC behavior cross native/device boundaries and require the maintained manual device matrix in
+  addition to CI. WalletConnect and AirGap have owner dogfood evidence, but are not fully automated end-to-end

@@ -15,12 +15,12 @@ Android APK: `flutter build apk --release --dart-define-from-file=dart_defines.j
 ## Правила
 
 - Перед коммитом: `dart format .` (CI проверяет форматирование).
-- Коммиты — на английском, в императиве (`Add login screen`).
+- Коммиты — на английском в формате Conventional Commits (`feat: add login screen`).
 - Пушим напрямую в `main`; проект должен собираться без ошибок.
-- Релизы — только через CI: пуш тега `vX.Y.Z` → пайплайн собирает, тестирует
-  и публикует артефакты (Package Registry + GitLab Release).
+- На GitHub выпуск запускается после изменения версии в `main`, если релиза для неё ещё нет;
+  CI собирает и проверяет цели, публикует артефакты и создаёт тег. GitLab выпускает релизы по тегам.
 - Версия SemVer: патч — правки без новой функциональности, минор — новая
   функциональность. При смене версии обновлять `pubspec.yaml`,
   `lib/src/app_version.dart`, `test/widget_test.dart`.
 - Детали работы агентов — в `AGENTS.md`, карта кода — в `CLAUDE.md`,
-  роадмап — в `docs/development-plan.md`.
+  направление — в `docs/ROADMAP.md`, текущие задачи — в `docs/PLAN.md`, состояние — в `docs/STATUS.md`.

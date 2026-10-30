@@ -1,7 +1,7 @@
 # Historical repo review — 2026-06-11 (v1.18 snapshot)
 
 > **Superseded as execution guidance.** This file preserves a point-in-time audit for history. Use
-> `docs/development-plan.md` (NOW / NEXT / LATER and Phase 10) for current direction and `CLAUDE.md` for the
+> `docs/ROADMAP.md` for current direction, `docs/STATUS.md` for current state and `CLAUDE.md` for the
 > current architecture.
 
 ## Outcome as of v1.39
