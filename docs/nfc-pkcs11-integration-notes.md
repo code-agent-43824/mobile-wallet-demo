@@ -1,14 +1,12 @@
 # NFC / PKCS#11 hardware-signer integration notes (Phase 10 reference)
 
-> **Audience:** any coding agent (Claude Code or other) who will turn the
-> simulated external-NFC device (Phase 7) into a **real** PKCS#11/NFC custody
-> signer in Phase 10. Read it together with `docs/development-plan.md`
-> (Phase 10) and `AGENTS.md`.
+> **Audience:** coding agents maintaining the PKCS#11/NFC custody signer.
+> Read it together with `docs/development-plan.md` (Phase 10) and `AGENTS.md`.
 >
-> **Status:** reference plus Android transport/provisioning implementation. v1.46's
-> official Android PC/SC + PKCS#11 read/sign diagnostic is physically validated;
-> v1.47 adds both recoverable `C_CreateObject` provisioning flows. The selectable
-> production backend and physical provisioning validation are still pending. Every constant/recipe below is cross-checked against the **two
+> **Status:** reference and historical implementation notes from v1.46–v1.47.
+> The selectable Android backend and physical provisioning validation were completed later;
+> current status and remaining hardware checks are in `docs/development-plan.md` and
+> `docs/device-test-matrix.md`. Every constant/recipe below is cross-checked against the **two
 > official Aktiv-Soft / Rutoken demo wallets** (iOS Swift + Android Kotlin) and
 > the vendor C headers they ship — see Provenance.
 

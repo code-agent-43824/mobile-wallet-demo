@@ -43,7 +43,8 @@ Releases: bump the version (and the CHANGELOG section) in `main`. The `plan` job
 
 The project's primary home is now the internal GitLab (`prototypes/mobile-wallet-demo`); `.gitlab-ci.yml` runs
 blocking SAST (semgrep + osv from `mko/ci-security`), the same format/analyze/test gate, an Android APK build, docs
-Pages, and tag releases. The GitHub repository and its `ci.yml` (Android/iOS/Windows) are kept in sync with it.
+Pages, and tag releases. The GitHub repository has additional desktop targets and release smoke tests;
+do not assume its workflow matches the GitLab pipeline target for target.
 
 ## Architecture
 

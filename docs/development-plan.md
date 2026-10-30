@@ -5,8 +5,9 @@ This file is the canonical development plan for the project. Use it as the sourc
 ## Status snapshot
 
 Current factual status of the project:
-- ✅ CI foundation covers Android, iOS Simulator/Device, and Windows x64 on GitHub Actions, plus the GitLab
-  pipeline (blocking SAST, tests, Android APK, Pages, tag releases). Since v1.56 CI follows the latest Flutter
+- ✅ CI builds Android, iOS Simulator/Device, Windows x64/arm64, Linux x64/arm64 and macOS on GitHub Actions;
+  the v1.60.0 release ran smoke checks on the supported runner architectures. The GitLab
+  pipeline runs blocking SAST, tests, an Android APK build, Pages and tag releases. Since v1.56 CI follows the latest Flutter
   stable instead of a pinned version; the Android build uses Flutter's AGP 9 template flags, with
   `android.builtInKotlin=false` kept only for `walletconnect_pay`
 - ✅ Phase 0 is effectively completed
@@ -569,8 +570,8 @@ Status: ✅ done + **device-validated on iOS sim** (v1.32–v1.33): the per-op P
 - **11.2** — per-op auth core: `_withFreshlyUnlockedMaterial({pin, useBiometrics})` (unlock → op → `lock()` in a `finally`) + an `_OperationAuthSheet` (PIN + optional biometric) shown by the widget before each key op.
 - **11.3** — rewire the three signing paths (send / WC-approve / AirGap-sign) to authenticate-on-demand; drop the held-`material` assumptions; update tests.
 
-### Deferred / future (recorded per owner request)
-- **Optional "lock app on open" toggle** — a privacy setting that re-introduces an app-open gate (PIN/biometric to even view), reusing the retained `locked` stage. Off by default. Not built now.
+### Deferred at the end of Phase 11 (recorded per owner request)
+- **Optional "lock app on open" toggle** — the privacy setting was deferred in Phase 11 and built in v1.57, reusing the retained `locked` stage. It is off by default.
 - **External-device session-management UX** — post-Phase-11 the demo device is locked at rest (no PKCS#11 session), so the dashboard's "ping session" / "read address via PKCS#11" buttons surface a "No active device session" banner until a signing op briefly opens one. Demo-path nicety: either hide those controls until a session exists, or have them open a session on demand. (Phase 10 will revisit the real device lifecycle anyway.)
 
 ## Phase 12 — AirGap over EIP-4527 / Keystone BC-UR (MetaMask-compatible signer)
@@ -703,20 +704,18 @@ way it switches storage backends today. Requested by the owner 2026-08-18 while 
 Status: 🟡 In progress — 14.1–14.4 are built and CI green; 14.5 (physical two-card dogfood) is the remaining
 exit criterion and needs the owner's hardware.
 
-### Why it is not a quick change
-Today "which wallet" and "which backend" are the same question: the switcher selects a **backend id**, and the
-Rutoken backend stores exactly one registered profile. Several cards would be several wallets *inside one
-backend*, which the model has no room for:
-- the profile store holds a single `WalletAccountDescriptor`, and `hasWallet()` means "is one registered";
-- provisioning refuses a second card outright («На телефоне уже зарегистрирован другой Рутокен»);
-- every operation asserts the presented card matches *the* registered address — the binding that was
+### Starting point before 14.1–14.4
+At the start of Phase 14, "which wallet" and "which backend" were the same question: the switcher selected a
+**backend id**, and the Rutoken backend stored one registered profile. Several cards would be several wallets
+*inside one backend*, which the model could not represent:
+- the profile store held a single `WalletAccountDescriptor`, and `hasWallet()` meant "is one registered";
+- provisioning refused a second card outright («На телефоне уже зарегистрирован другой Рутокен»);
+- every operation asserted the presented card matched *the* registered address — the binding that was
   physically validated in Phase 10 and must not be loosened by accident;
-- `switchActiveWallet` resolves a backend, not a profile.
+- `switchActiveWallet` resolved a backend, not a profile.
 
-### What is already available
-The Android layer **already returns the card's serial** — `RutokenRuntime` puts `tokenSerial` (plus label and
-model) in the open-session result — but Dart never reads it. So identifying cards in the picker needs no native
-work, only plumbing.
+The Android layer already returned the card's serial in the open-session result. Dart started reading it
+in 14.2, so identifying cards in the picker needed no new native code.
 
 ### Chunks
 - **14.1 — DONE (CI green)** — model: the profile store holds a list of card profiles plus a `selectedId`

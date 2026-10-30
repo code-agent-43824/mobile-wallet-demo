@@ -3,7 +3,7 @@
 Flutter-демо single-account EVM-кошелька с рабочим phone vault, WalletConnect и
 MetaMask-совместимым AirGap signer.
 
-**Сейчас:** v1.59 поддерживает Mainnet/Sepolia, локальные переводы, wallet-side WalletConnect,
+**Сейчас:** v1.60 поддерживает Mainnet/Sepolia, локальные переводы, wallet-side WalletConnect,
 EIP-4527/BC-UR AirGap и авторизацию на каждую операцию. Реальный Android Rutoken backend
 может создать/импортировать ключ либо без перезаписи принять уже готовую совместимую карту:
 read-only профиль загружается без NFC, адрес каждой поднесённой карты сверяется с профилем,
@@ -21,7 +21,7 @@ Live/native release evidence is tracked separately in
 
 ## Что уже есть
 
-- Flutter-проект с платформами: Android, iOS, Windows x64
+- Flutter-проект с платформами: Android, iOS, Windows x64/arm64, Linux x64/arm64, macOS
 - Базовый Secure Vault foundation для phone backend
 - Полноценный onboarding/auth shell:
   - welcome screen
@@ -88,7 +88,7 @@ Live/native release evidence is tracked separately in
 - Русская и английская локализация интерфейса: язык берётся из настроек приложения, затем из системного,
   иначе русский; переключатель — в разделе «Настройки»
 - Unit- и widget-тесты для ключевых flow
-- GitHub Actions для сборки и публикации артефактов; основной CI/CD — во внутреннем GitLab (SAST, тесты,
+- GitHub Actions для сборки, проверки запуска и публикации артефактов; основной CI/CD — во внутреннем GitLab (SAST, тесты,
   Android APK, Pages, релизы по тегам)
 - Артефакты iOS / Windows без двойной упаковки
 
@@ -129,23 +129,29 @@ Live/native release evidence is tracked separately in
 
 ## Артефакты CI
 
-Workflow публикует скачиваемые артефакты так, чтобы при скачивании с GitHub был нужен только один `unzip`:
+Workflow публикует артефакты сборки. Релиз v1.60.0 содержит восемь файлов с префиксом
+`mobile-wallet-demo-1.60.0-`:
 
-- Android: `app-release.apk`
-- iOS Simulator: `ios-simulator-app.zip` — внутри одна папка `Wallet Demo.app` (см. раздел «iOS artifacts»)
-- iOS Device: `ios-device-build.zip` — **неподписанный** device-build (технический артефакт; см. «iOS artifacts»)
-- Windows x64: один архив GitHub Artifact с содержимым `Release/` внутри
+- Android: `android.apk`;
+- iOS Simulator: `ios-simulator.zip` — внутри `Wallet Demo.app`;
+- iOS Device: `ios-device-unsigned.zip` — неподписанная сборка;
+- Windows: `windows-x64.zip`, `windows-arm64.zip`;
+- Linux: `linux-x64.tar.gz`, `linux-arm64.tar.gz`;
+- macOS: `macos.zip` — универсальная сборка для arm64 и x64.
+
+На странице запуска Actions артефакты iOS называются `ios-simulator` и `ios-device`;
+каждый содержит соответствующий ZIP-файл. Релиз публикуется после проверок запуска
+на доступных раннерах; ограничения проверки указаны в заметках к релизу.
 
 ## iOS artifacts
 
-CI собирает два независимых iOS-артефакта (параллельные job'ы после `validate`):
-`ios-simulator-app` и `ios-device-build`.
+CI собирает два независимых iOS-артефакта: `ios-simulator` и `ios-device`.
 
 ### 1. Запуск в iOS Simulator (на Mac)
 
-1. Открой нужный запуск в GitHub → вкладка **Actions** → job **iOS Simulator build**.
-2. Скачай артефакт **`ios-simulator-app.zip`**.
-3. Распакуй — внутри одна папка **`Wallet Demo.app`** (готовый `.app` bundle, а не набор файлов
+1. Открой нужный запуск в GitHub → вкладка **Actions** → job **iOS / Build simulator app**.
+2. Скачай артефакт **`ios-simulator`** и распакуй из него `ios-simulator.zip`.
+3. Распакуй ZIP — внутри одна папка **`Wallet Demo.app`** (готовый `.app` bundle, а не набор файлов
    `Info.plist` / `Runner` / `Frameworks` / `Assets.car`).
 4. Запусти **Simulator** (Xcode → Open Developer Tool → Simulator) и дождись загрузки симулятора.
 5. Установи приложение одним из способов:
@@ -157,7 +163,7 @@ CI собирает два независимых iOS-артефакта (пар
 
 ### 2. Запуск на реальном iPhone / iPad
 
-Артефакт **`ios-device-build.zip`** содержит **неподписанный** device-build (`Wallet Demo.app`) —
+Артефакт **`ios-device-unsigned.zip`** содержит **неподписанный** device-build (`Wallet Demo.app`) —
 это технический артефакт. **Установить его на реальное устройство без подписи нельзя.**
 
 Способы запустить на устройстве:
@@ -166,9 +172,8 @@ CI собирает два независимых iOS-артефакта (пар
   Capabilities* выбери свой **Personal Team** (бесплатный Apple ID), подключи iPhone/iPad кабелем и нажми
   **Run**. Xcode сам подпишет сборку development-сертификатом и provisioning profile. Пошаговая
   инструкция — в разделе «Run on real iPhone/iPad with free Apple Account» ниже.
-- **Через CI с подписью:** device-артефакт можно подписать в GitHub Actions, **только** если заранее заданы
-  signing-credentials в *Settings → Secrets and variables → Actions* (certificate + provisioning profile как
-  секреты). Без них job намеренно собирает unsigned-сборку и пишет об этом в лог. Никакие Apple ID, пароли,
+- CI сейчас собирает только неподписанный device-артефакт. Даже если заданы signing-credentials,
+  workflow сообщает, что экспорт подписанного IPA пока не реализован. Никакие Apple ID, пароли,
   сертификаты или профили в репозиторий не коммитятся — он публичный.
 
 Ограничения (честно):
@@ -231,10 +236,10 @@ Apple ID (Personal Team) — через Xcode, без платного Apple Dev
 
 ## Run iOS app on Apple Silicon Mac
 
-На **Apple Silicon Mac** (M1/M2/M3…) этот же iOS-таргет можно запускать прямо на macOS как
-**«Designed for iPad / iPhone»** — без отдельной macOS-сборки и без Simulator. В проекте это уже включено
-(`SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES` на target `Runner`; Mac Catalyst **не** используется,
-отдельного Flutter macOS-таргета и папки `macos/` нет).
+На **Apple Silicon Mac** (M1/M2/M3…) iOS-таргет можно запускать как
+**«Designed for iPad / iPhone»** без Simulator. Этот режим включён через
+`SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES` на target `Runner`; Mac Catalyst не используется.
+Это отдельный путь от нативной Flutter-сборки macOS в `macos/`.
 
 1. Открой `ios/Runner.xcworkspace` в Xcode (сначала `flutter pub get` и `flutter build ios --config-only`
    для CocoaPods — как в разделе про iPhone выше).
@@ -249,7 +254,7 @@ Apple ID (Personal Team) — через Xcode, без платного Apple Dev
 - Работает **только на Apple Silicon Mac** — на Intel-маках такой destination недоступен.
 - Это **не** iOS Simulator и **не** нативная macOS-сборка: запускается тот же iOS-бинарь (`iphoneos`/arm64)
   на macOS как «Designed for iPad/iPhone».
-- Отдельный Flutter macOS-таргет для этого **не нужен**. Часть чисто-iOS возможностей (например, биометрия)
+- Для этого режима Flutter macOS-таргет **не нужен**. Часть чисто-iOS возможностей (например, биометрия)
   на Mac может вести себя иначе — это ограничение режима «Designed for iPad», а не проекта.
 
 ## Идентификаторы приложения и запуск на Android / Windows
