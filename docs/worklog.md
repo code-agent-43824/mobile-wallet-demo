@@ -18,10 +18,10 @@ Entry template:
 
 ---
 
-## 2026-10-30 — Выпуск v1.60.0 через новый конвейер — branch main — in progress
+## 2026-10-30 — Выпуск v1.60.0 через новый конвейер — branch main — done
 - Plan: владелец поручил выпуск. Версия 1.60.0+72 в `pubspec.yaml`, `lib/src/app_version.dart`, README и снимке NOW в `docs/development-plan.md`; раздел CHANGELOG `[Unreleased]` → `[1.60.0]`. Push в main: `plan` увидит, что релиза `v1.60.0` нет, прогонит все смоки, а `release` опубликует 8 артефактов с таблицей смоков и сам создаст тег.
-- Done: перед выпуском прогон 237 (7cdfe6e) зелёный.
-- Next / open: дождаться прогона, проверить релиз (артефакты, таблица, тег), записать итог.
+- Done: перед выпуском прогон 237 (7cdfe6e) зелёный; локально (Flutter 3.47.9) формат, analyze и 251 тест зелёные. Прогон 238 (f2a7709) — первый полный выпуск через конвейер, ~22 мин: `plan` дал `release=true smoke=true`, все сборки и смоки зелёные (Android x86_64, iOS-симулятор, Windows x64/arm64, Linux x64/arm64, macOS arm64/x64 — запуск релизной сборки и сценарий; Android arm64 — `no-kvm`). Job `release` создал тег `v1.60.0` на f2a7709 и релиз с 8 артефактами (`mobile-wallet-demo-1.60.0-{android.apk, ios-simulator.zip, ios-device-unsigned.zip, windows-x64.zip, windows-arm64.zip, linux-x64.tar.gz, linux-arm64.tar.gz, macos.zip}`), заметками из CHANGELOG и таблицей смоков (8 ✅, 3 ⚠️ «не проверено»).
+- Next / open: повторный прогон владельцем WalletConnect с реальным dApp (строки в `docs/device-test-matrix.md`); убрать `scripts/ci/patch_flutter_191575.sh`, когда Flutter исправит #191575.
 
 ## 2026-10-29 — WalletConnect v2: находки прогона с реальным dApp — branch main — done (в коде; ждёт повторного прогона с dApp)
 - Контекст: владелец прогнал кошелёк с реальным dApp через WalletConnect v2 (устройство и версия не указаны). Нашлись три проблемы; две проверки прошли (просроченный запрос получает «Request expired. Please try again.», транзакция от чужого аккаунта блокирует Approve с объяснением). Результаты записаны в `docs/device-test-matrix.md`.
