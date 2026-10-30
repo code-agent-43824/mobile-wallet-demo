@@ -26,21 +26,23 @@ xcodebuild -version
 xcrun --sdk iphonesimulator --show-sdk-version
 flutter --version
 
-runtime="$(xcrun simctl list runtimes available -j | python3 -c '
+runtimes="$(xcrun simctl list runtimes available -j | python3 -c '
 import json, sys
 runtimes = [r for r in json.load(sys.stdin)["runtimes"]
             if r["identifier"].startswith("com.apple.CoreSimulator.SimRuntime.iOS-")
             and r.get("isAvailable", True)]
 if not runtimes:
     sys.exit("no available iOS simulator runtime")
-print(max(runtimes, key=lambda r: tuple(map(int, r["version"].split("."))))["identifier"])
+for runtime in sorted(runtimes, key=lambda r: tuple(map(int, r["version"].split("."))), reverse=True):
+    print(runtime["identifier"])
 ')"
 device_types="$(xcrun simctl list devicetypes -j | python3 -c '
 import json, sys
 import re
-phones = [(int(m.group(1)), d["name"], d["identifier"])
+phones = [(int(m.group(1)) if (m := re.match(r"iPhone (\d+)", d["name"])) else -1,
+           d["name"], d["identifier"])
           for d in json.load(sys.stdin)["devicetypes"]
-          if (m := re.match(r"iPhone (\d+)", d["name"]))]
+          if d["name"].startswith("iPhone ")]
 if not phones:
     sys.exit("no iPhone simulator device type")
 for _, _, identifier in sorted(phones, reverse=True):
@@ -48,19 +50,22 @@ for _, _, identifier in sorted(phones, reverse=True):
 ')"
 
 echo "== Isolated simulator =="
-echo "Runtime: $runtime"
 udid=""
-while IFS= read -r device_type; do
-  echo "Trying device type: $device_type"
-  if created="$(xcrun simctl create "WalletDemo-Xcode27-$$" "$device_type" "$runtime" 2>>"$OUT_DIR/device-create-errors.log")"; then
-    udid="$created"
-    break
-  fi
-done <<< "$device_types"
+while IFS= read -r runtime; do
+  echo "Trying runtime: $runtime"
+  while IFS= read -r device_type; do
+    echo "Trying device type: $device_type"
+    if created="$(xcrun simctl create "WalletDemo-Xcode27-$$" "$device_type" "$runtime" 2>>"$OUT_DIR/device-create-errors.log")"; then
+      udid="$created"
+      break 2
+    fi
+  done <<< "$device_types"
+done <<< "$runtimes"
 if [ -z "$udid" ]; then
-  echo "No iPhone type is compatible with runtime $runtime; see $OUT_DIR/device-create-errors.log" >&2
+  echo "No iPhone type is compatible with available iOS runtimes; see $OUT_DIR/device-create-errors.log" >&2
   exit 2
 fi
+echo "Runtime: $runtime"
 echo "Device type: $device_type"
 cleanup() {
   xcrun simctl shutdown "$udid" >/dev/null 2>&1 || true
