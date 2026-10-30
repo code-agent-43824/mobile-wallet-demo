@@ -54,6 +54,10 @@ CI собирает два независимых iOS-артефакта: `ios-s
 не меняет. Версия Xcode, результат и логи сохраняются в `build/smoke/xcode27-*`;
 сообщи путь и результат для записи в матрицу проверок.
 
+Тот же сценарий можно запустить без локального Mac через GitHub Actions →
+**Xcode 27 simulator smoke** → **Run workflow**. Журнал сохраняется в артефакте
+`xcode27-simulator-smoke`.
+
 ### 2. Запуск на реальном iPhone / iPad
 
 Артефакт **`ios-device-unsigned.zip`** содержит **неподписанный** device-build (`Wallet Demo.app`) —
