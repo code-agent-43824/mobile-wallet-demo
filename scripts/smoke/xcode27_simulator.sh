@@ -35,20 +35,33 @@ if not runtimes:
     sys.exit("no available iOS simulator runtime")
 print(max(runtimes, key=lambda r: tuple(map(int, r["version"].split("."))))["identifier"])
 ')"
-device_type="$(xcrun simctl list devicetypes -j | python3 -c '
+device_types="$(xcrun simctl list devicetypes -j | python3 -c '
 import json, sys
 import re
-phones = [(int(m.group(1)), d) for d in json.load(sys.stdin)["devicetypes"]
+phones = [(int(m.group(1)), d["name"], d["identifier"])
+          for d in json.load(sys.stdin)["devicetypes"]
           if (m := re.match(r"iPhone (\d+)", d["name"]))]
 if not phones:
     sys.exit("no iPhone simulator device type")
-print(max(phones, key=lambda item: item[0])[1]["identifier"])
+for _, _, identifier in sorted(phones, reverse=True):
+    print(identifier)
 ')"
 
 echo "== Isolated simulator =="
 echo "Runtime: $runtime"
+udid=""
+while IFS= read -r device_type; do
+  echo "Trying device type: $device_type"
+  if created="$(xcrun simctl create "WalletDemo-Xcode27-$$" "$device_type" "$runtime" 2>>"$OUT_DIR/device-create-errors.log")"; then
+    udid="$created"
+    break
+  fi
+done <<< "$device_types"
+if [ -z "$udid" ]; then
+  echo "No iPhone type is compatible with runtime $runtime; see $OUT_DIR/device-create-errors.log" >&2
+  exit 2
+fi
 echo "Device type: $device_type"
-udid="$(xcrun simctl create "WalletDemo-Xcode27-$$" "$device_type" "$runtime")"
 cleanup() {
   xcrun simctl shutdown "$udid" >/dev/null 2>&1 || true
   xcrun simctl delete "$udid" >/dev/null 2>&1 || true
