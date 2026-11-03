@@ -69,7 +69,7 @@
 
 ### Подпись EIP-712: общее превью (начато 2026-11-03 по решению владельца)
 
-- [ ] **`wallet_getCapabilities` без `atomic`.** По EIP-5792 `atomic: unsupported` значит «пакеты
+- [x] **`wallet_getCapabilities` без `atomic`.** По EIP-5792 `atomic: unsupported` значит «пакеты
   принимаю и выполняю последовательно», а `wallet_sendCalls` кошелёк не принимает. Без `atomic`
   ответ значит «пакетов нет», и dApp сразу шлёт вызовы по одному через `eth_sendTransaction`.
 - [ ] **Общее превью EIP-712 для WalletConnect.** Сейчас видно только «тип @ домен». Показать домен

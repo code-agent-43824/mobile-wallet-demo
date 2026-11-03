@@ -204,11 +204,13 @@ class WalletConnectInboundCoordinator {
               .whereType<int>()
               .where(supported.contains)
               .toSet();
+    // No `atomic` capability: under EIP-5792 even `unsupported` would promise
+    // that `wallet_sendCalls` batches are taken and run one after another,
+    // which this wallet does not do. Without it a dApp sends the calls one by
+    // one with `eth_sendTransaction`.
     final result = <String, Object?>{
       for (final chainId in requested)
-        '0x${chainId.toRadixString(16)}': const <String, Object?>{
-          'atomic': <String, Object?>{'status': 'unsupported'},
-        },
+        '0x${chainId.toRadixString(16)}': const <String, Object?>{},
     };
     await _service.respondResult(request: request, result: result);
   }

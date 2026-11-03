@@ -105,13 +105,11 @@ void main() {
 
       expect(service.respondedErrors, isEmpty);
       expect(service.respondedResults.single.id, request.id);
+      // Known chains only (0x89 is dropped), and no `atomic`: the wallet
+      // takes no EIP-5792 batches.
       expect(service.respondedResults.single.result, <String, Object?>{
-        '0x1': const <String, Object?>{
-          'atomic': <String, Object?>{'status': 'unsupported'},
-        },
-        '0xaa36a7': const <String, Object?>{
-          'atomic': <String, Object?>{'status': 'unsupported'},
-        },
+        '0x1': const <String, Object?>{},
+        '0xaa36a7': const <String, Object?>{},
       });
     },
   );
