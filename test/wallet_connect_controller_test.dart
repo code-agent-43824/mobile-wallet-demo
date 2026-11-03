@@ -64,6 +64,7 @@ void main() {
     NonceProvider? nonceProvider,
     QrScanner qrScanner = const UnavailableQrScanner(),
     Duration walletConnectResponseTimeout = const Duration(seconds: 30),
+    DateTime Function()? now,
   }) async {
     final controller = WalletFlowController(
       store: store ?? InMemorySecureKeyValueStore(),
@@ -74,6 +75,7 @@ void main() {
       nonceProvider: nonceProvider,
       qrScanner: qrScanner,
       walletConnectResponseTimeout: walletConnectResponseTimeout,
+      now: now,
     );
     await controller.loadInitialState();
     controller.goToCreateWallet();
@@ -662,6 +664,81 @@ void main() {
     expect(controller.pendingRequest, isNull);
     expect(controller.errorMessage, isNull);
     expect(service.respondedResults.single.result, '0x1');
+
+    controller.dispose();
+    await service.dispose();
+  });
+
+  test(
+    'an AirGap request signed before is called out when loaded again',
+    () async {
+      final service = FakeWalletConnectService();
+      final signedAt = DateTime.utc(2026, 11, 3, 12, 5);
+      final controller = await buildUnlocked(
+        service,
+        transactionService: const LocalTransactionService(),
+        now: () => signedAt,
+      );
+      String payload(String requestId, String toByte) =>
+          const Eip4527Codec().encodeSignRequest(
+            EthSignRequest(
+              requestId: requestId,
+              signData: Uint8List.fromList(
+                hexToBytes(
+                  '02ef83aa36a780843b9aca0085069db9ac0082520894'
+                  '${toByte * 20}808412345678c0',
+                ),
+              ),
+              dataType: EthSignDataType.typedTransaction,
+              chainId: 11155111,
+              derivationPath: CryptoKeypath.parse("M/44'/60'/0'/0/0"),
+            ),
+          );
+      final first = payload('aa1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d', '22');
+
+      await controller.loadAirGapRequest(first);
+      expect(controller.airGapRequestSignedBefore, isNull);
+      await controller.signPendingAirGapRequest(pin: '1234');
+      expect(controller.airGapResponsePayload, isNotNull);
+
+      await controller.loadAirGapRequest(first);
+      expect(controller.airGapRequestSignedBefore, signedAt);
+      // A notice, not a block: the request can still be signed.
+      expect(controller.airGapRequestPreview, isNotNull);
+      expect(controller.errorMessage, isNull);
+
+      await controller.loadAirGapRequest(
+        payload('cc1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d', '33'),
+      );
+      expect(controller.airGapRequestSignedBefore, isNull);
+
+      controller.dispose();
+      await service.dispose();
+    },
+  );
+
+  test('an AirGap message signing request is refused as such', () async {
+    final service = FakeWalletConnectService();
+    final controller = await buildUnlocked(service);
+
+    await controller.loadAirGapRequest(
+      const Eip4527Codec().encodeSignRequest(
+        EthSignRequest(
+          requestId: 'dd1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
+          signData: Uint8List.fromList(<int>[0x48, 0x69]),
+          dataType: EthSignDataType.rawBytes,
+          chainId: 11155111,
+          derivationPath: CryptoKeypath.parse("M/44'/60'/0'/0/0"),
+        ),
+      ),
+    );
+
+    expect(
+      controller.errorMessage,
+      'Через AirGap кошелёк подписывает только транзакции; '
+      'подпись сообщений не поддерживается.',
+    );
+    expect(controller.airGapRequest, isNull);
 
     controller.dispose();
     await service.dispose();

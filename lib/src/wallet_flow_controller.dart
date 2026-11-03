@@ -68,6 +68,7 @@ class WalletFlowController extends ChangeNotifier {
        _now = now ?? DateTime.now,
        _walletConnectResponseTimeout = walletConnectResponseTimeout,
        _store = store,
+       _airGapSignedRequests = AirGapSignedRequestLog(store: store),
        _walletConnectService = walletConnectService,
        _walletConnectPreflight = walletConnectPreflight,
        _qrScanner = qrScanner,
@@ -194,6 +195,7 @@ class WalletFlowController extends ChangeNotifier {
   late final PhoneSecureVault _vault;
   late final WalletBackendRegistry _backendRegistry;
   final SecureKeyValueStore _store;
+  final AirGapSignedRequestLog _airGapSignedRequests;
   final DateTime Function() _now;
   final WalletConnectService _walletConnectService;
   final WalletConnectTransactionPreflight _walletConnectPreflight;
@@ -246,6 +248,7 @@ class WalletFlowController extends ChangeNotifier {
   String? _airGapRequestPayload;
   EthSignRequest? _airGapRequest;
   Eip4527TransactionPreview? _airGapRequestPreview;
+  DateTime? _airGapRequestSignedBefore;
   String? _airGapResponsePayload;
   List<WalletConnectSession> _walletConnectSessions =
       const <WalletConnectSession>[];
@@ -333,6 +336,9 @@ class WalletFlowController extends ChangeNotifier {
   String? get airGapAccountExportPayload => _airGapAccountExportPayload;
   EthSignRequest? get airGapRequest => _airGapRequest;
   Eip4527TransactionPreview? get airGapRequestPreview => _airGapRequestPreview;
+
+  /// When the loaded AirGap request was signed before (UTC), or null.
+  DateTime? get airGapRequestSignedBefore => _airGapRequestSignedBefore;
 
   /// The most recent EIP-4527 `eth-signature` response, if any.
   String? get airGapResponsePayload => _airGapResponsePayload;
@@ -1541,6 +1547,7 @@ class WalletFlowController extends ChangeNotifier {
     _airGapRequestPayload = null;
     _airGapRequest = null;
     _airGapRequestPreview = null;
+    _airGapRequestSignedBefore = null;
     _airGapResponsePayload = null;
     await _runGuarded(() async {
       final normalized = normalizeUr(payload);
@@ -1555,7 +1562,7 @@ class WalletFlowController extends ChangeNotifier {
       }
       if (request.dataType != EthSignDataType.transaction &&
           request.dataType != EthSignDataType.typedTransaction) {
-        throw Eip4527Exception(_messages.errorOnlyEthTransfers);
+        throw Eip4527Exception(_messages.errorAirGapTransactionsOnly);
       }
       if (request.dataType == EthSignDataType.transaction &&
           request.chainId != 1) {
@@ -1580,6 +1587,7 @@ class WalletFlowController extends ChangeNotifier {
       _airGapRequestPayload = normalized;
       _airGapRequest = request;
       _airGapRequestPreview = preview;
+      _airGapRequestSignedBefore = await _airGapSignedBefore(request);
       _airGapResponsePayload = null;
     });
   }
@@ -1610,7 +1618,8 @@ class WalletFlowController extends ChangeNotifier {
     bool useBiometrics = false,
   }) async {
     final requestPayload = _airGapRequestPayload;
-    if (requestPayload == null || _airGapRequest == null) {
+    final request = _airGapRequest;
+    if (requestPayload == null || request == null) {
       await _runGuarded(() async {
         throw Eip4527Exception(_messages.errorScanRequestFirst);
       });
@@ -1626,8 +1635,23 @@ class WalletFlowController extends ChangeNotifier {
               signer: signer,
               transactionService: _transactionService,
             );
+        try {
+          await _airGapSignedRequests.record(request, _now());
+        } on Object {
+          // The signature is made; losing the note only loses a later notice.
+        }
       },
     );
+  }
+
+  /// The log only informs: failing to read it never stands between the user
+  /// and a request.
+  Future<DateTime?> _airGapSignedBefore(EthSignRequest request) async {
+    try {
+      return await _airGapSignedRequests.signedAt(request);
+    } on Object {
+      return null;
+    }
   }
 
   /// Clears the request/signature while keeping the reusable account QR.
@@ -1635,6 +1659,7 @@ class WalletFlowController extends ChangeNotifier {
     _airGapRequestPayload = null;
     _airGapRequest = null;
     _airGapRequestPreview = null;
+    _airGapRequestSignedBefore = null;
     _airGapResponsePayload = null;
     _errorMessage = null;
     _notify();

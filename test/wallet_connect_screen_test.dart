@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/app.dart';
+import 'package:mobile_wallet_demo/src/airgap/airgap_signed_requests.dart';
 import 'package:mobile_wallet_demo/src/airgap/eip4527.dart';
 import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
@@ -595,6 +596,41 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('AirGap warns about a request it signed before', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final store = InMemorySecureKeyValueStore();
+    final payload = _airGapRequestUr();
+    await AirGapSignedRequestLog(store: store).record(
+      const Eip4527Codec().decodeSignRequest(payload.toLowerCase()),
+      DateTime.utc(2026, 11, 3, 12, 5),
+    );
+
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        locale: const Locale('ru'),
+        store: store,
+        blockchainProvider: _FakeBlockchainProvider(),
+        walletConnectService: FakeWalletConnectService(),
+        qrScanner: FakeQrScanner(nextResult: payload),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _createUnlock(tester);
+    await _openConnections(tester);
+
+    final scan = find.text('Сканировать запрос');
+    await tester.ensureVisible(scan);
+    await tester.tap(scan);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Этот запрос уже был подписан'), findsOneWidget);
+    // Not a block: the request can still be signed on purpose.
+    expect(find.text('Подписать транзакцию'), findsOneWidget);
   });
 
   testWidgets('connections screen previews and signs MetaMask AirGap tx', (

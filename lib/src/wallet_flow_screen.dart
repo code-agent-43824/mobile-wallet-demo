@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:zxing2/qrcode.dart';
 
 import 'airgap/account_export.dart';
+import 'airgap/airgap_signed_requests.dart';
 import 'airgap/eip4527.dart';
 import 'airgap/eip4527_inbound.dart';
 import 'airgap/eip4527_transaction_preview.dart';
@@ -593,6 +594,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen>
           airGapAccountExportPayload: controller.airGapAccountExportPayload,
           airGapRequest: controller.airGapRequest,
           airGapRequestPreview: controller.airGapRequestPreview,
+          airGapRequestSignedBefore: controller.airGapRequestSignedBefore,
           airGapResponsePayload: controller.airGapResponsePayload,
           walletAddress: controller.summary?.address,
           isQrCameraAvailable: controller.isQrCameraAvailable,

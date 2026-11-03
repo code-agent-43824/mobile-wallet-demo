@@ -281,7 +281,7 @@
       }
     }
   },
-  "errorOnlyEthTransfers": "Only ETH transfers are supported.",
+  "errorAirGapTransactionsOnly": "Over AirGap the wallet signs transactions only; message signing is not supported.",
   "errorLegacyMainnetOnly": "The legacy transaction format is supported on Mainnet only; on Sepolia MetaMask must use EIP-1559.",
   "errorRequestOtherAccount": "The request is addressed to a different account ({address}).",
   "@errorRequestOtherAccount": {
@@ -344,6 +344,14 @@
   "airgapScanRequest": "Scan the request",
   "airgapSignTransaction": "Sign the transaction",
   "airgapStep3Body": "Show this code to the MetaMask camera. MetaMask sends the transfer to the network — nothing more is needed from the wallet.",
+  "airgapAlreadySigned": "This request was already signed on {when}. Do not sign it again unless you know why it is needed.",
+  "@airgapAlreadySigned": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
   "airgapNewTransaction": "New transaction",
   "qrSingleFrame": "A single QR code",
   "qrFrameProgress": "Frame {index} of {total}",

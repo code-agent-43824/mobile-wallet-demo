@@ -18,6 +18,7 @@ class _ConnectionsStage extends StatefulWidget {
     required this.airGapAccountExportPayload,
     required this.airGapRequest,
     required this.airGapRequestPreview,
+    this.airGapRequestSignedBefore,
     required this.airGapResponsePayload,
     required this.walletAddress,
     required this.isQrCameraAvailable,
@@ -51,6 +52,9 @@ class _ConnectionsStage extends StatefulWidget {
   final String? airGapAccountExportPayload;
   final EthSignRequest? airGapRequest;
   final Eip4527TransactionPreview? airGapRequestPreview;
+
+  /// When the loaded request was signed before (UTC), or null.
+  final DateTime? airGapRequestSignedBefore;
   final String? airGapResponsePayload;
   final String? walletAddress;
   final bool isQrCameraAvailable;
@@ -365,6 +369,14 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
                 ],
               ),
               if (airGapRequest != null && airGapPreview != null) ...[
+                if (widget.airGapRequestSignedBefore case final DateTime at)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Text(
+                      l10n.airgapAlreadySigned(_localDateTime(context, at)),
+                      style: TextStyle(color: theme.colorScheme.error),
+                    ),
+                  ),
                 const SizedBox(height: 16),
                 _AirGapTransactionPreviewCard(
                   request: airGapRequest,
@@ -536,6 +548,14 @@ class _AirGapTransactionPreviewCard extends StatelessWidget {
       ],
     );
   }
+}
+
+/// [utc] in the device's time zone, worded by the active locale.
+String _localDateTime(BuildContext context, DateTime utc) {
+  final local = utc.toLocal();
+  final words = MaterialLocalizations.of(context);
+  return '${words.formatMediumDate(local)}, '
+      '${words.formatTimeOfDay(TimeOfDay.fromDateTime(local), alwaysUse24HourFormat: true)}';
 }
 
 /// What an ERC-20 call does, as the label/value pairs both transaction
