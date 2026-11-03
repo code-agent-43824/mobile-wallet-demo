@@ -88,6 +88,8 @@ report's own reproduction notes were not handed over.
 | AirGap T8: envelope chainId 1 over a Sepolia transaction | FAIL | The mismatch is refused, but the request loaded before it stayed on screen and Sign signed that one. Fixed in `e937083`; needs a re-run. |
 | AirGap `personal_sign` from MetaMask (added after this run, `06b89e7`) | NOT RUN | The message preview matches the request; MetaMask accepts the signature and `ecrecover` gives the wallet address. |
 | AirGap multipart request from image files (added after this run, `def4852`) | NOT RUN | All frames picked at once rebuild the request; too few frames say how many are missing. |
+| WalletConnect EIP-712 Permit preview (added after this run, `a7623e4`) | NOT RUN | The card warns that the signature lets someone spend tokens and lists spender, amount and deadline; a domain `chainId` other than the session chain disables Approve. |
+| AirGap EIP-712 from MetaMask (added after this run, `22fa735`) | NOT RUN | The same preview; MetaMask accepts the signature and it verifies for the wallet address. |
 | AirGap T10: 0-ETH transaction with ERC-20 calldata | INCONCLUSIVE | The preview showed function `0x0a9059cb`. The wallet prints the first four data bytes as they are (`0xa9059cbb` for `transfer`), so that transaction's data starts with `0a9059cb`: shifted by half a byte, it does not call `transfer`. Check its receipt for a Transfer event. Token calls are now decoded in both previews (`c5e6c9a`). |
 
 ## Phase 10 Rutoken gate
