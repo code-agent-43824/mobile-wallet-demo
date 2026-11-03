@@ -610,6 +610,7 @@ class WalletFlowController extends ChangeNotifier {
           ? WalletFlowStage.welcome
           : WalletFlowStage.unlocked;
       _errorMessage = null;
+      await _closeWalletConnectSessionsOfOtherAccounts();
     });
   }
 
@@ -637,6 +638,7 @@ class WalletFlowController extends ChangeNotifier {
         _biometricsEnabled = await backend.isBiometricUnlockEnabled();
         _biometricsAvailable = await backend.isBiometricUnlockAvailable();
         _errorMessage = null;
+        await _closeWalletConnectSessionsOfOtherAccounts();
         return;
       }
       // That was the last card: fall back to the phone vault, or to onboarding
@@ -652,6 +654,7 @@ class WalletFlowController extends ChangeNotifier {
           ? WalletFlowStage.welcome
           : WalletFlowStage.unlocked;
       _errorMessage = null;
+      await _closeWalletConnectSessionsOfOtherAccounts();
     });
   }
 
@@ -800,6 +803,7 @@ class WalletFlowController extends ChangeNotifier {
         _rutokenProvisioningResult = _messages.cardAdoptSuccess(
           account.address,
         );
+        await _closeWalletConnectSessionsOfOtherAccounts();
         await _queueRutokenBiometricOffer(pin);
       },
       onCancel: _rutokenNativeAdapter?.cancelPendingOperation,
@@ -844,6 +848,7 @@ class WalletFlowController extends ChangeNotifier {
         _rutokenGeneratedBackup = null;
         _stage = WalletFlowStage.unlocked;
         _cardSetupReturnStage = WalletFlowStage.welcome;
+        await _closeWalletConnectSessionsOfOtherAccounts();
         await _queueRutokenBiometricOffer(pin);
       },
       onCancel: _rutokenNativeAdapter?.cancelPendingOperation,
@@ -920,6 +925,7 @@ class WalletFlowController extends ChangeNotifier {
         _seedPhraseToShow = material.mnemonic;
         _stage = WalletFlowStage.showSeed;
       }
+      await _closeWalletConnectSessionsOfOtherAccounts();
     });
   }
 
@@ -958,6 +964,7 @@ class WalletFlowController extends ChangeNotifier {
       } else {
         _stage = WalletFlowStage.biometricPrompt;
       }
+      await _closeWalletConnectSessionsOfOtherAccounts();
     });
   }
 
@@ -1292,6 +1299,44 @@ class WalletFlowController extends ChangeNotifier {
         _notify();
       }
     }
+  }
+
+  /// Closes the WalletConnect sessions that were approved for an address other
+  /// than the active wallet's, with their queued requests.
+  ///
+  /// A session names the account the dApp may use; after a switch to another
+  /// wallet (a different card, the phone vault, or none) it would keep the dApp
+  /// on an account this wallet no longer signs for. Moving it to the new
+  /// address instead would tell the dApp that both addresses belong together.
+  Future<void> _closeWalletConnectSessionsOfOtherAccounts() async {
+    final address = _summary?.address.toLowerCase();
+    final staleTopics = <String>{
+      for (final session in _walletConnectService.activeSessions)
+        if (!session.accounts.any(
+          (account) => account.split(':').last.toLowerCase() == address,
+        ))
+          session.topic,
+    };
+    if (staleTopics.isEmpty) return;
+    for (final topic in staleTopics) {
+      try {
+        await _walletConnectService.disconnect(topic: topic);
+      } on Object {
+        // Offline relay: the session lingers on the dApp's side, but requests
+        // for its address are refused as another account's anyway.
+      }
+    }
+    final head = pendingRequest;
+    _pendingRequests.removeWhere(
+      (request) => staleTopics.contains(request.topic),
+    );
+    if (head != null && pendingRequest != head) {
+      _pendingRequestPreview = null;
+      _pendingRequestPreviewError = null;
+      _isPendingRequestPreviewLoading = false;
+      unawaited(_preparePendingRequestPreview());
+    }
+    _walletConnectSessions = _walletConnectService.activeSessions;
   }
 
   void _removePendingRequest(WalletConnectRequest request) {

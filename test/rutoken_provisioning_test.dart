@@ -396,6 +396,77 @@ void main() {
     controller.dispose();
   });
 
+  test(
+    'a wallet switch closes the WalletConnect sessions of the other address',
+    () async {
+      final card = _ProvisioningAdapter(serial: 'RT-A');
+      final walletConnect = FakeWalletConnectService();
+      final controller = WalletFlowController(
+        store: InMemorySecureKeyValueStore(),
+        biometricAuthGateway: const SimulatedBiometricAuthGateway(),
+        walletConnectService: walletConnect,
+        rutokenNativeAdapter: card,
+      );
+      await controller.loadInitialState();
+      await controller.provisionImportedRutoken(
+        mnemonic: _mnemonic,
+        passphrase: '',
+        pin: '1234',
+      );
+      final addressA = controller.summary!.address;
+      card.account = const WalletAccountDescriptor(
+        backendId: 'rutoken_nfc',
+        address: _legacyAddress,
+        derivationPath: "m/44'/60'/0'/0/0",
+      );
+      await controller.adoptExistingRutoken(pin: '1234');
+      expect(controller.summary?.address, _legacyAddress);
+
+      Future<String> connectDapp() async {
+        await controller.pairWalletConnect(uri: 'wc:demo@2');
+        await pumpEventQueue();
+        await controller.approvePendingProposal();
+        return walletConnect.activeSessions.last.topic;
+      }
+
+      final sessionOfB = await connectDapp();
+      walletConnect.simulateRequest(
+        topic: sessionOfB,
+        method: 'personal_sign',
+        params: <Object?>['0x48656c6c6f', _legacyAddress],
+      );
+      await pumpEventQueue();
+      expect(controller.pendingRequest, isNotNull);
+
+      final cardA = (await controller.listSwitchableWallets()).firstWhere(
+        (wallet) => wallet.isCard && wallet.address == addressA,
+      );
+      await controller.switchActiveWallet(cardA);
+
+      expect(controller.summary?.address, addressA);
+      expect(walletConnect.activeSessions, isEmpty);
+      expect(controller.walletConnectSessions, isEmpty);
+      expect(
+        controller.pendingRequest,
+        isNull,
+        reason: 'a request of the closed session can no longer be answered',
+      );
+
+      // A session approved for this card survives nothing but this card.
+      final sessionOfA = await connectDapp();
+      await controller.forgetCard(cardA.cardProfileId!);
+
+      expect(controller.summary?.address, _legacyAddress);
+      expect(
+        walletConnect.activeSessions.map((session) => session.topic),
+        isNot(contains(sessionOfA)),
+      );
+
+      controller.dispose();
+      await walletConnect.dispose();
+    },
+  );
+
   test('the new-card row opens setup even when a card is active', () async {
     final adapter = _ProvisioningAdapter();
     final controller = WalletFlowController(
