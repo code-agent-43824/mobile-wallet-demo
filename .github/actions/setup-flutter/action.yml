@@ -23,13 +23,43 @@ runs:
         git clone --depth 1 --branch stable https://github.com/flutter/flutter.git "$dir"
         echo "$dir/bin" >> "$GITHUB_PATH"
 
+    # Windows ARM64 has no Flutter archive anywhere, so every job used to
+    # clone the SDK, bootstrap its Dart SDK and tool, and fetch the engine
+    # files again. The whole SDK directory is cached after use, keyed by the
+    # stable commit, so a new Flutter release refreshes it.
+    - if: runner.arch == 'ARM64' && runner.os == 'Windows'
+      id: flutter-stable
+      name: Find Flutter stable (Windows ARM64)
+      shell: pwsh
+      run: |
+        $sha = ((git ls-remote https://github.com/flutter/flutter.git refs/heads/stable) -split '\s+')[0]
+        if ($LASTEXITCODE -ne 0 -or -not $sha) { exit 1 }
+        Add-Content -Path $env:GITHUB_OUTPUT -Value "sha=$sha"
+
+    - if: runner.arch == 'ARM64' && runner.os == 'Windows'
+      id: flutter-sdk-cache
+      name: Cache Flutter SDK (Windows ARM64)
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ${{ runner.temp }}/flutter
+        key: flutter-sdk-Windows-ARM64-${{ steps.flutter-stable.outputs.sha }}
+
     - if: runner.arch == 'ARM64' && runner.os == 'Windows'
       name: Clone Flutter stable (Windows ARM64)
       shell: pwsh
+      env:
+        CACHE_HIT: ${{ steps.flutter-sdk-cache.outputs.cache-hit }}
+        STABLE_SHA: ${{ steps.flutter-stable.outputs.sha }}
       run: |
         $dir = Join-Path $env:RUNNER_TEMP 'flutter'
-        git clone --depth 1 --branch stable https://github.com/flutter/flutter.git $dir
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        if ($env:CACHE_HIT -ne 'true') {
+          git clone --depth 1 --branch stable https://github.com/flutter/flutter.git $dir
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Stable moving between the lookup and the clone would store a
+          # newer SDK under the older key; the next release replaces it.
+          $head = git -C $dir rev-parse HEAD
+          if ($head -ne $env:STABLE_SHA) { Write-Host "stable moved to $head during setup" }
+        }
         Add-Content -Path $env:GITHUB_PATH -Value (Join-Path $dir 'bin')
 
     # On x64, subosito/flutter-action (cache: true) already restores the pub
