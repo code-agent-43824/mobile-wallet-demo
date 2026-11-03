@@ -32,7 +32,10 @@ runs:
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Add-Content -Path $env:GITHUB_PATH -Value (Join-Path $dir 'bin')
 
-    - name: Cache pub packages
+    # On x64, subosito/flutter-action (cache: true) already restores the pub
+    # cache; restoring it again here cost ~25 s on Windows.
+    - if: runner.arch == 'ARM64'
+      name: Cache pub packages
       uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ${{ runner.os == 'Windows' && '~\AppData\Local\Pub\Cache' || '~/.pub-cache' }}
