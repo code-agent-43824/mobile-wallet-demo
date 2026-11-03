@@ -1488,6 +1488,13 @@ class WalletFlowController extends ChangeNotifier {
 
   /// Decodes and validates an EIP-4527 request without unlocking the key.
   Future<void> loadAirGapRequest(String payload) async {
+    // Whatever was loaded before goes first: should this payload be refused,
+    // its error must not sit above an older request that Sign would still
+    // sign.
+    _airGapRequestPayload = null;
+    _airGapRequest = null;
+    _airGapRequestPreview = null;
+    _airGapResponsePayload = null;
     await _runGuarded(() async {
       final normalized = normalizeUr(payload);
       if (normalized.split('/').length != 2) {

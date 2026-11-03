@@ -660,6 +660,56 @@ void main() {
     await service.dispose();
   });
 
+  test(
+    'a refused AirGap request leaves nothing signable from the one before',
+    () async {
+      final service = FakeWalletConnectService();
+      final controller = await buildUnlocked(
+        service,
+        transactionService: const LocalTransactionService(),
+      );
+      // The same Sepolia transaction bytes; only the envelope's chainId
+      // differs, which the preview refuses.
+      String payload({required int chainId, required String requestId}) =>
+          const Eip4527Codec().encodeSignRequest(
+            EthSignRequest(
+              requestId: requestId,
+              signData: Uint8List.fromList(
+                hexToBytes(
+                  '02ef83aa36a780843b9aca0085069db9ac0082520894'
+                  '2222222222222222222222222222222222222222808412345678c0',
+                ),
+              ),
+              dataType: EthSignDataType.typedTransaction,
+              chainId: chainId,
+              derivationPath: CryptoKeypath.parse("M/44'/60'/0'/0/0"),
+            ),
+          );
+
+      await controller.loadAirGapRequest(
+        payload(
+          chainId: 11155111,
+          requestId: 'aa1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
+        ),
+      );
+      expect(controller.airGapRequestPreview, isNotNull);
+
+      await controller.loadAirGapRequest(
+        payload(chainId: 1, requestId: 'bb1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'),
+      );
+
+      expect(controller.errorMessage, contains('11155111'));
+      expect(controller.airGapRequest, isNull);
+      expect(controller.airGapRequestPreview, isNull);
+
+      await controller.signPendingAirGapRequest(pin: '1234');
+      expect(controller.airGapResponsePayload, isNull);
+
+      controller.dispose();
+      await service.dispose();
+    },
+  );
+
   test('loadQrFromFile returns the decoded value', () async {
     final service = FakeWalletConnectService();
     final controller = await buildUnlocked(
