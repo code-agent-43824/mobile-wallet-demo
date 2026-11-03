@@ -138,6 +138,8 @@ abstract final class DappErrorText {
       'Address $address is not connected to this session.';
   static String unsupportedChain(int chainId) =>
       'Chain eip155:$chainId is not supported.';
+  static String malformedChain(String chainId) =>
+      'Chain id $chainId is not a CAIP-2 eip155 chain.';
 }
 
 /// Wallet-side WalletConnect v2 service: external dApps pair with this wallet,

@@ -51,6 +51,14 @@ class WalletConnectInboundCoordinator {
         return;
       }
 
+      if (_codec.isSessionInfoMethod(request.method)) {
+        await _handleSessionInfo(
+          request,
+          walletAddress: walletAddress ?? signer?.address,
+        );
+        return;
+      }
+
       if (_codec.isChainSwitchMethod(request.method)) {
         try {
           await switchChain(request);
@@ -203,6 +211,44 @@ class WalletConnectInboundCoordinator {
         },
     };
     await _service.respondResult(request: request, result: result);
+  }
+
+  /// `eth_chainId` answers the request's chain as hex. `eth_accounts` and
+  /// `eth_requestAccounts` answer the wallet's address when this session was
+  /// approved for it, and nothing otherwise, so a session left over from
+  /// another wallet learns no new address.
+  Future<void> _handleSessionInfo(
+    WalletConnectRequest request, {
+    required String? walletAddress,
+  }) async {
+    if (request.method == WalletConnectV2RequestCodec.chainIdMethod) {
+      final chainId = int.tryParse(request.chainId.split(':').last);
+      if (chainId == null) {
+        await _service.respondError(
+          request: request,
+          code: DappErrorCode.invalidParams,
+          message: DappErrorText.malformedChain(request.chainId),
+        );
+        return;
+      }
+      await _service.respondResult(
+        request: request,
+        result: '0x${chainId.toRadixString(16)}',
+      );
+      return;
+    }
+    final address = walletAddress?.toLowerCase();
+    final approved = _service.activeSessions.any(
+      (session) =>
+          session.topic == request.topic &&
+          session.accounts.any(
+            (account) => account.split(':').last.toLowerCase() == address,
+          ),
+    );
+    await _service.respondResult(
+      request: request,
+      result: <String>[if (approved) walletAddress!],
+    );
   }
 
   int? _parseHexChainId(String value) {

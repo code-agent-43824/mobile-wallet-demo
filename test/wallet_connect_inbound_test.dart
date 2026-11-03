@@ -194,6 +194,55 @@ void main() {
     );
   });
 
+  test('eth_accounts names the account only in its own session', () async {
+    final service = FakeWalletConnectService();
+    final session = await service.approveSession(
+      proposal: service.simulateProposal(
+        peer: const WalletConnectPeer(name: 'dApp', url: 'https://dapp.test'),
+      ),
+      accounts: const <String>['eip155:1:$_walletAddress'],
+    );
+    final own = service.simulateRequest(
+      topic: session.topic,
+      method: 'eth_accounts',
+      params: const <Object?>[],
+    );
+    // A session of another wallet that outlived its disconnect.
+    final stale = service.simulateRequest(
+      topic: 'topic-of-another-wallet',
+      method: 'eth_requestAccounts',
+      params: const <Object?>[],
+    );
+
+    final coordinator = _coordinator(service);
+    await coordinator.handleRequest(
+      request: own,
+      walletAddress: _walletAddress,
+    );
+    await coordinator.handleRequest(
+      request: stale,
+      walletAddress: _walletAddress,
+    );
+
+    expect(service.respondedErrors, isEmpty);
+    expect(service.respondedResults[0].result, <String>[_walletAddress]);
+    expect(service.respondedResults[1].result, isEmpty);
+  });
+
+  test('eth_chainId answers the request chain as hex', () async {
+    final service = FakeWalletConnectService();
+    final request = service.simulateRequest(
+      topic: 'topic-1',
+      method: 'eth_chainId',
+      chainId: 'eip155:11155111',
+      params: const <Object?>[],
+    );
+
+    await _coordinator(service).handleRequest(request: request);
+
+    expect(service.respondedResults.single.result, '0xaa36a7');
+  });
+
   test('an unsupported method answers EIP-1193 4200', () async {
     final service = FakeWalletConnectService();
     final request = service.simulateRequest(

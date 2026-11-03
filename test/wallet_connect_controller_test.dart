@@ -647,6 +647,26 @@ void main() {
     await service.dispose();
   });
 
+  test('account and chain probes are answered without a card', () async {
+    final service = FakeWalletConnectService();
+    final controller = await buildUnlocked(service);
+
+    service.simulateRequest(
+      topic: 'topic-1',
+      method: 'eth_chainId',
+      chainId: 'eip155:1',
+      params: const <Object?>[],
+    );
+    await pumpEventQueue();
+
+    expect(controller.pendingRequest, isNull);
+    expect(controller.errorMessage, isNull);
+    expect(service.respondedResults.single.result, '0x1');
+
+    controller.dispose();
+    await service.dispose();
+  });
+
   test('a malformed EIP-4527 AirGap payload surfaces an error', () async {
     final service = FakeWalletConnectService();
     final controller = await buildUnlocked(service);

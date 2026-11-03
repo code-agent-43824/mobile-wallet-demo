@@ -43,6 +43,35 @@ void main() {
     expect(namespace.accounts, isNot(contains('eip155:137:$address')));
   });
 
+  test('accepts a dApp that requires its account and chain probes', () {
+    const address = '0x1111111111111111111111111111111111111111';
+    final result = const WalletConnectNamespacePolicy().build(
+      requiredNamespaces: const <String, RequiredNamespace>{
+        'eip155': RequiredNamespace(
+          chains: <String>['eip155:1'],
+          methods: <String>[
+            'eth_accounts',
+            'eth_requestAccounts',
+            'eth_chainId',
+            'personal_sign',
+          ],
+          events: <String>['chainChanged'],
+        ),
+      },
+      optionalNamespaces: const <String, RequiredNamespace>{},
+      accounts: const <String>['eip155:1:$address'],
+    );
+
+    expect(
+      result['eip155']!.methods,
+      containsAll(<String>[
+        'eth_accounts',
+        'eth_requestAccounts',
+        'eth_chainId',
+      ]),
+    );
+  });
+
   test('rejects an unsupported required method instead of advertising it', () {
     expect(
       () => const WalletConnectNamespacePolicy().build(

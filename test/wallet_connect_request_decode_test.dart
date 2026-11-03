@@ -83,6 +83,24 @@ void main() {
     );
   });
 
+  test('decodes personal_sign sent as [address, message]', () {
+    const address = '0x1111111111111111111111111111111111111111';
+    final reversed = codec.decodeMessageRequest(
+      'personal_sign',
+      const <Object?>[address, '0x48656c6c6f'],
+    );
+
+    expect(reversed.address, address);
+    expect(reversed.displayText, 'Hello');
+
+    // A message that is itself 20 bytes of hex keeps the standard order.
+    final standard = codec.decodeMessageRequest(
+      'personal_sign',
+      const <Object?>['0x2222222222222222222222222222222222222222', address],
+    );
+    expect(standard.address, address);
+  });
+
   test('decodes eth_sign with the [address, message] param order', () {
     final request = codec.decodeMessageRequest('eth_sign', const <Object?>[
       '0xAbc',

@@ -125,6 +125,9 @@ class WalletConnectV2RequestCodec {
   static const String signTypedDataMethod = 'eth_signTypedData';
   static const String switchEthereumChainMethod = 'wallet_switchEthereumChain';
   static const String getCapabilitiesMethod = 'wallet_getCapabilities';
+  static const String accountsMethod = 'eth_accounts';
+  static const String requestAccountsMethod = 'eth_requestAccounts';
+  static const String chainIdMethod = 'eth_chainId';
 
   static const Set<String> supportedMethods = <String>{
     signTransactionMethod,
@@ -136,6 +139,9 @@ class WalletConnectV2RequestCodec {
     signTypedDataMethod,
     switchEthereumChainMethod,
     getCapabilitiesMethod,
+    accountsMethod,
+    requestAccountsMethod,
+    chainIdMethod,
   };
 
   /// Whether [method] is a transaction request this codec can decode.
@@ -158,6 +164,19 @@ class WalletConnectV2RequestCodec {
 
   /// Whether [method] is the read-only EIP-5792 capability query.
   bool isCapabilitiesMethod(String method) => method == getCapabilitiesMethod;
+
+  /// Whether [method] asks for the session's own account or chain. A dApp's
+  /// WalletConnect provider usually answers these itself, but a dApp that
+  /// requires them must not have its session refused for it.
+  bool isSessionInfoMethod(String method) =>
+      method == accountsMethod ||
+      method == requestAccountsMethod ||
+      method == chainIdMethod;
+
+  /// Whether the wallet answers [method] without asking the user: nothing in
+  /// it touches a key or changes the session.
+  bool isAutoAnsweredMethod(String method) =>
+      isCapabilitiesMethod(method) || isSessionInfoMethod(method);
 
   /// Decodes EIP-5792 `[address, [chainIds]?]`. Chain ids stay as canonical
   /// hex strings because that is also how the response object is keyed.
@@ -294,7 +313,8 @@ class WalletConnectV2RequestCodec {
   static bool _isTypedDataObject(Object? value) =>
       value is Map || (value is String && value.trimLeft().startsWith('{'));
 
-  /// Decodes a `personal_sign` (`[message, address]`) or `eth_sign`
+  /// Decodes a `personal_sign` (`[message, address]`, or the reversed order
+  /// when only its first parameter is an address) or `eth_sign`
   /// (`[address, message]`) request. The message param is hex (`0x…`) bytes or
   /// a plain UTF-8 string.
   WalletConnectMessageRequest decodeMessageRequest(
@@ -312,8 +332,11 @@ class WalletConnectV2RequestCodec {
     final Object? messageParam;
     final Object? addressParam;
     if (method == personalSignMethod) {
-      messageParam = params[0];
-      addressParam = params[1];
+      // `[address, message]` is a common mistake MetaMask tolerates: when only
+      // the first parameter looks like an address, it is the address.
+      final reversed = _isEvmAddress(params[0]) && !_isEvmAddress(params[1]);
+      messageParam = reversed ? params[1] : params[0];
+      addressParam = reversed ? params[0] : params[1];
     } else {
       addressParam = params[0];
       messageParam = params[1];

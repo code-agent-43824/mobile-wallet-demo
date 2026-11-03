@@ -158,8 +158,8 @@ class WalletFlowController extends ChangeNotifier {
     });
     _walletConnectRequestSub = _walletConnectService.requests.listen((request) {
       const codec = WalletConnectV2RequestCodec();
-      if (codec.isCapabilitiesMethod(request.method)) {
-        unawaited(_autoRespondCapabilities(request));
+      if (codec.isAutoAnsweredMethod(request.method)) {
+        unawaited(_autoRespond(request));
         return;
       }
       final alreadyQueued = _pendingRequests.any(
@@ -1241,14 +1241,16 @@ class WalletFlowController extends ChangeNotifier {
     );
   }
 
-  Future<void> _autoRespondCapabilities(WalletConnectRequest request) async {
+  /// Answers a request that needs no user decision (capabilities, the
+  /// session's account or chain) without queueing it.
+  Future<void> _autoRespond(WalletConnectRequest request) async {
     try {
       await _walletConnectCoordinator().handleRequest(
         request: request,
         walletAddress: _summary?.address,
       );
     } catch (error) {
-      _errorMessage = 'WalletConnect capabilities: $error';
+      _errorMessage = describeError(_messages, error);
       _notify();
     }
   }
