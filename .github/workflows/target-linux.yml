@@ -43,7 +43,7 @@ jobs:
           cp -a "build/linux/$ARCH/release/bundle" dist/stage/WalletDemo
           tar -C dist/stage -czf "dist/linux-$ARCH.tar.gz" WalletDemo
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: linux-${{ inputs.arch }}
           path: dist/linux-${{ inputs.arch }}.tar.gz
@@ -84,7 +84,7 @@ jobs:
         run: echo "result=passed" >> "$GITHUB_OUTPUT"
 
       - if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: smoke-linux-${{ inputs.arch }}
           path: build/smoke

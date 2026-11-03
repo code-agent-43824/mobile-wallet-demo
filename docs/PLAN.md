@@ -96,7 +96,7 @@
 
 ### Выпуск 1.61.0 (2026-11-03, поручение владельца)
 
-- [ ] **Предупреждения Node.js 20 в CI.** `actions/cache` v4 и `actions/upload-artifact` v4 работают на
+- [x] **Предупреждения Node.js 20 в CI.** `actions/cache` v4 и `actions/upload-artifact` v4 работают на
   Node 20, который GitHub объявил устаревшим; `android-emulator-runner` закреплён на старом теге v2.
   Обновить до `actions/cache` v5.1.0, `upload-artifact` v6.0.0 и `android-emulator-runner` v2.38.0
   (все на Node 24, параметры наших шагов в них есть).

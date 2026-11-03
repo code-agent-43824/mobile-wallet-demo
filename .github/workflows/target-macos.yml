@@ -37,7 +37,7 @@ jobs:
           mkdir -p dist
           ditto -c -k --sequesterRsrc --keepParent "build/macos/Build/Products/Release/Wallet Demo.app" dist/macos.zip
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: macos
           path: dist/macos.zip
@@ -85,7 +85,7 @@ jobs:
         run: echo "result=passed" >> "$GITHUB_OUTPUT"
 
       - if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: smoke-macos-arm64
           path: build/smoke
@@ -133,7 +133,7 @@ jobs:
         run: echo "result=passed" >> "$GITHUB_OUTPUT"
 
       - if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: smoke-macos-x64
           path: build/smoke
