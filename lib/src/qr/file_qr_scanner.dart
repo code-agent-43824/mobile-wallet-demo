@@ -26,16 +26,18 @@ class ZxingQrImageDecoder implements QrImageDecoder {
         return null;
       }
 
+      // Channels are read normalized: a 1-bit PNG keeps its pixels in 0..1
+      // and a 16-bit one in 0..65535, and a grey image has no green or blue.
+      // Transparency is laid over white, the paper a QR code is printed on.
       final pixels = Int32List(image.width * image.height);
       var i = 0;
       for (var y = 0; y < image.height; y++) {
         for (var x = 0; x < image.width; x++) {
           final p = image.getPixel(x, y);
-          pixels[i++] =
-              (p.a.toInt() << 24) |
-              (p.r.toInt() << 16) |
-              (p.g.toInt() << 8) |
-              p.b.toInt();
+          final alpha = p.aNormalized;
+          final grey = (255 * (p.luminanceNormalized * alpha + 1 - alpha))
+              .round();
+          pixels[i++] = (grey << 16) | (grey << 8) | grey;
         }
       }
 
