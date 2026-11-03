@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.61.0] - 2026-11-03
+
 ### Changed
 
+- CI: actions переведены на Node 24 (предупреждения о Node 20 ушли); на Windows ARM64 развёрнутый
+  Flutter SDK кэшируется между прогонами, на x64 пакеты Dart восстанавливаются из кэша один раз.
 - Выпускной smoke на iOS-симуляторе и настольных системах проверяет восстановление того же
   адреса после перезапуска приложения. Для локального прогона на Xcode 27 добавлена команда
   `scripts/smoke/xcode27_simulator.sh`; её можно запустить и вручную через GitHub Actions
