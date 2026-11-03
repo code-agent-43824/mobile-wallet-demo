@@ -625,6 +625,118 @@ class _AirGapMessagePreviewCard extends StatelessWidget {
   }
 }
 
+/// One EIP-712 preview for WalletConnect and AirGap: a spending permission
+/// first and loudly, then who asks, on which network, and every field.
+class _TypedDataPreview extends StatelessWidget {
+  const _TypedDataPreview({required this.preview, this.requestChainId});
+
+  final Eip712Preview preview;
+
+  /// The chain the request came on; null when the request names none.
+  final int? requestChainId;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    String line(String label, String value) =>
+        l10n.labelValueLine(label, value);
+    final chainId = preview.chainId;
+    final requestChain = requestChainId;
+    final otherChain =
+        requestChain != null && chainId != null && chainId != requestChain;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (preview.grantsSpending)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.errorContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: DefaultTextStyle.merge(
+              style: TextStyle(color: theme.colorScheme.onErrorContainer),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.typedSpendingWarning,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(line(l10n.previewTokenSpender, preview.spender!)),
+                  for (final allowance in preview.allowances) ...[
+                    if (allowance.token case final String token)
+                      Text(line(l10n.typedToken, token)),
+                    Text(
+                      line(
+                        l10n.previewTokenAmount,
+                        allowance.unlimited
+                            ? l10n.previewTokenAmountUnlimited
+                            : l10n.previewTokenAmountRaw('${allowance.amount}'),
+                      ),
+                    ),
+                  ],
+                  for (final deadline in preview.deadlines)
+                    Text(
+                      line(
+                        '${l10n.typedValidUntil} (${deadline.path})',
+                        Eip712Preview.formatUnixSeconds(deadline.seconds) ??
+                            l10n.typedNoDate,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        Text(line(l10n.typedType, preview.primaryType)),
+        if (preview.appName case final String name)
+          Text(
+            line(
+              l10n.typedApp,
+              <String?>[name, preview.appVersion].whereType<String>().join(' '),
+            ),
+          ),
+        Text(
+          line(
+            l10n.detailsNetwork,
+            chainId == null ? l10n.typedNetworkMissing : _chainName(chainId),
+          ),
+        ),
+        if (preview.verifyingContract case final String contract)
+          Text(line(l10n.typedContract, contract)),
+        if (otherChain) ...[
+          const SizedBox(height: 4),
+          Text(
+            l10n.typedOtherChain(_chainName(chainId), _chainName(requestChain)),
+            style: TextStyle(color: theme.colorScheme.error),
+          ),
+        ],
+        const SizedBox(height: 8),
+        Text(l10n.typedFields, style: theme.textTheme.labelMedium),
+        for (final field in preview.fields)
+          SelectableText(
+            line(field.path, field.value),
+            style: theme.textTheme.bodySmall,
+          ),
+      ],
+    );
+  }
+}
+
+/// A chain's network name, or `chainId N` for one the wallet does not know.
+String _chainName(int chainId) {
+  for (final config in evmNetworkConfigs.values) {
+    if (config.chainId == chainId) {
+      return config.name;
+    }
+  }
+  return 'chainId $chainId';
+}
+
 /// [utc] in the device's time zone, worded by the active locale.
 String _localDateTime(BuildContext context, DateTime utc) {
   final local = utc.toLocal();
@@ -872,20 +984,21 @@ class _RequestCard extends StatelessWidget {
     }
   }
 
-  /// Best-effort `primaryType @ domain` summary for EIP-712; null otherwise.
-  String? _typedDataSummary() {
+  /// The EIP-712 preview of a typed-data request: null for other methods, a
+  /// record without a preview when the data cannot be read.
+  ({Eip712Preview? preview})? _typedData() {
     const codec = WalletConnectV2RequestCodec();
     if (!codec.isTypedDataMethod(request.method)) {
       return null;
     }
     try {
-      final typed = codec.decodeTypedDataRequest(request.params).typedData;
-      final primaryType = typed['primaryType'] ?? 'typed data';
-      final domain = typed['domain'];
-      final domainName = domain is Map ? (domain['name'] ?? '') : '';
-      return domainName == '' ? '$primaryType' : '$primaryType @ $domainName';
+      return (
+        preview: Eip712Preview.parse(
+          codec.decodeTypedDataRequest(request.params).typedData,
+        ),
+      );
     } catch (_) {
-      return null;
+      return (preview: null);
     }
   }
 
@@ -985,7 +1098,14 @@ class _RequestCard extends StatelessWidget {
     final to = tx['to']?.toString();
     final value = tx['value']?.toString();
     final message = _messageText();
-    final typedData = _typedDataSummary();
+    final typedData = _typedData();
+    final requestChainId = int.tryParse(request.chainId.split(':').last);
+    // What cannot be shown, or what names another chain, is not signed.
+    final typedDataBlocked =
+        typedData != null &&
+        (typedData.preview == null ||
+            (requestChainId != null &&
+                !typedData.preview!.isForChain(requestChainId)));
     final chainSwitchTarget = _chainSwitchTarget(l10n);
     const codec = WalletConnectV2RequestCodec();
     final isTransaction = codec.isTransactionMethod(request.method);
@@ -1040,7 +1160,19 @@ class _RequestCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(l10n.wcMessageLine(message)),
           ],
-          if (typedData != null) Text('EIP-712: $typedData'),
+          if (typedData != null) ...[
+            const SizedBox(height: 8),
+            if (typedData.preview case final Eip712Preview preview)
+              _TypedDataPreview(
+                preview: preview,
+                requestChainId: requestChainId,
+              )
+            else
+              Text(
+                l10n.typedUnreadable,
+                style: TextStyle(color: theme.colorScheme.error),
+              ),
+          ],
           if (isPreviewLoading) ...[
             const SizedBox(height: 8),
             Row(
@@ -1117,7 +1249,9 @@ class _RequestCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               FilledButton(
-                onPressed: canApproveTransaction ? onApprove : null,
+                onPressed: canApproveTransaction && !typedDataBlocked
+                    ? onApprove
+                    : null,
                 child: Text(
                   const WalletConnectV2RequestCodec().isChainSwitchMethod(
                         request.method,

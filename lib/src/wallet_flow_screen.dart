@@ -38,6 +38,7 @@ import 'transactions/erc20_calldata.dart';
 import 'transactions/hardened_transaction_service.dart';
 import 'transactions/transaction_service.dart';
 import 'transactions/transaction_tracker.dart';
+import 'walletconnect/eip712_preview.dart';
 import 'walletconnect/wallet_connect_inbound.dart';
 import 'walletconnect/wallet_connect_preflight.dart';
 import 'walletconnect/wallet_connect_service.dart';

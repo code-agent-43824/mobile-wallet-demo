@@ -352,6 +352,40 @@ void main() {
     expect(result.length, 132); // 65-byte r‖s‖v signature
   });
 
+  test('refuses typed data whose domain names another chain', () async {
+    final service = FakeWalletConnectService();
+    final request = service.simulateRequest(
+      topic: 'topic-1',
+      method: 'eth_signTypedData_v4',
+      chainId: 'eip155:1',
+      params: <Object?>[
+        _walletAddress,
+        <String, dynamic>{
+          'types': <String, dynamic>{
+            'EIP712Domain': <dynamic>[
+              <String, String>{'name': 'name', 'type': 'string'},
+              <String, String>{'name': 'chainId', 'type': 'uint256'},
+            ],
+            'Msg': <dynamic>[
+              <String, String>{'name': 'contents', 'type': 'string'},
+            ],
+          },
+          'primaryType': 'Msg',
+          'domain': <String, dynamic>{'name': 'Demo', 'chainId': 137},
+          'message': <String, dynamic>{'contents': 'gm'},
+        },
+      ],
+    );
+
+    await _coordinator(
+      service,
+    ).handleRequest(request: request, signer: _signer);
+
+    expect(service.respondedResults, isEmpty);
+    expect(service.respondedErrors.single.code, DappErrorCode.invalidParams);
+    expect(service.respondedErrors.single.message, contains('eip155:137'));
+  });
+
   test('rejects eth_signTypedData_v4 for another account', () async {
     final service = FakeWalletConnectService();
     final request = service.simulateRequest(

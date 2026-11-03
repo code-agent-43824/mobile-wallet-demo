@@ -316,6 +316,102 @@ void main() {
     );
   });
 
+  for (final (name, chainId, blocked) in <(String, int, bool)>[
+    ('on its own network', 1, false),
+    ('for another network', 137, true),
+  ]) {
+    testWidgets('connections screen: a Permit request $name', (
+      WidgetTester tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final service = FakeWalletConnectService();
+      await tester.pumpWidget(
+        MobileWalletDemoApp(
+          locale: const Locale('ru'),
+          store: InMemorySecureKeyValueStore(),
+          blockchainProvider: _FakeBlockchainProvider(),
+          walletConnectService: service,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _createUnlock(tester);
+      await _openConnections(tester);
+
+      service.simulateRequest(
+        topic: 'topic-1',
+        method: 'eth_signTypedData_v4',
+        chainId: 'eip155:1',
+        params: <Object?>[
+          '0x1111111111111111111111111111111111111111',
+          <String, dynamic>{
+            'types': <String, dynamic>{
+              'EIP712Domain': <dynamic>[
+                <String, String>{'name': 'name', 'type': 'string'},
+                <String, String>{'name': 'chainId', 'type': 'uint256'},
+                <String, String>{
+                  'name': 'verifyingContract',
+                  'type': 'address',
+                },
+              ],
+              'Permit': <dynamic>[
+                <String, String>{'name': 'owner', 'type': 'address'},
+                <String, String>{'name': 'spender', 'type': 'address'},
+                <String, String>{'name': 'value', 'type': 'uint256'},
+                <String, String>{'name': 'nonce', 'type': 'uint256'},
+                <String, String>{'name': 'deadline', 'type': 'uint256'},
+              ],
+            },
+            'primaryType': 'Permit',
+            'domain': <String, dynamic>{
+              'name': 'USD Coin',
+              'chainId': chainId,
+              'verifyingContract': '0x3333333333333333333333333333333333333333',
+            },
+            'message': <String, dynamic>{
+              'owner': '0x1111111111111111111111111111111111111111',
+              'spender': '0x2222222222222222222222222222222222222222',
+              'value': '0x${'f' * 64}',
+              'nonce': 0,
+              'deadline': 1767225600,
+            },
+          },
+        ],
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('позволит другому адресу тратить'),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'Кому разрешено тратить: 0x2222222222222222222222222222222222222222',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'Количество токенов: Без ограничения: все токены, сейчас и в будущем',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Действует до (deadline): 2026-01-01 00:00 UTC'),
+        findsOneWidget,
+      );
+      expect(find.text('Приложение: USD Coin'), findsOneWidget);
+      expect(
+        find.textContaining('Данные предназначены для сети'),
+        blocked ? findsOneWidget : findsNothing,
+      );
+      final approve = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Одобрить и подписать'),
+      );
+      expect(approve.onPressed == null, blocked);
+    });
+  }
+
   testWidgets('connections screen: an incoming request can be rejected', (
     WidgetTester tester,
   ) async {

@@ -3,6 +3,7 @@ import '../blockchain/network_config.dart';
 import '../errors/app_error.dart';
 import '../transactions/transaction_service.dart';
 import 'eip712.dart';
+import 'eip712_preview.dart';
 import 'wallet_connect_preflight.dart';
 import 'wallet_connect_service.dart';
 import 'wallet_connect_v2.dart';
@@ -253,6 +254,15 @@ class WalletConnectInboundCoordinator {
     );
   }
 
+  int? _domainChainId(Map<String, dynamic> typedData) {
+    try {
+      return Eip712Preview.parse(typedData).chainId;
+    } on FormatException {
+      // The encoder below refuses what cannot be read, in its own words.
+      return null;
+    }
+  }
+
   int? _parseHexChainId(String value) {
     if (!value.toLowerCase().startsWith('0x')) {
       return null;
@@ -357,6 +367,22 @@ class WalletConnectInboundCoordinator {
         request: request,
         code: DappErrorCode.unauthorized,
         message: DappErrorText.otherAccount(typed.address),
+      );
+      return;
+    }
+
+    // The wallet UI refuses this before asking for a PIN; here it is refused
+    // again, so no path signs a domain that names another chain.
+    final domainChainId = _domainChainId(typed.typedData);
+    final requestChainId = int.tryParse(request.chainId.split(':').last);
+    if (domainChainId != null && domainChainId != requestChainId) {
+      await _service.respondError(
+        request: request,
+        code: DappErrorCode.invalidParams,
+        message: DappErrorText.typedDataOtherChain(
+          domainChainId,
+          request.chainId,
+        ),
       );
       return;
     }

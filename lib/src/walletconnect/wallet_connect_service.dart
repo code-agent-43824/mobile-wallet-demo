@@ -140,6 +140,9 @@ abstract final class DappErrorText {
       'Chain eip155:$chainId is not supported.';
   static String malformedChain(String chainId) =>
       'Chain id $chainId is not a CAIP-2 eip155 chain.';
+  static String typedDataOtherChain(int domainChainId, String requestChain) =>
+      'The typed data is for chain eip155:$domainChainId, but the request '
+      'is on $requestChain.';
 }
 
 /// Wallet-side WalletConnect v2 service: external dApps pair with this wallet,

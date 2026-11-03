@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:web3dart/web3dart.dart' show bytesToHex;
 
+import '../hidden_text.dart';
+
 /// What an EIP-4527 `personal_sign` request (`rawBytes`) asks to sign, in the
 /// form a person can check: the text itself when the bytes read as text, the
 /// hex otherwise.
@@ -34,16 +36,6 @@ class Eip4527MessagePreview {
     } on FormatException {
       return null;
     }
-    return decoded.runes.any(_hidesText) ? null : decoded;
+    return decoded.runes.any(hidesText) ? null : decoded;
   }
-
-  /// Control characters other than line breaks and tabs, zero-width
-  /// characters and bidirectional overrides change what the eye reads.
-  static bool _hidesText(int rune) =>
-      (rune < 0x20 && rune != 0x09 && rune != 0x0a && rune != 0x0d) ||
-      (rune >= 0x7f && rune <= 0x9f) ||
-      (rune >= 0x200b && rune <= 0x200f) ||
-      (rune >= 0x202a && rune <= 0x202e) ||
-      (rune >= 0x2066 && rune <= 0x2069) ||
-      rune == 0xfeff;
 }

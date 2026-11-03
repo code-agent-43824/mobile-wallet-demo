@@ -423,6 +423,27 @@
       }
     }
   },
+  "typedSpendingWarning": "This signature lets someone else spend your tokens, with no further transaction or approval from you.",
+  "typedType": "Data type",
+  "typedApp": "App",
+  "typedContract": "Contract",
+  "typedNetworkMissing": "not specified",
+  "typedToken": "Token",
+  "typedValidUntil": "Valid until",
+  "typedNoDate": "no time limit",
+  "typedFields": "All fields",
+  "typedOtherChain": "The data is for {domain}, but the request comes from {request}. Such a signature could be used on the other network, so the wallet will not sign it.",
+  "@typedOtherChain": {
+    "placeholders": {
+      "domain": {
+        "type": "String"
+      },
+      "request": {
+        "type": "String"
+      }
+    }
+  },
+  "typedUnreadable": "The typed data cannot be read, so the wallet will not sign it.",
   "previewSource": "Source",
   "wcChains": "Networks: {chains}",
   "@wcChains": {
