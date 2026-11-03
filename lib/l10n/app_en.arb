@@ -377,6 +377,32 @@
       }
     }
   },
+  "previewTokenCall": "Token action",
+  "previewTokenTransfer": "ERC-20 transfer",
+  "previewTokenApprove": "ERC-20 spending approval",
+  "previewTokenRecipient": "Token recipient",
+  "previewTokenSpender": "May spend the tokens",
+  "previewTokenAmount": "Token amount",
+  "previewTokenAmountRaw": "{amount} in the token's smallest units (the wallet does not know its decimals)",
+  "@previewTokenAmountRaw": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "previewTokenAmountUnlimited": "Unlimited: every token, now and later",
+  "labelValueLine": "{label}: {value}",
+  "@labelValueLine": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
   "previewSource": "Source",
   "wcChains": "Networks: {chains}",
   "@wcChains": {

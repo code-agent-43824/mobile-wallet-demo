@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:web3dart/web3dart.dart' show bytesToHex;
 
 import '../errors/app_error.dart';
+import '../transactions/erc20_calldata.dart';
 import 'eip4527.dart';
 
 /// Human-verifiable fields decoded from the unsigned transaction carried by an
@@ -18,6 +19,7 @@ class Eip4527TransactionPreview {
     required this.valueWei,
     required this.dataLength,
     required this.selector,
+    this.erc20Call,
   });
 
   final int chainId;
@@ -29,6 +31,10 @@ class Eip4527TransactionPreview {
   final BigInt valueWei;
   final int dataLength;
   final String? selector;
+
+  /// The data read as an ERC-20 `transfer`/`approve`, or null for any other
+  /// call.
+  final Erc20Call? erc20Call;
 
   String get networkLabel => switch (chainId) {
     1 => 'Ethereum Mainnet',
@@ -175,6 +181,7 @@ class Eip4527TransactionPreviewDecoder {
       selector: data.length < 4
           ? null
           : bytesToHex(data.sublist(0, 4), include0x: true),
+      erc20Call: Erc20Call.tryDecode(data),
     );
   }
 

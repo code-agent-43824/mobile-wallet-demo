@@ -528,11 +528,36 @@ class _AirGapTransactionPreviewCard extends StatelessWidget {
                   preview.selector ?? l10n.wcSelectorNone,
                 ),
         ),
+        if (preview.erc20Call case final Erc20Call call)
+          for (final (label, value) in _erc20Lines(l10n, call))
+            _SummaryTile(label: label, value: value),
         if (request.origin != null)
           _SummaryTile(label: l10n.previewSource, value: request.origin!),
       ],
     );
   }
+}
+
+/// What an ERC-20 call does, as the label/value pairs both transaction
+/// previews show: the action, who receives or may spend, and how much.
+List<(String, String)> _erc20Lines(AppLocalizations l10n, Erc20Call call) {
+  final isTransfer = call.kind == Erc20CallKind.transfer;
+  return <(String, String)>[
+    (
+      l10n.previewTokenCall,
+      isTransfer ? l10n.previewTokenTransfer : l10n.previewTokenApprove,
+    ),
+    (
+      isTransfer ? l10n.previewTokenRecipient : l10n.previewTokenSpender,
+      call.counterparty,
+    ),
+    (
+      l10n.previewTokenAmount,
+      call.isUnlimited
+          ? l10n.previewTokenAmountUnlimited
+          : l10n.previewTokenAmountRaw(call.amount.toString()),
+    ),
+  ];
 }
 
 /// Static QR for small URs and a looping animated fountain sequence for larger
@@ -965,6 +990,9 @@ class _RequestCard extends StatelessWidget {
                   safe.calldataSelector ?? l10n.wcSelectorNone,
                 ),
               ),
+            if (safe.erc20Call case final Erc20Call call)
+              for (final (label, value) in _erc20Lines(l10n, call))
+                Text(l10n.labelValueLine(label, value)),
             Text(
               safe.gasWasEstimated
                   ? l10n.wcGasLimitEstimated('${safe.gasLimit}')

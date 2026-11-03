@@ -11,7 +11,7 @@ import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
 import 'package:mobile_wallet_demo/src/qr/qr_scanner.dart';
 import 'package:mobile_wallet_demo/src/walletconnect/wallet_connect_service.dart';
 import 'package:mobile_wallet_demo/src/walletconnect/wallet_connect_preflight.dart';
-import 'package:web3dart/web3dart.dart' show hexToBytes;
+import 'package:web3dart/web3dart.dart' show encode, hexToBytes;
 
 String _airGapRequestUr() => const Eip4527Codec().encodeSignRequest(
   EthSignRequest(
@@ -29,8 +29,40 @@ String _airGapRequestUr() => const Eip4527Codec().encodeSignRequest(
   ),
 );
 
+/// A Sepolia EIP-1559 call to a token contract: transfer(recipient, 1.5e6).
+String _airGapTokenTransferUr() => const Eip4527Codec().encodeSignRequest(
+  EthSignRequest(
+    requestId: '7b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
+    signData: Uint8List.fromList(<int>[
+      0x02,
+      ...encode(<Object>[
+        11155111,
+        0,
+        1000000000,
+        28415994880,
+        60000,
+        hexToBytes('4444444444444444444444444444444444444444'),
+        0,
+        hexToBytes(
+          'a9059cbb'
+          '0000000000000000000000003333333333333333333333333333333333333333'
+          '000000000000000000000000000000000000000000000000000000000016e360',
+        ),
+        <Object>[],
+      ]),
+    ]),
+    dataType: EthSignDataType.typedTransaction,
+    chainId: 11155111,
+    derivationPath: CryptoKeypath.parse("M/44'/60'/0'/0/0"),
+  ),
+);
+
 class _SuccessfulPreflight implements WalletConnectTransactionPreflight {
-  const _SuccessfulPreflight();
+  const _SuccessfulPreflight({
+    this.data = const <int>[0x12, 0x34, 0x56, 0x78, 0xaa],
+  });
+
+  final List<int> data;
 
   @override
   Future<WalletConnectTransactionPreview> inspect({
@@ -45,7 +77,7 @@ class _SuccessfulPreflight implements WalletConnectTransactionPreflight {
       fromAddress: walletAddress,
       toAddress: '0x2222222222222222222222222222222222222222',
       valueWei: BigInt.zero,
-      data: Uint8List.fromList(<int>[0x12, 0x34, 0x56, 0x78, 0xaa]),
+      data: Uint8List.fromList(data),
       gasLimit: 120000,
       maxFeePerGasWei: BigInt.from(5000000000),
       maxPriorityFeePerGasWei: BigInt.from(1000000000),
@@ -220,6 +252,66 @@ void main() {
 
     await _openSendSheet(tester);
     expect(find.text('Подготовка и отправка перевода'), findsOneWidget);
+  });
+
+  testWidgets('connections screen: a token approval says it is unlimited', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final approve = hexToBytes(
+      '095ea7b3'
+      '0000000000000000000000003333333333333333333333333333333333333333'
+      '${'f' * 64}',
+    );
+    final service = FakeWalletConnectService();
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        locale: const Locale('ru'),
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _FakeBlockchainProvider(),
+        walletConnectService: service,
+        walletConnectPreflight: _SuccessfulPreflight(data: approve),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _createUnlock(tester);
+    await _openConnections(tester);
+
+    service.simulateRequest(
+      topic: 'topic-1',
+      method: 'eth_sendTransaction',
+      chainId: 'eip155:1',
+      params: <Object?>[
+        <String, Object?>{
+          'from': '0x1111111111111111111111111111111111111111',
+          'to': '0x2222222222222222222222222222222222222222',
+          'data':
+              '0x${approve.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}',
+        },
+      ],
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('функция 0x095ea7b3'), findsOneWidget);
+    expect(
+      find.text('Действие с токеном: Разрешение тратить токен ERC-20'),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'Кому разрешено тратить: '
+        '0x3333333333333333333333333333333333333333',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'Количество токенов: Без ограничения: все токены, сейчас и в будущем',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('connections screen: an incoming request can be rejected', (
@@ -464,6 +556,46 @@ void main() {
       );
     },
   );
+
+  testWidgets('AirGap preview reads an ERC-20 transfer', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        locale: const Locale('ru'),
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _FakeBlockchainProvider(),
+        walletConnectService: FakeWalletConnectService(),
+        qrScanner: FakeQrScanner(nextResult: _airGapTokenTransferUr()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _createUnlock(tester);
+    await _openConnections(tester);
+
+    final scan = find.text('Сканировать запрос');
+    await tester.ensureVisible(scan);
+    await tester.tap(scan);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Проверьте транзакцию'), findsOneWidget);
+    expect(find.text('Перевод токена ERC-20'), findsOneWidget);
+    expect(find.text('Получатель токенов'), findsOneWidget);
+    expect(
+      find.text('0x3333333333333333333333333333333333333333'),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        '1500000 в минимальных единицах токена '
+        '(число знаков после запятой кошельку неизвестно)',
+      ),
+      findsOneWidget,
+    );
+  });
 
   testWidgets('connections screen previews and signs MetaMask AirGap tx', (
     WidgetTester tester,

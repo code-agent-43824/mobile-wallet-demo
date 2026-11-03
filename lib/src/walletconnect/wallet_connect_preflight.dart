@@ -5,6 +5,7 @@ import '../blockchain/network_config.dart';
 import 'wallet_connect_service.dart';
 import 'wallet_connect_v2.dart';
 import '../errors/app_error.dart';
+import '../transactions/erc20_calldata.dart';
 
 class WalletConnectPreflightFailure implements Exception, CodedError {
   /// A failure whose text comes from outside the app; shown as is.
@@ -84,6 +85,10 @@ class WalletConnectTransactionPreview {
     }
     return buffer.toString();
   }
+
+  /// The data read as an ERC-20 `transfer`/`approve`, or null for any other
+  /// call.
+  Erc20Call? get erc20Call => Erc20Call.tryDecode(data);
 
   bool matches(WalletConnectRequest request) =>
       request.id == requestId &&

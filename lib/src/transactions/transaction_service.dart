@@ -6,6 +6,7 @@ import 'package:web3dart/web3dart.dart' hide TransactionReceipt;
 import '../blockchain/blockchain_provider.dart';
 import '../blockchain/network_config.dart';
 import '../key_storage/key_storage_backend.dart';
+import 'erc20_calldata.dart';
 import 'transaction_tracker.dart';
 import '../errors/app_error.dart';
 
@@ -603,30 +604,10 @@ class LocalTransactionService implements TransactionService {
       value: isNative ? EtherAmount.inWei(amountUnits) : EtherAmount.zero(),
       data: isNative
           ? Uint8List(0)
-          : _buildErc20TransferData(recipient: to, amountUnits: amountUnits),
+          : Erc20Call.encodeTransfer(recipient: to.value, amount: amountUnits),
       maxFeePerGas: EtherAmount.inWei(maxFeePerGasWei),
       maxPriorityFeePerGas: EtherAmount.inWei(maxPriorityFeePerGasWei),
     );
-  }
-
-  Uint8List _buildErc20TransferData({
-    required EthereumAddress recipient,
-    required BigInt amountUnits,
-  }) {
-    final selector = hexToBytes('a9059cbb');
-    final paddedAddress = Uint8List(32)..setRange(12, 32, recipient.value);
-    final paddedAmount = _bigIntToFixedBytes(amountUnits, 32);
-
-    return Uint8List.fromList(<int>[
-      ...selector,
-      ...paddedAddress,
-      ...paddedAmount,
-    ]);
-  }
-
-  Uint8List _bigIntToFixedBytes(BigInt value, int byteLength) {
-    final hexValue = value.toRadixString(16).padLeft(byteLength * 2, '0');
-    return Uint8List.fromList(hexToBytes(hexValue));
   }
 
   bool _isValidEvmAddress(String value) {

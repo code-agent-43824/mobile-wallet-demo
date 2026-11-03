@@ -32,6 +32,7 @@ import 'key_storage/rutoken_provisioning.dart';
 import 'key_storage/secure_key_value_store.dart';
 import 'qr/qr_scanner.dart';
 import 'qr/ur_qr.dart';
+import 'transactions/erc20_calldata.dart';
 import 'transactions/hardened_transaction_service.dart';
 import 'transactions/transaction_service.dart';
 import 'transactions/transaction_tracker.dart';

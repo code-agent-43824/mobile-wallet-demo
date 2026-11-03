@@ -3,7 +3,8 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/airgap/eip4527.dart';
 import 'package:mobile_wallet_demo/src/airgap/eip4527_transaction_preview.dart';
-import 'package:web3dart/web3dart.dart' show hexToBytes;
+import 'package:mobile_wallet_demo/src/transactions/erc20_calldata.dart';
+import 'package:web3dart/web3dart.dart' show bytesToHex, encode, hexToBytes;
 
 EthSignRequest _request({
   required String signDataHex,
@@ -75,6 +76,43 @@ void main() {
     expect(preview.gasLimit, BigInt.from(10000));
     expect(preview.dataLength, 36);
     expect(preview.selector, '0x7f746573');
+  });
+
+  test('reads ERC-20 calldata and keeps the selector bytes as they are', () {
+    // A Sepolia EIP-1559 call to a token contract: approve(spender, max).
+    final approve = hexToBytes(
+      '095ea7b3'
+      '0000000000000000000000003333333333333333333333333333333333333333'
+      '${'f' * 64}',
+    );
+    final signData = Uint8List.fromList(<int>[
+      0x02,
+      ...encode(<Object>[
+        11155111,
+        0,
+        1000000000,
+        28415994880,
+        60000,
+        hexToBytes('4444444444444444444444444444444444444444'),
+        0,
+        approve,
+        <Object>[],
+      ]),
+    ]);
+
+    final preview = decoder.decode(
+      _request(chainId: 11155111, signDataHex: bytesToHex(signData)),
+    );
+
+    // A selector with a leading zero byte is shown in full.
+    expect(preview.selector, '0x095ea7b3');
+    expect(preview.toAddress, '0x4444444444444444444444444444444444444444');
+    expect(preview.erc20Call?.kind, Erc20CallKind.approve);
+    expect(
+      preview.erc20Call?.counterparty,
+      '0x3333333333333333333333333333333333333333',
+    );
+    expect(preview.erc20Call?.isUnlimited, isTrue);
   });
 
   test('rejects mismatch between outer and embedded chain ids', () {
