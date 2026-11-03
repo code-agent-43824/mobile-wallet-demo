@@ -180,11 +180,15 @@ abstract interface class WalletConnectService {
   /// methods such as `wallet_switchEthereumChain`).
   Stream<WalletConnectRequest> get requests;
 
-  /// Responds to [request] with a successful JSON-RPC result (e.g. a tx hash,
-  /// a signed-tx/signature hex string, or null for EIP-1193 wallet methods).
+  /// Responds to [request] with a successful JSON-RPC result (e.g. a tx hash
+  /// or a signed-tx/signature hex string).
+  ///
+  /// Never null: WalletConnect's sign API rejects a response whose result and
+  /// error are both null, so it would never reach the dApp. A method whose
+  /// standard result is null answers `true` instead.
   Future<void> respondResult({
     required WalletConnectRequest request,
-    required Object? result,
+    required Object result,
   });
 
   /// Responds to [request] with a JSON-RPC error: one of [DappErrorCode] and
@@ -264,7 +268,7 @@ class UnavailableWalletConnectService implements WalletConnectService {
   @override
   Future<void> respondResult({
     required WalletConnectRequest request,
-    required Object? result,
+    required Object result,
   }) async {}
 
   @override
@@ -319,8 +323,8 @@ class FakeWalletConnectService implements WalletConnectService {
   final List<WalletConnectSession> _active = <WalletConnectSession>[];
 
   /// Successful responses recorded for assertions, in arrival order.
-  final List<({int id, Object? result})> respondedResults =
-      <({int id, Object? result})>[];
+  final List<({int id, Object result})> respondedResults =
+      <({int id, Object result})>[];
 
   /// Error responses recorded for assertions, in arrival order.
   final List<({int id, int code, String message})> respondedErrors =
@@ -440,7 +444,7 @@ class FakeWalletConnectService implements WalletConnectService {
   @override
   Future<void> respondResult({
     required WalletConnectRequest request,
-    required Object? result,
+    required Object result,
   }) async {
     respondedResults.add((id: request.id, result: result));
   }

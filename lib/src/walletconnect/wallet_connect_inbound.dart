@@ -266,8 +266,10 @@ class WalletConnectInboundCoordinator {
       );
       rethrow;
     }
-    // EIP-3326 success result is JSON null.
-    await _service.respondResult(request: request, result: null);
+    // EIP-3326's success result is null, which WalletConnect cannot carry (see
+    // [WalletConnectService.respondResult]). `true` is what Reown's own sample
+    // wallet answers; dApp providers resolve the switch without reading it.
+    await _service.respondResult(request: request, result: true);
   }
 
   /// `personal_sign` / `eth_sign`: decode → verify the account → sign the

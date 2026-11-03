@@ -132,7 +132,8 @@ void main() {
 
       expect(service.respondedErrors, isEmpty);
       expect(service.respondedResults.single.id, request.id);
-      expect(service.respondedResults.single.result, isNull);
+      // Never null: Reown drops a response with neither result nor error.
+      expect(service.respondedResults.single.result, isTrue);
       // The dApp moves on chainChanged, which the session switch emits.
       expect(service.switchedChains.single, (
         topic: 'topic-1',

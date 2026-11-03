@@ -322,7 +322,7 @@ void main() {
     expect(controller.errorMessage, isNull);
     expect(controller.pendingRequest, isNull);
     expect(service.respondedErrors, isEmpty);
-    expect(service.respondedResults.single.result, isNull);
+    expect(service.respondedResults.single.result, isTrue);
     expect(service.switchedChains.single.chainId, 11155111);
 
     controller.dispose();
