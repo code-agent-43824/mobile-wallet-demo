@@ -69,6 +69,25 @@ platform hardware/security claim.
 The three failures are fixed in code on 2026-10-29 (`dfe7a6c`, `65ebf9b` and the timeout commit after them) and need
 the same dApp run again before they count as PASS.
 
+### Re-run on v1.60.0 — owner's report, received 2026-11-03 (device not recorded)
+
+WalletConnect with a real dApp, and EIP-4527 AirGap against MetaMask on Sepolia. The rows restate the report; the
+report's own reproduction notes were not handed over.
+
+| Check | Result | Observation |
+| --- | --- | --- |
+| Pairing with `eth_signTypedData` and `wallet_switchEthereumChain` required | PASS | Closes the 2026-10-29 `eth_signTypedData` row. |
+| `personal_sign`, `eth_signTypedData` | PASS | ecrecover gives the wallet address. |
+| `wallet_switchEthereumChain` Sepolia ↔ Mainnet | FAIL | The switch happens (`chainChanged`, session updated), but the dApp's request gets no answer and expires. Cause: Reown rejects a response whose result is null. Fixed in `ba17be3` (answers `true`); needs a re-run. |
+| Pairing timeout | PASS | «dApp did not answer the pairing» after 30 s. Closes the 2026-10-29 relay row. |
+| User rejection, request expiry, disconnect | PASS | Rejection arrives as code 5000. |
+| AirGap negatives T1–T5 | PASS | Every one fails closed. |
+| AirGap T2: `personal_sign` / `eth_signTypedData_v4` | PASS | Refused, including a 4-frame multipart UR; message signing stays out of scope by the owner's decision. The refusal now names it (`3953331`). |
+| AirGap T6: transaction with data | PASS | Full round trip, confirmed on-chain. |
+| AirGap T7: the same request loaded again | FAIL | Loaded and signable again with nothing said. A notice with the earlier signing time was added in `3953331`; needs a re-run. |
+| AirGap T8: envelope chainId 1 over a Sepolia transaction | FAIL | The mismatch is refused, but the request loaded before it stayed on screen and Sign signed that one. Fixed in `e937083`; needs a re-run. |
+| AirGap T10: 0-ETH transaction with ERC-20 calldata | INCONCLUSIVE | The preview showed function `0x0a9059cb`. The wallet prints the first four data bytes as they are (`0xa9059cbb` for `transfer`), so that transaction's data starts with `0a9059cb`: shifted by half a byte, it does not call `transfer`. Check its receipt for a Transfer event. Token calls are now decoded in both previews (`c5e6c9a`). |
+
 ## Phase 10 Rutoken gate
 
 Since v1.57 card errors are coded in Dart and worded without the vendor name, per the redesign's rule that
