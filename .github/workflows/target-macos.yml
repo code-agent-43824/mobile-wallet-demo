@@ -78,8 +78,16 @@ jobs:
       - name: Forget the release build's keychain items
         run: bash scripts/smoke/reset_macos_keychain.sh
 
+      # Each `flutter test` run builds the app again from a listener in a new
+      # random temporary directory, so a second run is a differently signed
+      # app: the login keychain would ask whether it may read the first run's
+      # vault, and nobody answers on a runner. Like Android, macOS checks
+      # creation only; the iOS simulator, Windows and Linux check the restart.
       - name: Scenario
-        run: dart scripts/smoke/persistence_smoke.dart macos
+        run: >-
+          flutter test integration_test/smoke_test.dart -d macos
+          --reporter=expanded --dart-define-from-file=dart_defines.json
+          --plain-name 'a new wallet reaches the dashboard'
 
       - id: result
         run: echo "result=passed" >> "$GITHUB_OUTPUT"
@@ -126,8 +134,16 @@ jobs:
       - name: Forget the release build's keychain items
         run: bash scripts/smoke/reset_macos_keychain.sh
 
+      # Each `flutter test` run builds the app again from a listener in a new
+      # random temporary directory, so a second run is a differently signed
+      # app: the login keychain would ask whether it may read the first run's
+      # vault, and nobody answers on a runner. Like Android, macOS checks
+      # creation only; the iOS simulator, Windows and Linux check the restart.
       - name: Scenario
-        run: dart scripts/smoke/persistence_smoke.dart macos
+        run: >-
+          flutter test integration_test/smoke_test.dart -d macos
+          --reporter=expanded --dart-define-from-file=dart_defines.json
+          --plain-name 'a new wallet reaches the dashboard'
 
       - id: result
         run: echo "result=passed" >> "$GITHUB_OUTPUT"
