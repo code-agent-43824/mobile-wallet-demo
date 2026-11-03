@@ -317,7 +317,7 @@ void main() {
     expect(find.text('Подтвердите операцию'), findsNothing);
     expect(find.text('Входящий запрос на подпись'), findsNothing);
     expect(service.respondedErrors, isEmpty);
-    expect(service.respondedResults.single.result, isNull);
+    expect(service.respondedResults.single.result, isTrue);
     // Success is said out loud instead of the card silently vanishing.
     expect(
       find.text('Приложение переключено на сеть Ethereum Sepolia.'),
