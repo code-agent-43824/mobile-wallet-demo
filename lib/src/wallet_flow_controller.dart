@@ -248,6 +248,7 @@ class WalletFlowController extends ChangeNotifier {
   String? _airGapRequestPayload;
   EthSignRequest? _airGapRequest;
   Eip4527TransactionPreview? _airGapRequestPreview;
+  Eip4527MessagePreview? _airGapMessagePreview;
   DateTime? _airGapRequestSignedBefore;
   String? _airGapResponsePayload;
   List<WalletConnectSession> _walletConnectSessions =
@@ -336,6 +337,9 @@ class WalletFlowController extends ChangeNotifier {
   String? get airGapAccountExportPayload => _airGapAccountExportPayload;
   EthSignRequest? get airGapRequest => _airGapRequest;
   Eip4527TransactionPreview? get airGapRequestPreview => _airGapRequestPreview;
+
+  /// The loaded `personal_sign` request's message; null for a transaction.
+  Eip4527MessagePreview? get airGapMessagePreview => _airGapMessagePreview;
 
   /// When the loaded AirGap request was signed before (UTC), or null.
   DateTime? get airGapRequestSignedBefore => _airGapRequestSignedBefore;
@@ -1547,6 +1551,7 @@ class WalletFlowController extends ChangeNotifier {
     _airGapRequestPayload = null;
     _airGapRequest = null;
     _airGapRequestPreview = null;
+    _airGapMessagePreview = null;
     _airGapRequestSignedBefore = null;
     _airGapResponsePayload = null;
     await _runGuarded(() async {
@@ -1555,14 +1560,16 @@ class WalletFlowController extends ChangeNotifier {
         throw UrQrException(_messages.errorMultipartUrNeedsCamera);
       }
       final request = const Eip4527Codec().decodeSignRequest(normalized);
-      if (request.chainId != 1 && request.chainId != 11155111) {
+      if (request.dataType == EthSignDataType.typedData) {
+        throw Eip4527Exception(_messages.errorAirGapTypedDataUnsupported);
+      }
+      // An EIP-191 message signature is the same on every chain, so only a
+      // transaction is held to the networks the wallet knows.
+      final isMessage = request.dataType == EthSignDataType.rawBytes;
+      if (!isMessage && request.chainId != 1 && request.chainId != 11155111) {
         throw Eip4527Exception(
           _messages.errorUnsupportedChain(request.chainId),
         );
-      }
-      if (request.dataType != EthSignDataType.transaction &&
-          request.dataType != EthSignDataType.typedTransaction) {
-        throw Eip4527Exception(_messages.errorAirGapTransactionsOnly);
       }
       if (request.dataType == EthSignDataType.transaction &&
           request.chainId != 1) {
@@ -1583,10 +1590,15 @@ class WalletFlowController extends ChangeNotifier {
           ),
         );
       }
-      final preview = const Eip4527TransactionPreviewDecoder().decode(request);
+      if (isMessage) {
+        _airGapMessagePreview = Eip4527MessagePreview(request.signData);
+      } else {
+        _airGapRequestPreview = const Eip4527TransactionPreviewDecoder().decode(
+          request,
+        );
+      }
       _airGapRequestPayload = normalized;
       _airGapRequest = request;
-      _airGapRequestPreview = preview;
       _airGapRequestSignedBefore = await _airGapSignedBefore(request);
       _airGapResponsePayload = null;
     });
@@ -1659,6 +1671,7 @@ class WalletFlowController extends ChangeNotifier {
     _airGapRequestPayload = null;
     _airGapRequest = null;
     _airGapRequestPreview = null;
+    _airGapMessagePreview = null;
     _airGapRequestSignedBefore = null;
     _airGapResponsePayload = null;
     _errorMessage = null;

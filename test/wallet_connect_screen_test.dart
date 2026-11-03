@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -597,6 +598,59 @@ void main() {
       findsOneWidget,
     );
   });
+
+  for (final (name, message, shown, warned)
+      in <(String, List<int>, String, bool)>[
+        (
+          'text',
+          utf8.encode('Вход на example.org'),
+          'Вход на example.org',
+          false,
+        ),
+        ('bytes', List<int>.filled(32, 0xab), '0x${'ab' * 32}', true),
+      ]) {
+    testWidgets('AirGap personal_sign shows the message ($name)', (
+      WidgetTester tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final payload = const Eip4527Codec().encodeSignRequest(
+        EthSignRequest(
+          requestId: '5b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
+          signData: Uint8List.fromList(message),
+          dataType: EthSignDataType.rawBytes,
+          derivationPath: CryptoKeypath.parse("M/44'/60'/0'/0/0"),
+        ),
+      );
+
+      await tester.pumpWidget(
+        MobileWalletDemoApp(
+          locale: const Locale('ru'),
+          store: InMemorySecureKeyValueStore(),
+          blockchainProvider: _FakeBlockchainProvider(),
+          walletConnectService: FakeWalletConnectService(),
+          qrScanner: FakeQrScanner(nextResult: payload),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _createUnlock(tester);
+      await _openConnections(tester);
+
+      final scan = find.text('Сканировать запрос');
+      await tester.ensureVisible(scan);
+      await tester.tap(scan);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Проверьте сообщение'), findsOneWidget);
+      expect(find.text(shown), findsOneWidget);
+      expect(find.text('Подписать сообщение'), findsOneWidget);
+      expect(find.text('Подписать транзакцию'), findsNothing);
+      expect(
+        find.textContaining('Это не читаемый текст'),
+        warned ? findsOneWidget : findsNothing,
+      );
+    });
+  }
 
   testWidgets('AirGap warns about a request it signed before', (
     WidgetTester tester,

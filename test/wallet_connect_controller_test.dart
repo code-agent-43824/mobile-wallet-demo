@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:mobile_wallet_demo/src/auth/biometric_auth.dart';
@@ -717,16 +718,60 @@ void main() {
     },
   );
 
-  test('an AirGap message signing request is refused as such', () async {
+  test('an AirGap personal_sign request is previewed and signed', () async {
+    final service = FakeWalletConnectService();
+    final controller = await buildUnlocked(
+      service,
+      transactionService: const LocalTransactionService(),
+    );
+    final message = Uint8List.fromList(utf8.encode('Вход на example.org'));
+
+    await controller.loadAirGapRequest(
+      const Eip4527Codec().encodeSignRequest(
+        EthSignRequest(
+          requestId: 'dd1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
+          signData: message,
+          dataType: EthSignDataType.rawBytes,
+          // A message carries no meaningful chain; another one is no reason
+          // to refuse it.
+          chainId: 137,
+          derivationPath: CryptoKeypath.parse("M/44'/60'/0'/0/0"),
+          address: Uint8List.fromList(
+            hexToBytes(controller.summary!.address.substring(2)),
+          ),
+        ),
+      ),
+    );
+
+    expect(controller.errorMessage, isNull);
+    expect(controller.airGapRequestPreview, isNull);
+    expect(controller.airGapMessagePreview?.text, 'Вход на example.org');
+
+    await controller.signPendingAirGapRequest(pin: '1234');
+
+    final response = const Eip4527Codec().decodeSignature(
+      controller.airGapResponsePayload!,
+    );
+    expect(response.requestId, 'dd1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d');
+    expect(response.signature, hasLength(65));
+    // MetaMask hands the signature to the dApp as is: v must be 27 or 28.
+    // (Recovery to the signing address is covered in eip4527_inbound_test.)
+    expect(response.signature.last, anyOf(27, 28));
+
+    controller.dispose();
+    await service.dispose();
+  });
+
+  test('AirGap EIP-712 typed data is refused in its own words', () async {
     final service = FakeWalletConnectService();
     final controller = await buildUnlocked(service);
 
     await controller.loadAirGapRequest(
       const Eip4527Codec().encodeSignRequest(
         EthSignRequest(
-          requestId: 'dd1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
-          signData: Uint8List.fromList(<int>[0x48, 0x69]),
-          dataType: EthSignDataType.rawBytes,
+          requestId: 'ee1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
+          signData: Uint8List.fromList(utf8.encode('{}')),
+          dataType: EthSignDataType.typedData,
           chainId: 11155111,
           derivationPath: CryptoKeypath.parse("M/44'/60'/0'/0/0"),
         ),
@@ -735,8 +780,7 @@ void main() {
 
     expect(
       controller.errorMessage,
-      'Через AirGap кошелёк подписывает только транзакции; '
-      'подпись сообщений не поддерживается.',
+      'Через AirGap кошелёк не подписывает типизированные данные EIP-712.',
     );
     expect(controller.airGapRequest, isNull);
 

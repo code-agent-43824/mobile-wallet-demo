@@ -18,6 +18,7 @@ class _ConnectionsStage extends StatefulWidget {
     required this.airGapAccountExportPayload,
     required this.airGapRequest,
     required this.airGapRequestPreview,
+    this.airGapMessagePreview,
     this.airGapRequestSignedBefore,
     required this.airGapResponsePayload,
     required this.walletAddress,
@@ -52,6 +53,9 @@ class _ConnectionsStage extends StatefulWidget {
   final String? airGapAccountExportPayload;
   final EthSignRequest? airGapRequest;
   final Eip4527TransactionPreview? airGapRequestPreview;
+
+  /// The loaded `personal_sign` request's message; null for a transaction.
+  final Eip4527MessagePreview? airGapMessagePreview;
 
   /// When the loaded request was signed before (UTC), or null.
   final DateTime? airGapRequestSignedBefore;
@@ -210,6 +214,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
     final accountExport = widget.airGapAccountExportPayload;
     final airGapRequest = widget.airGapRequest;
     final airGapPreview = widget.airGapRequestPreview;
+    final airGapMessage = widget.airGapMessagePreview;
     final airGapResponse = widget.airGapResponsePayload;
     final sessions = widget.sessions;
 
@@ -368,7 +373,8 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
                     ),
                 ],
               ),
-              if (airGapRequest != null && airGapPreview != null) ...[
+              if (airGapRequest != null &&
+                  (airGapPreview != null || airGapMessage != null)) ...[
                 if (widget.airGapRequestSignedBefore case final DateTime at)
                   Padding(
                     padding: const EdgeInsets.only(top: 16),
@@ -378,15 +384,25 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
                     ),
                   ),
                 const SizedBox(height: 16),
-                _AirGapTransactionPreviewCard(
-                  request: airGapRequest,
-                  preview: airGapPreview,
-                ),
+                if (airGapPreview != null)
+                  _AirGapTransactionPreviewCard(
+                    request: airGapRequest,
+                    preview: airGapPreview,
+                  )
+                else if (airGapMessage != null)
+                  _AirGapMessagePreviewCard(
+                    request: airGapRequest,
+                    preview: airGapMessage,
+                  ),
                 const SizedBox(height: 12),
                 FilledButton.icon(
                   onPressed: _signAirGap,
                   icon: const Icon(Icons.draw),
-                  label: Text(l10n.airgapSignTransaction),
+                  label: Text(
+                    airGapPreview != null
+                        ? l10n.airgapSignTransaction
+                        : l10n.airgapSignMessage,
+                  ),
                 ),
               ],
             ],
@@ -543,6 +559,65 @@ class _AirGapTransactionPreviewCard extends StatelessWidget {
         if (preview.erc20Call case final Erc20Call call)
           for (final (label, value) in _erc20Lines(l10n, call))
             _SummaryTile(label: label, value: value),
+        if (request.origin != null)
+          _SummaryTile(label: l10n.previewSource, value: request.origin!),
+      ],
+    );
+  }
+}
+
+/// A `personal_sign` request from MetaMask: the message comes first and in
+/// full, since it is all the user signs; bytes that are not readable text are
+/// shown as hex under a warning.
+class _AirGapMessagePreviewCard extends StatelessWidget {
+  const _AirGapMessagePreviewCard({
+    required this.request,
+    required this.preview,
+  });
+
+  final EthSignRequest request;
+  final Eip4527MessagePreview preview;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(l10n.airgapMessageTitle),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: theme.colorScheme.primary, width: 2),
+          ),
+          child: SelectableText(
+            preview.text ?? preview.hex,
+            style: preview.isText
+                ? theme.textTheme.titleMedium
+                : theme.textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
+          ),
+        ),
+        if (!preview.isText) ...[
+          const SizedBox(height: 8),
+          Text(
+            l10n.airgapMessageNotText,
+            style: TextStyle(color: theme.colorScheme.error),
+          ),
+        ],
+        const SizedBox(height: 8),
+        _SummaryTile(
+          label: l10n.airgapMessageSize,
+          value: l10n.airgapMessageBytes(preview.bytes.length),
+        ),
+        _SummaryTile(
+          label: l10n.previewFrom,
+          value: request.addressHex ?? request.derivationPath.toPathString(),
+        ),
         if (request.origin != null)
           _SummaryTile(label: l10n.previewSource, value: request.origin!),
       ],

@@ -9,6 +9,7 @@ import 'airgap/account_export.dart';
 import 'airgap/airgap_signed_requests.dart';
 import 'airgap/eip4527.dart';
 import 'airgap/eip4527_inbound.dart';
+import 'airgap/eip4527_message_preview.dart';
 import 'airgap/eip4527_transaction_preview.dart';
 import 'auth/biometric_auth.dart';
 import 'auth/external_digest_signer.dart';
@@ -594,6 +595,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen>
           airGapAccountExportPayload: controller.airGapAccountExportPayload,
           airGapRequest: controller.airGapRequest,
           airGapRequestPreview: controller.airGapRequestPreview,
+          airGapMessagePreview: controller.airGapMessagePreview,
           airGapRequestSignedBefore: controller.airGapRequestSignedBefore,
           airGapResponsePayload: controller.airGapResponsePayload,
           walletAddress: controller.summary?.address,
