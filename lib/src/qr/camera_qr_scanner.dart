@@ -71,6 +71,10 @@ class CameraQrScanner implements QrScanner {
 
   @override
   Future<String?> loadFromFile() => _fileDelegate.loadFromFile();
+
+  @override
+  Future<String?> loadUrFromFiles({String? expectedType}) =>
+      _fileDelegate.loadUrFromFiles(expectedType: expectedType);
 }
 
 /// Creates the production camera controller with settings tuned for dense QR

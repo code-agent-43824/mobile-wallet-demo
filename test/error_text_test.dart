@@ -26,6 +26,8 @@ void main() {
     'chainId': 137,
     'requested': 1,
     'embedded': 11155111,
+    'framesReceived': 2,
+    'framesNeeded': 5,
   };
 
   test('every error code reads in both languages', () {

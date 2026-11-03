@@ -51,6 +51,21 @@ void main() {
       expect(delegate.events, contains('file'));
     });
 
+    test('loadUrFromFiles delegates to the file scanner', () async {
+      final delegate = FakeQrScanner(nextResult: 'ur:eth-sign-request/x');
+      final scanner = CameraQrScanner(
+        navigatorKey: GlobalKey<NavigatorState>(),
+        fileDelegate: delegate,
+      );
+
+      final result = await scanner.loadUrFromFiles(
+        expectedType: 'eth-sign-request',
+      );
+
+      expect(result, 'ur:eth-sign-request/x');
+      expect(delegate.events, contains('files-ur:eth-sign-request'));
+    });
+
     test('scanWithCamera throws when the navigator is not mounted', () async {
       final scanner = CameraQrScanner(
         // A fresh key never attached to a Navigator → currentState is null.

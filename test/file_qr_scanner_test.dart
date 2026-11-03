@@ -3,8 +3,11 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
+import 'package:mobile_wallet_demo/src/airgap/eip4527.dart';
+import 'package:mobile_wallet_demo/src/errors/app_error.dart';
 import 'package:mobile_wallet_demo/src/qr/file_qr_scanner.dart';
 import 'package:mobile_wallet_demo/src/qr/qr_scanner.dart';
+import 'package:mobile_wallet_demo/src/qr/ur_qr.dart';
 import 'package:zxing2/qrcode.dart';
 
 class _NullDecoder implements QrImageDecoder {
@@ -17,6 +20,17 @@ class _NullDecoder implements QrImageDecoder {
 const String _fixtureText = 'wc:9.6demo@2?relay=irn';
 
 const String _urText = 'UR:ETH-SIGN-REQUEST/TEST-PAYLOAD-1234567890';
+
+final String _airGapSinglePart = const Eip4527Codec()
+    .encodeSignRequest(
+      EthSignRequest(
+        requestId: '3b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
+        signData: Uint8List.fromList(<int>[0x48, 0x69]),
+        dataType: EthSignDataType.rawBytes,
+        derivationPath: CryptoKeypath.parse("M/44'/60'/0'/0/0"),
+      ),
+    )
+    .toUpperCase();
 
 /// Draws a QR code of [text] into [image] (8 px modules, 4-module quiet zone)
 /// and returns it as PNG bytes, the way an image tool would save it.
@@ -95,6 +109,83 @@ void main() {
     expect(_pngDepthAndColourType(png), (8, 6));
 
     expect(const ZxingQrImageDecoder().decode(png), _urText);
+  });
+
+  group('loadUrFromFiles', () {
+    // A long personal message: its eth-sign-request needs several QR frames.
+    final requestUr = const Eip4527Codec().encodeSignRequest(
+      EthSignRequest(
+        requestId: '4b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
+        signData: Uint8List.fromList(
+          List<int>.generate(400, (i) => 0x41 + i % 26),
+        ),
+        dataType: EthSignDataType.rawBytes,
+        derivationPath: CryptoKeypath.parse("M/44'/60'/0'/0/0"),
+      ),
+    );
+    final framePngs = <Uint8List>[
+      for (final frame in const UrQrEncoder().encode(requestUr))
+        _qrPng(
+          frame.toUpperCase(),
+          (size) => img.Image(width: size, height: size, numChannels: 1),
+          (image, dark) => image.getColor(dark ? 0 : 255, 0, 0),
+        ),
+    ];
+
+    FileQrScanner scanner(List<Uint8List> images) =>
+        FileQrScanner(pickManyImageBytes: () async => images);
+
+    test('rebuilds a multipart UR from all its frames, in any order', () async {
+      expect(framePngs.length, greaterThan(2));
+      final shuffled = <Uint8List>[
+        ...framePngs.reversed,
+        // A stray image without a QR in the selection does no harm.
+        Uint8List.fromList(img.encodePng(img.Image(width: 8, height: 8))),
+      ];
+
+      final result = await scanner(
+        shuffled,
+      ).loadUrFromFiles(expectedType: Eip4527Codec.signRequestType);
+
+      expect(result, requestUr);
+    });
+
+    test('says how many frames are missing', () async {
+      await expectLater(
+        scanner(<Uint8List>[
+          framePngs.first,
+        ]).loadUrFromFiles(expectedType: Eip4527Codec.signRequestType),
+        throwsA(
+          isA<QrScannerException>()
+              .having(
+                (error) => error.errorCode,
+                'code',
+                AppErrorCode.urFramesIncomplete,
+              )
+              .having((error) => error.errorArgs, 'args', <String, Object>{
+                'framesReceived': 1,
+                'framesNeeded': framePngs.length,
+              }),
+        ),
+      );
+    });
+
+    test('a single-part UR needs one image', () async {
+      final png = _qrPng(
+        _airGapSinglePart,
+        (size) => img.Image(width: size, height: size, numChannels: 1),
+        (image, dark) => image.getColor(dark ? 0 : 255, 0, 0),
+      );
+
+      expect(
+        await scanner(<Uint8List>[png]).loadUrFromFiles(),
+        _airGapSinglePart.toLowerCase(),
+      );
+    });
+
+    test('returns null when the picker is cancelled', () async {
+      expect(await scanner(const <Uint8List>[]).loadUrFromFiles(), isNull);
+    });
   });
 
   test('ZxingQrImageDecoder returns null on a non-image input', () {

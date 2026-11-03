@@ -57,6 +57,9 @@ enum AppErrorCode {
   /// Args: `expected`, `actual`.
   urWrongType,
 
+  /// Args: `framesReceived`, `framesNeeded`.
+  urFramesIncomplete,
+
   // Transfers.
   txRecipientInvalid,
   txAmountEmpty,

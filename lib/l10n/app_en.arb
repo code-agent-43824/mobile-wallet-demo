@@ -97,7 +97,7 @@
   "airgapStep3Title": "Return the signature to MetaMask",
   "airgapAccountQr": "Public account QR for MetaMask",
   "airgapSignatureQr": "Transaction signature QR for MetaMask",
-  "airgapLoadQrFile": "Load a QR from a file",
+  "airgapLoadQrFile": "Load QR from files",
   "busyTakesSeconds": "This takes a few seconds.",
   "busyCancelNfc": "Cancel waiting for the card",
   "busyCancelling": "Cancelling…",
@@ -272,7 +272,7 @@
   "errorStorageCannotSignLocally": "The active storage cannot sign on the phone.",
   "errorHardenedFlowUnsupported": "The current transaction service does not support hardened sending.",
   "errorWalletKeyUnavailable": "The wallet key is unavailable.",
-  "errorMultipartUrNeedsCamera": "A multipart QR has to be scanned in full with the camera.",
+  "errorMultipartUrNeedsCamera": "This is one frame of a multipart QR. Scan it with the camera, or select all of its frames at once from files.",
   "errorUnsupportedChain": "MetaMask sent a network this app does not support (chainId {chainId}). Ethereum Mainnet and Sepolia are available.",
   "@errorUnsupportedChain": {
     "placeholders": {
@@ -653,6 +653,17 @@
         "type": "String"
       },
       "actual": {
+        "type": "String"
+      }
+    }
+  },
+  "errUrFramesIncomplete": "The images hold {framesReceived} of the {framesNeeded} frames of this multipart QR. Select all of its frames at once.",
+  "@errUrFramesIncomplete": {
+    "placeholders": {
+      "framesReceived": {
+        "type": "String"
+      },
+      "framesNeeded": {
         "type": "String"
       }
     }

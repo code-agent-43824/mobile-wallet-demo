@@ -6,6 +6,7 @@ import 'package:zxing2/qrcode.dart';
 
 import '../errors/app_error.dart';
 import 'qr_scanner.dart';
+import 'ur_qr.dart';
 
 /// Decodes QR text from raw image bytes. Pure Dart (`image` + `zxing2`), so it
 /// runs on **every** platform including Windows — no camera, no native plugin.
@@ -56,16 +57,20 @@ class ZxingQrImageDecoder implements QrImageDecoder {
 /// platform (the only option on Windows x64, where camera plugins don't exist).
 /// Live camera scanning stays deferred (a future native-platform step). File
 /// picking goes through `file_selector` (official, Windows-supported), kept
-/// injectable via [pickImageBytes] so tests don't touch the platform.
+/// injectable via [pickImageBytes] and [pickManyImageBytes] so tests don't
+/// touch the platform.
 class FileQrScanner implements QrScanner {
   FileQrScanner({
     QrImageDecoder decoder = const ZxingQrImageDecoder(),
     Future<Uint8List?> Function()? pickImageBytes,
+    Future<List<Uint8List>> Function()? pickManyImageBytes,
   }) : _decoder = decoder,
-       _pickImageBytes = pickImageBytes ?? _pickWithFileSelector;
+       _pickImageBytes = pickImageBytes ?? _pickWithFileSelector,
+       _pickManyImageBytes = pickManyImageBytes ?? _pickManyWithFileSelector;
 
   final QrImageDecoder _decoder;
   final Future<Uint8List?> Function() _pickImageBytes;
+  final Future<List<Uint8List>> Function() _pickManyImageBytes;
 
   @override
   bool get isCameraScanAvailable => false;
@@ -99,15 +104,58 @@ class FileQrScanner implements QrScanner {
     return text;
   }
 
-  static Future<Uint8List?> _pickWithFileSelector() async {
-    const typeGroup = XTypeGroup(
-      label: 'QR image',
-      extensions: <String>['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'],
+  /// Images that hold no QR are skipped, so a stray screenshot in the
+  /// selection does no harm; frames of another UR type are refused.
+  @override
+  Future<String?> loadUrFromFiles({String? expectedType}) async {
+    final images = await _pickManyImageBytes();
+    if (images.isEmpty) {
+      return null; // user cancelled the picker
+    }
+    final assembler = UrQrAssembler(expectedType: expectedType);
+    var withQr = 0;
+    for (final bytes in images) {
+      final text = _decoder.decode(bytes);
+      if (text == null) {
+        continue;
+      }
+      withQr++;
+      assembler.add(text);
+      if (assembler.isComplete) {
+        return assembler.result;
+      }
+    }
+    if (withQr == 0) {
+      throw const QrScannerException.coded(AppErrorCode.qrImageNotRecognized);
+    }
+    throw QrScannerException.coded(
+      AppErrorCode.urFramesIncomplete,
+      <String, Object>{
+        'framesReceived': assembler.receivedCount,
+        'framesNeeded': assembler.expectedCount,
+      },
     );
-    final file = await openFile(acceptedTypeGroups: <XTypeGroup>[typeGroup]);
+  }
+
+  static const XTypeGroup _imageTypes = XTypeGroup(
+    label: 'QR image',
+    extensions: <String>['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'],
+  );
+
+  static Future<Uint8List?> _pickWithFileSelector() async {
+    final file = await openFile(
+      acceptedTypeGroups: const <XTypeGroup>[_imageTypes],
+    );
     if (file == null) {
       return null;
     }
     return file.readAsBytes();
+  }
+
+  static Future<List<Uint8List>> _pickManyWithFileSelector() async {
+    final files = await openFiles(
+      acceptedTypeGroups: const <XTypeGroup>[_imageTypes],
+    );
+    return <Uint8List>[for (final file in files) await file.readAsBytes()];
   }
 }

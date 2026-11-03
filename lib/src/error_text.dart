@@ -64,6 +64,10 @@ String describeAppError(
       arg('expected'),
       arg('actual'),
     ),
+    AppErrorCode.urFramesIncomplete => l10n.errUrFramesIncomplete(
+      arg('framesReceived'),
+      arg('framesNeeded'),
+    ),
     AppErrorCode.txRecipientInvalid => l10n.errTxRecipientInvalid,
     AppErrorCode.txAmountEmpty => l10n.errTxAmountEmpty,
     AppErrorCode.txAmountFormat => l10n.errTxAmountFormat,

@@ -762,6 +762,29 @@ void main() {
     await service.dispose();
   });
 
+  test('an AirGap request is loaded from the frames in image files', () async {
+    final service = FakeWalletConnectService();
+    final scanner = FakeQrScanner(
+      nextResult: const Eip4527Codec().encodeSignRequest(
+        EthSignRequest(
+          requestId: 'ff1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
+          signData: Uint8List.fromList(utf8.encode('Hello')),
+          dataType: EthSignDataType.rawBytes,
+          derivationPath: CryptoKeypath.parse("M/44'/60'/0'/0/0"),
+        ),
+      ),
+    );
+    final controller = await buildUnlocked(service, qrScanner: scanner);
+
+    await controller.loadAirGapRequestFromFile();
+
+    expect(scanner.events, <String>['files-ur:eth-sign-request']);
+    expect(controller.airGapMessagePreview?.text, 'Hello');
+
+    controller.dispose();
+    await service.dispose();
+  });
+
   test('AirGap EIP-712 typed data is refused in its own words', () async {
     final service = FakeWalletConnectService();
     final controller = await buildUnlocked(service);

@@ -30,6 +30,12 @@ abstract interface class QrScanner {
   /// text or null when the user cancels. Throws [QrScannerException] when file
   /// loading is unavailable or the image holds no readable QR.
   Future<String?> loadFromFile();
+
+  /// Picks one or more image files holding the frames of a BC-UR — one image
+  /// for a single-part UR, every frame for a multipart one — and resolves with
+  /// the reconstructed single-part UR, or null when the user cancels. Throws
+  /// when the frames are not enough, or not a UR of [expectedType].
+  Future<String?> loadUrFromFiles({String? expectedType});
 }
 
 class QrScannerException implements Exception, CodedError {
@@ -91,6 +97,11 @@ class UnavailableQrScanner implements QrScanner {
   Future<String?> loadFromFile() async {
     throw _unavailable;
   }
+
+  @override
+  Future<String?> loadUrFromFiles({String? expectedType}) async {
+    throw _unavailable;
+  }
 }
 
 /// In-memory [QrScanner] for tests/DI: both sources resolve with [nextResult]
@@ -132,6 +143,12 @@ class FakeQrScanner implements QrScanner {
   @override
   Future<String?> loadFromFile() async {
     events.add('file');
+    return nextResult;
+  }
+
+  @override
+  Future<String?> loadUrFromFiles({String? expectedType}) async {
+    events.add('files-ur:${expectedType ?? ''}');
     return nextResult;
   }
 }

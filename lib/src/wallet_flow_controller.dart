@@ -1617,7 +1617,11 @@ class WalletFlowController extends ChangeNotifier {
   }
 
   Future<void> loadAirGapRequestFromFile() async {
-    final payload = await _runQr(_qrScanner.loadFromFile);
+    final payload = await _runQr(
+      () => _qrScanner.loadUrFromFiles(
+        expectedType: Eip4527Codec.signRequestType,
+      ),
+    );
     if (payload != null) {
       await loadAirGapRequest(payload);
     }
@@ -1694,6 +1698,11 @@ class WalletFlowController extends ChangeNotifier {
       _notify();
       return result;
     } on QrScannerException catch (error) {
+      _errorMessage = describeError(_messages, error);
+      _notify();
+      return null;
+    } on UrQrException catch (error) {
+      // Frames of another UR type, or a corrupt sequence, among the files.
       _errorMessage = describeError(_messages, error);
       _notify();
       return null;
