@@ -135,7 +135,7 @@ class Eip4527InboundCoordinator {
       case EthSignDataType.typedData:
         // EIP-712. signData is the typed-data JSON as UTF-8 bytes. Hash with the
         // pure-Dart encoder, sign the 32-byte digest raw. v = recId+27.
-        final typedData = _decodeTypedData(request.signData);
+        final typedData = decodeTypedData(request.signData);
         final digest = _eip712.encode(typedData);
         final hex = await signer.signDigest(
           transactionService: transactionService,
@@ -249,7 +249,9 @@ class Eip4527InboundCoordinator {
     }
   }
 
-  Map<String, dynamic> _decodeTypedData(Uint8List signData) {
+  /// The `{types, primaryType, domain, message}` object a `typedData`
+  /// request carries as UTF-8 JSON.
+  Map<String, dynamic> decodeTypedData(Uint8List signData) {
     final dynamic decoded;
     try {
       decoded = jsonDecode(utf8.decode(signData));

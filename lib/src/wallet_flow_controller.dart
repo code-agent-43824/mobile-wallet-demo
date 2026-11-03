@@ -249,6 +249,7 @@ class WalletFlowController extends ChangeNotifier {
   EthSignRequest? _airGapRequest;
   Eip4527TransactionPreview? _airGapRequestPreview;
   Eip4527MessagePreview? _airGapMessagePreview;
+  Eip712Preview? _airGapTypedDataPreview;
   DateTime? _airGapRequestSignedBefore;
   String? _airGapResponsePayload;
   List<WalletConnectSession> _walletConnectSessions =
@@ -340,6 +341,9 @@ class WalletFlowController extends ChangeNotifier {
 
   /// The loaded `personal_sign` request's message; null for a transaction.
   Eip4527MessagePreview? get airGapMessagePreview => _airGapMessagePreview;
+
+  /// The loaded EIP-712 request's preview; null for other requests.
+  Eip712Preview? get airGapTypedDataPreview => _airGapTypedDataPreview;
 
   /// When the loaded AirGap request was signed before (UTC), or null.
   DateTime? get airGapRequestSignedBefore => _airGapRequestSignedBefore;
@@ -1552,6 +1556,7 @@ class WalletFlowController extends ChangeNotifier {
     _airGapRequest = null;
     _airGapRequestPreview = null;
     _airGapMessagePreview = null;
+    _airGapTypedDataPreview = null;
     _airGapRequestSignedBefore = null;
     _airGapResponsePayload = null;
     await _runGuarded(() async {
@@ -1560,13 +1565,15 @@ class WalletFlowController extends ChangeNotifier {
         throw UrQrException(_messages.errorMultipartUrNeedsCamera);
       }
       final request = const Eip4527Codec().decodeSignRequest(normalized);
-      if (request.dataType == EthSignDataType.typedData) {
-        throw Eip4527Exception(_messages.errorAirGapTypedDataUnsupported);
-      }
-      // An EIP-191 message signature is the same on every chain, so only a
-      // transaction is held to the networks the wallet knows.
+      // An EIP-191 message signature is the same on every chain, and typed
+      // data names its chain in its own domain (checked below), so only a
+      // transaction is held to the envelope's chain.
       final isMessage = request.dataType == EthSignDataType.rawBytes;
-      if (!isMessage && request.chainId != 1 && request.chainId != 11155111) {
+      final isTypedData = request.dataType == EthSignDataType.typedData;
+      if (!isMessage &&
+          !isTypedData &&
+          request.chainId != 1 &&
+          request.chainId != 11155111) {
         throw Eip4527Exception(
           _messages.errorUnsupportedChain(request.chainId),
         );
@@ -1592,6 +1599,8 @@ class WalletFlowController extends ChangeNotifier {
       }
       if (isMessage) {
         _airGapMessagePreview = Eip4527MessagePreview(request.signData);
+      } else if (isTypedData) {
+        _airGapTypedDataPreview = _airGapTypedDataPreviewOf(request);
       } else {
         _airGapRequestPreview = const Eip4527TransactionPreviewDecoder().decode(
           request,
@@ -1660,6 +1669,32 @@ class WalletFlowController extends ChangeNotifier {
     );
   }
 
+  /// The preview of an AirGap `typedData` request, or a coded failure for
+  /// data that cannot be signed: unreadable, not hashable, or for a network
+  /// the wallet does not know. MetaMask may leave the request envelope
+  /// without a chain, so the domain's own `chainId` is what is checked.
+  Eip712Preview _airGapTypedDataPreviewOf(EthSignRequest request) {
+    final typedData = const Eip4527InboundCoordinator().decodeTypedData(
+      request.signData,
+    );
+    // The digest that would be signed must exist before anything is shown.
+    const Eip712Encoder().encode(typedData);
+    final Eip712Preview preview;
+    try {
+      preview = Eip712Preview.parse(typedData);
+    } on FormatException catch (error) {
+      throw Eip4527SignException.coded(
+        AppErrorCode.airgapTypedDataInvalid,
+        <String, Object>{'detail': error.message},
+      );
+    }
+    final chainId = preview.chainId;
+    if (chainId != null && chainId != 1 && chainId != 11155111) {
+      throw Eip4527Exception(_messages.errorUnsupportedChain(chainId));
+    }
+    return preview;
+  }
+
   /// The log only informs: failing to read it never stands between the user
   /// and a request.
   Future<DateTime?> _airGapSignedBefore(EthSignRequest request) async {
@@ -1676,6 +1711,7 @@ class WalletFlowController extends ChangeNotifier {
     _airGapRequest = null;
     _airGapRequestPreview = null;
     _airGapMessagePreview = null;
+    _airGapTypedDataPreview = null;
     _airGapRequestSignedBefore = null;
     _airGapResponsePayload = null;
     _errorMessage = null;

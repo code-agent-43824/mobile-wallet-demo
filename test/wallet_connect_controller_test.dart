@@ -785,30 +785,99 @@ void main() {
     await service.dispose();
   });
 
-  test('AirGap EIP-712 typed data is refused in its own words', () async {
-    final service = FakeWalletConnectService();
-    final controller = await buildUnlocked(service);
+  group('AirGap EIP-712', () {
+    String payload(Map<String, dynamic> typedData) =>
+        const Eip4527Codec().encodeSignRequest(
+          EthSignRequest(
+            requestId: 'ee1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
+            signData: Uint8List.fromList(utf8.encode(jsonEncode(typedData))),
+            dataType: EthSignDataType.typedData,
+            derivationPath: CryptoKeypath.parse("M/44'/60'/0'/0/0"),
+          ),
+        );
+    Map<String, dynamic> permit({required int chainId}) => <String, dynamic>{
+      'types': <String, dynamic>{
+        'EIP712Domain': <dynamic>[
+          <String, String>{'name': 'name', 'type': 'string'},
+          <String, String>{'name': 'chainId', 'type': 'uint256'},
+          <String, String>{'name': 'verifyingContract', 'type': 'address'},
+        ],
+        'Permit': <dynamic>[
+          <String, String>{'name': 'owner', 'type': 'address'},
+          <String, String>{'name': 'spender', 'type': 'address'},
+          <String, String>{'name': 'value', 'type': 'uint256'},
+          <String, String>{'name': 'nonce', 'type': 'uint256'},
+          <String, String>{'name': 'deadline', 'type': 'uint256'},
+        ],
+      },
+      'primaryType': 'Permit',
+      'domain': <String, dynamic>{
+        'name': 'USD Coin',
+        'chainId': chainId,
+        'verifyingContract': '0x3333333333333333333333333333333333333333',
+      },
+      'message': <String, dynamic>{
+        'owner': '0x1111111111111111111111111111111111111111',
+        'spender': '0x2222222222222222222222222222222222222222',
+        'value': '1000000',
+        'nonce': 0,
+        'deadline': 1767225600,
+      },
+    };
 
-    await controller.loadAirGapRequest(
-      const Eip4527Codec().encodeSignRequest(
-        EthSignRequest(
-          requestId: 'ee1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
-          signData: Uint8List.fromList(utf8.encode('{}')),
-          dataType: EthSignDataType.typedData,
-          chainId: 11155111,
-          derivationPath: CryptoKeypath.parse("M/44'/60'/0'/0/0"),
-        ),
-      ),
-    );
+    test('a Permit is previewed and signed', () async {
+      final service = FakeWalletConnectService();
+      final controller = await buildUnlocked(
+        service,
+        transactionService: const LocalTransactionService(),
+      );
 
-    expect(
-      controller.errorMessage,
-      'Через AirGap кошелёк не подписывает типизированные данные EIP-712.',
-    );
-    expect(controller.airGapRequest, isNull);
+      await controller.loadAirGapRequest(payload(permit(chainId: 11155111)));
 
-    controller.dispose();
-    await service.dispose();
+      expect(controller.errorMessage, isNull);
+      final preview = controller.airGapTypedDataPreview!;
+      expect(preview.spender, '0x2222222222222222222222222222222222222222');
+      expect(preview.allowances.single.amount, BigInt.from(1000000));
+
+      await controller.signPendingAirGapRequest(pin: '1234');
+
+      final response = const Eip4527Codec().decodeSignature(
+        controller.airGapResponsePayload!,
+      );
+      expect(response.signature, hasLength(65));
+      // Passed to the dApp as is, like personal_sign: v is 27 or 28.
+      expect(response.signature.last, anyOf(27, 28));
+
+      controller.dispose();
+      await service.dispose();
+    });
+
+    test('a domain on a network the wallet does not know is refused', () async {
+      final service = FakeWalletConnectService();
+      final controller = await buildUnlocked(service);
+
+      await controller.loadAirGapRequest(payload(permit(chainId: 137)));
+
+      expect(controller.errorMessage, contains('137'));
+      expect(controller.airGapRequest, isNull);
+      expect(controller.airGapTypedDataPreview, isNull);
+
+      controller.dispose();
+      await service.dispose();
+    });
+
+    test('data that is not typed data is refused', () async {
+      final service = FakeWalletConnectService();
+      final controller = await buildUnlocked(service);
+
+      await controller.loadAirGapRequest(payload(<String, dynamic>{}));
+
+      expect(controller.errorMessage, isNotNull);
+      expect(controller.airGapRequest, isNull);
+
+      controller.dispose();
+      await service.dispose();
+    });
   });
 
   test('a malformed EIP-4527 AirGap payload surfaces an error', () async {

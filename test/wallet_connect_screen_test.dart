@@ -748,6 +748,68 @@ void main() {
     });
   }
 
+  testWidgets('AirGap EIP-712 shows what the signature grants', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final payload = const Eip4527Codec().encodeSignRequest(
+      EthSignRequest(
+        requestId: '6b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
+        signData: Uint8List.fromList(
+          utf8.encode(
+            jsonEncode(<String, dynamic>{
+              'types': <String, dynamic>{
+                'EIP712Domain': <dynamic>[
+                  <String, String>{'name': 'name', 'type': 'string'},
+                  <String, String>{'name': 'chainId', 'type': 'uint256'},
+                ],
+                'Permit': <dynamic>[
+                  <String, String>{'name': 'spender', 'type': 'address'},
+                  <String, String>{'name': 'value', 'type': 'uint256'},
+                ],
+              },
+              'primaryType': 'Permit',
+              'domain': <String, dynamic>{'name': 'USD Coin', 'chainId': 1},
+              'message': <String, dynamic>{
+                'spender': '0x2222222222222222222222222222222222222222',
+                'value': '5',
+              },
+            }),
+          ),
+        ),
+        dataType: EthSignDataType.typedData,
+        derivationPath: CryptoKeypath.parse("M/44'/60'/0'/0/0"),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        locale: const Locale('ru'),
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _FakeBlockchainProvider(),
+        walletConnectService: FakeWalletConnectService(),
+        qrScanner: FakeQrScanner(nextResult: payload),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _createUnlock(tester);
+    await _openConnections(tester);
+
+    final scan = find.text('Сканировать запрос');
+    await tester.ensureVisible(scan);
+    await tester.tap(scan);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Проверьте данные EIP-712'), findsOneWidget);
+    expect(
+      find.textContaining('позволит другому адресу тратить'),
+      findsOneWidget,
+    );
+    expect(find.text('Сеть: Ethereum Mainnet'), findsOneWidget);
+    expect(find.text('Подписать данные'), findsOneWidget);
+  });
+
   testWidgets('AirGap warns about a request it signed before', (
     WidgetTester tester,
   ) async {

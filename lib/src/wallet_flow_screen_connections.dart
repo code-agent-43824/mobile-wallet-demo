@@ -19,6 +19,7 @@ class _ConnectionsStage extends StatefulWidget {
     required this.airGapRequest,
     required this.airGapRequestPreview,
     this.airGapMessagePreview,
+    this.airGapTypedDataPreview,
     this.airGapRequestSignedBefore,
     required this.airGapResponsePayload,
     required this.walletAddress,
@@ -56,6 +57,9 @@ class _ConnectionsStage extends StatefulWidget {
 
   /// The loaded `personal_sign` request's message; null for a transaction.
   final Eip4527MessagePreview? airGapMessagePreview;
+
+  /// The loaded EIP-712 request's preview; null for other requests.
+  final Eip712Preview? airGapTypedDataPreview;
 
   /// When the loaded request was signed before (UTC), or null.
   final DateTime? airGapRequestSignedBefore;
@@ -215,6 +219,7 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
     final airGapRequest = widget.airGapRequest;
     final airGapPreview = widget.airGapRequestPreview;
     final airGapMessage = widget.airGapMessagePreview;
+    final airGapTypedData = widget.airGapTypedDataPreview;
     final airGapResponse = widget.airGapResponsePayload;
     final sessions = widget.sessions;
 
@@ -374,7 +379,9 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
                 ],
               ),
               if (airGapRequest != null &&
-                  (airGapPreview != null || airGapMessage != null)) ...[
+                  (airGapPreview != null ||
+                      airGapMessage != null ||
+                      airGapTypedData != null)) ...[
                 if (widget.airGapRequestSignedBefore case final DateTime at)
                   Padding(
                     padding: const EdgeInsets.only(top: 16),
@@ -393,6 +400,11 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
                   _AirGapMessagePreviewCard(
                     request: airGapRequest,
                     preview: airGapMessage,
+                  )
+                else if (airGapTypedData != null)
+                  _AirGapTypedDataPreviewCard(
+                    request: airGapRequest,
+                    preview: airGapTypedData,
                   ),
                 const SizedBox(height: 12),
                 FilledButton.icon(
@@ -401,6 +413,8 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
                   label: Text(
                     airGapPreview != null
                         ? l10n.airgapSignTransaction
+                        : airGapTypedData != null
+                        ? l10n.airgapSignTypedData
                         : l10n.airgapSignMessage,
                   ),
                 ),
@@ -614,6 +628,39 @@ class _AirGapMessagePreviewCard extends StatelessWidget {
           label: l10n.airgapMessageSize,
           value: l10n.airgapMessageBytes(preview.bytes.length),
         ),
+        _SummaryTile(
+          label: l10n.previewFrom,
+          value: request.addressHex ?? request.derivationPath.toPathString(),
+        ),
+        if (request.origin != null)
+          _SummaryTile(label: l10n.previewSource, value: request.origin!),
+      ],
+    );
+  }
+}
+
+/// An EIP-712 request from MetaMask, read by the preview WalletConnect uses.
+/// The request envelope may name no chain, so the domain's own network is
+/// shown rather than compared.
+class _AirGapTypedDataPreviewCard extends StatelessWidget {
+  const _AirGapTypedDataPreviewCard({
+    required this.request,
+    required this.preview,
+  });
+
+  final EthSignRequest request;
+  final Eip712Preview preview;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(l10n.airgapTypedDataTitle),
+        const SizedBox(height: 8),
+        _TypedDataPreview(preview: preview),
+        const SizedBox(height: 8),
         _SummaryTile(
           label: l10n.previewFrom,
           value: request.addressHex ?? request.derivationPath.toPathString(),

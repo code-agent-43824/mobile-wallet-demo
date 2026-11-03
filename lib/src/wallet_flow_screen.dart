@@ -38,6 +38,7 @@ import 'transactions/erc20_calldata.dart';
 import 'transactions/hardened_transaction_service.dart';
 import 'transactions/transaction_service.dart';
 import 'transactions/transaction_tracker.dart';
+import 'walletconnect/eip712.dart';
 import 'walletconnect/eip712_preview.dart';
 import 'walletconnect/wallet_connect_inbound.dart';
 import 'walletconnect/wallet_connect_preflight.dart';
@@ -597,6 +598,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen>
           airGapRequest: controller.airGapRequest,
           airGapRequestPreview: controller.airGapRequestPreview,
           airGapMessagePreview: controller.airGapMessagePreview,
+          airGapTypedDataPreview: controller.airGapTypedDataPreview,
           airGapRequestSignedBefore: controller.airGapRequestSignedBefore,
           airGapResponsePayload: controller.airGapResponsePayload,
           walletAddress: controller.summary?.address,

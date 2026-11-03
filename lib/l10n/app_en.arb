@@ -281,7 +281,6 @@
       }
     }
   },
-  "errorAirGapTypedDataUnsupported": "Over AirGap the wallet does not sign EIP-712 typed data.",
   "errorLegacyMainnetOnly": "The legacy transaction format is supported on Mainnet only; on Sepolia MetaMask must use EIP-1559.",
   "errorRequestOtherAccount": "The request is addressed to a different account ({address}).",
   "@errorRequestOtherAccount": {
@@ -340,7 +339,7 @@
   "airgapStep1Body": "In MetaMask pick \"Hardware wallet via QR\" and point its camera at this code. Only public data is shared — the key stays here.",
   "airgapShowAccountQr": "Show the account QR",
   "airgapRefreshAccountQr": "Refresh the account QR",
-  "airgapStep2Body": "MetaMask shows a QR with a transaction or a message to sign. Point the camera at it — the app decodes it and shows exactly what it will sign.",
+  "airgapStep2Body": "MetaMask shows a QR with a transaction, a message or typed data to sign. Point the camera at it — the app decodes it and shows exactly what it will sign.",
   "airgapScanRequest": "Scan the request",
   "airgapSignMessage": "Sign the message",
   "airgapMessageTitle": "Check the message",
@@ -354,6 +353,8 @@
       }
     }
   },
+  "airgapSignTypedData": "Sign the data",
+  "airgapTypedDataTitle": "Check the EIP-712 data",
   "airgapSignTransaction": "Sign the transaction",
   "airgapStep3Body": "Show this code to the MetaMask camera. MetaMask sends the transfer to the network — nothing more is needed from the wallet.",
   "airgapAlreadySigned": "This request was already signed on {when}. Do not sign it again unless you know why it is needed.",
