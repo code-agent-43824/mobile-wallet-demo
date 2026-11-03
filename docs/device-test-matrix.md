@@ -164,3 +164,27 @@ Automated widget/controller tests cover these with fakes; none of them is physic
 | Cancel and «use PIN» | NOT RUN | NOT RUN | Backing out of the dialog or choosing the fallback shows «Проверка биометрии отменена.» and the PIN path still works. |
 | Lockout | NOT RUN | NOT RUN | After repeated failed fingerprints/faces the app shows «Биометрия заблокирована после нескольких неудачных попыток. Используйте PIN.», not a raw code. |
 
+
+## v1.61 WalletConnect / AirGap regression re-check (2026-11-04, x86_64 emulator, API 34, release APK v1.61.0+73)
+
+Purpose: verify the fixes from v1.61.0 (ba17be3, 9a1b5a4, 81f6f6f, e937083, 3953331, c5e6c9a,
+06b89e7/22fa735) against a real dApp (local SignClient 2.17.0) and crafted BC-UR files.
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| wallet_switchEthereumChain (ba17be3) | **FAIL — defect remains** | Session updates (session_update + chainChanged eip155:1 reach the dApp, UI shows both networks), but the JSON-RPC respondResult is never published; the dApp promise hangs until «Request expired. Please try again.» (~3–5 min TTL), after which the WC request queue stays blocked until the app is restarted. |
+| personal_sign (9a1b5a4) | PASS | ecrecover of the returned signature == account 0x25D47340624e4d187a0d3963dB8aD21713335026. |
+| eth_accounts / eth_requestAccounts / eth_chainId (9a1b5a4) | PASS | Accounts `[0x25D4…5026]`, chainId `0xaa36a7`. |
+| wallet_getCapabilities (81f6f6a) | PASS | Returns `{"0xaa36a7":{}}` — no EIP-5792 claimed, as designed. |
+| AirGap ERC-20 transfer preview (c5e6c9a) | PASS | Preview shows Network Sepolia, EIP-1559, 0.000005 ETH, nonce 40, gas 60000, «ERC-20 transfer», recipient and «1000 in the token's smallest units», origin airgap-e2e. |
+| AirGap personal_sign (06b89e7/22fa735) | PASS | Signed request QR (2 frames) assembled; CBOR `{1: requestId b1b2…f91 MATCH, 2: 65-byte sig, 3: 'wallet-demo'}`; ecrecover (v=27, so vrs v−27) == 0x25D47340624E4d187A0d3963dB8aD21713335026. |
+| AirGap T7 replay notice (3953331) | PASS | Re-loading an already signed request shows the red banner «This request was already signed on Wed, Nov 4, 02:04. Do not sign it again unless you know why it is needed.»; the request stays signable with the warning (per the fix design). |
+| AirGap T8 chain mismatch (e937083) | PASS | Loading a request with embedded chainId 1 against a Sepolia session refuses with «The request's network (1) does not match the transaction's (11155111).» and the previously loaded request is fully cleared (no stale preview/signature state). |
+| AirGap T2 other-account refusal (3953331) | PASS | Loading a request addressed to 0xFcf9…8D6a refuses with «The request is addressed to a different account (0xfcf9418751060b574fdaf082fbbea06772808d6a).» — the message names the account. |
+
+Cosmetic notes (not blockers): the «Done» modal says «show the QR to MetaMask» but the QR appears only after
+tapping Continue; «Scan the request» label can be clipped at the top; the From address on the preview has no
+copy button.
+
+The wallet_switchEthereumChain row above is the only open defect carried over from the earlier session
+(result is applied and propagated, response to the dApp is lost).
