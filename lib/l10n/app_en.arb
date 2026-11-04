@@ -878,6 +878,8 @@
   "wcApproveSuccess": "The app has the response.",
   "airgapExportSuccess": "The account QR is ready — show it to MetaMask.",
   "airgapSignSuccess": "The signature is ready. Tap Continue — the QR for MetaMask is in step 3.",
+  "actionCopyAddress": "Copy address",
+  "addressCopied": "Address copied.",
   "cardConnectSuccess": "The card is connected and is now the active wallet.",
   "tapCardSignBody": "Hold the card to the back of the phone until the signature is done. The key never leaves the card.",
   "transferReview": "Review the transfer",

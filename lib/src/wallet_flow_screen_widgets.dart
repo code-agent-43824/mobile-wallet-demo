@@ -173,14 +173,22 @@ class _ErrorBanner extends StatelessWidget {
 }
 
 class _SummaryTile extends StatelessWidget {
-  const _SummaryTile({required this.label, required this.value});
+  const _SummaryTile({
+    required this.label,
+    required this.value,
+    this.copyable = false,
+  });
 
   final String label;
   final String value;
 
+  /// An address the user may need elsewhere: a copy button besides selection.
+  final bool copyable;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final text = SelectableText(value, style: theme.textTheme.bodyLarge);
 
     return Container(
       width: double.infinity,
@@ -199,10 +207,29 @@ class _SummaryTile extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          SelectableText(value, style: theme.textTheme.bodyLarge),
+          if (copyable)
+            Row(
+              children: [
+                Expanded(child: text),
+                IconButton(
+                  tooltip: AppLocalizations.of(context).actionCopyAddress,
+                  icon: const Icon(Icons.copy_outlined, size: 20),
+                  onPressed: () => _copy(context),
+                ),
+              ],
+            )
+          else
+            text,
         ],
       ),
     );
+  }
+
+  Future<void> _copy(BuildContext context) async {
+    final message = AppLocalizations.of(context).addressCopied;
+    final messenger = ScaffoldMessenger.of(context);
+    await Clipboard.setData(ClipboardData(text: value));
+    messenger.showSnackBar(SnackBar(content: Text(message)));
   }
 }
 

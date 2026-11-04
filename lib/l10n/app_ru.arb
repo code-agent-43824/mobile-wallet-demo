@@ -382,6 +382,8 @@
   "wcApproveSuccess": "Ответ отправлен приложению.",
   "airgapExportSuccess": "QR аккаунта готов — покажите его MetaMask.",
   "airgapSignSuccess": "Подпись готова. Нажмите «Продолжить» — QR для MetaMask будет в шаге 3.",
+  "actionCopyAddress": "Копировать адрес",
+  "addressCopied": "Адрес скопирован.",
   "cardConnectSuccess": "Карта подключена и выбрана активным кошельком.",
   "tapCardSignBody": "Держите карту у задней стороны телефона, пока подпись не будет готова. Ключ не покидает карту.",
   "transferReview": "Проверьте перевод",

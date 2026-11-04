@@ -582,10 +582,12 @@ class _AirGapTransactionPreviewCard extends StatelessWidget {
         _SummaryTile(
           label: l10n.previewFrom,
           value: request.addressHex ?? request.derivationPath.toPathString(),
+          copyable: request.addressHex != null,
         ),
         _SummaryTile(
           label: l10n.previewTo,
           value: preview.toAddress ?? l10n.previewContractCreation,
+          copyable: preview.toAddress != null,
         ),
         _SummaryTile(
           label: l10n.previewAmount,
@@ -611,7 +613,11 @@ class _AirGapTransactionPreviewCard extends StatelessWidget {
         ),
         if (preview.erc20Call case final Erc20Call call)
           for (final (label, value) in _erc20Lines(l10n, call))
-            _SummaryTile(label: label, value: value),
+            _SummaryTile(
+              label: label,
+              value: value,
+              copyable: value == call.counterparty,
+            ),
         if (request.origin != null)
           _SummaryTile(label: l10n.previewSource, value: request.origin!),
       ],
@@ -670,6 +676,7 @@ class _AirGapMessagePreviewCard extends StatelessWidget {
         _SummaryTile(
           label: l10n.previewFrom,
           value: request.addressHex ?? request.derivationPath.toPathString(),
+          copyable: request.addressHex != null,
         ),
         if (request.origin != null)
           _SummaryTile(label: l10n.previewSource, value: request.origin!),
@@ -703,6 +710,7 @@ class _AirGapTypedDataPreviewCard extends StatelessWidget {
         _SummaryTile(
           label: l10n.previewFrom,
           value: request.addressHex ?? request.derivationPath.toPathString(),
+          copyable: request.addressHex != null,
         ),
         if (request.origin != null)
           _SummaryTile(label: l10n.previewSource, value: request.origin!),

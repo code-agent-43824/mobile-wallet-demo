@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- AirGap: у адресов в превью запроса (от кого, кому, получатель или распорядитель токенов) есть кнопка
+  копирования.
+
 ### Fixed
 
 - WalletConnect: двойное нажатие «Переключить сеть», «Одобрить» или «Отклонить» больше не отвечает на

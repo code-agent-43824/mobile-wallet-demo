@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemChannels;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/app.dart';
 import 'package:mobile_wallet_demo/src/airgap/airgap_signed_requests.dart';
@@ -31,8 +32,11 @@ String _airGapRequestUr() => const Eip4527Codec().encodeSignRequest(
   ),
 );
 
-/// A Sepolia EIP-1559 call to a token contract: transfer(recipient, 1.5e6).
-String _airGapTokenTransferUr() => const Eip4527Codec().encodeSignRequest(
+/// A Sepolia EIP-1559 call to a token contract: transfer(recipient, 1.5e6),
+/// optionally naming the signing account the way MetaMask does.
+String _airGapTokenTransferUr({
+  String? address,
+}) => const Eip4527Codec().encodeSignRequest(
   EthSignRequest(
     requestId: '7b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d',
     signData: Uint8List.fromList(<int>[
@@ -56,6 +60,7 @@ String _airGapTokenTransferUr() => const Eip4527Codec().encodeSignRequest(
     dataType: EthSignDataType.typedTransaction,
     chainId: 11155111,
     derivationPath: CryptoKeypath.parse("M/44'/60'/0'/0/0"),
+    address: address == null ? null : hexToBytes(address),
   ),
 );
 
@@ -901,6 +906,67 @@ void main() {
     expect(find.textContaining('Этот запрос уже был подписан'), findsOneWidget);
     // Not a block: the request can still be signed on purpose.
     expect(find.text('Подписать транзакцию'), findsOneWidget);
+  });
+
+  testWidgets('AirGap preview copies its addresses', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final copied = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied.add(
+            (call.arguments as Map<Object?, Object?>)['text']! as String,
+          );
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    final scanner = FakeQrScanner();
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        locale: const Locale('ru'),
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _FakeBlockchainProvider(),
+        walletConnectService: FakeWalletConnectService(),
+        qrScanner: scanner,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _createUnlock(tester);
+    final address = await _readWalletAddress(tester);
+    scanner.nextResult = _airGapTokenTransferUr(address: address);
+    await _openConnections(tester);
+
+    final scan = find.text('Сканировать запрос');
+    await tester.ensureVisible(scan);
+    await tester.tap(scan);
+    await tester.pumpAndSettle();
+
+    // From (the wallet), To (the token contract) and the token recipient.
+    final copyButtons = find.byTooltip('Копировать адрес');
+    expect(copyButtons, findsNWidgets(3));
+    for (var i = 0; i < 3; i++) {
+      await tester.ensureVisible(copyButtons.at(i));
+      await tester.tap(copyButtons.at(i));
+      await tester.pumpAndSettle();
+    }
+    expect(copied.map((value) => value.toLowerCase()), <String>[
+      address.toLowerCase(),
+      '0x4444444444444444444444444444444444444444',
+      '0x3333333333333333333333333333333333333333',
+    ]);
+    expect(find.text('Адрес скопирован.'), findsWidgets);
   });
 
   testWidgets('connections screen previews and signs MetaMask AirGap tx', (
