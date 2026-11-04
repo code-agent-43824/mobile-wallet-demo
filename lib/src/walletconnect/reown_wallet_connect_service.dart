@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:reown_walletkit/reown_walletkit.dart';
 
 import '../blockchain/network_config.dart';
@@ -23,6 +24,15 @@ class ReownWalletConnectService implements WalletConnectService {
     : _projectId = projectId ?? wcProjectId,
       _metadata = metadata ?? _defaultMetadata;
 
+  /// Wraps an already created [kit], skipping [init]'s relay connection, so
+  /// tests can stand in for the dApp side.
+  @visibleForTesting
+  ReownWalletConnectService.withKit(IReownWalletKit kit)
+    : _projectId = 'test',
+      _metadata = _defaultMetadata,
+      _kit = kit,
+      _initStarted = true;
+
   static const PairingMetadata _defaultMetadata = PairingMetadata(
     name: 'Wallet Demo',
     description: 'Flutter EVM wallet demo — WalletConnect v2 wallet side.',
@@ -33,7 +43,7 @@ class ReownWalletConnectService implements WalletConnectService {
   final String _projectId;
   final PairingMetadata _metadata;
 
-  ReownWalletKit? _kit;
+  IReownWalletKit? _kit;
   bool _initStarted = false;
 
   final StreamController<WalletConnectSessionProposal> _proposals =
@@ -75,7 +85,7 @@ class ReownWalletConnectService implements WalletConnectService {
     }
   }
 
-  ReownWalletKit _requireKit() {
+  IReownWalletKit _requireKit() {
     final kit = _kit;
     if (kit == null) {
       throw const WalletConnectServiceException.coded(
@@ -227,11 +237,17 @@ class ReownWalletConnectService implements WalletConnectService {
       );
     }
     if (namespace.events.contains('chainChanged')) {
-      await kit.emitSessionEvent(
-        topic: topic,
-        chainId: chain,
-        event: SessionEventParams(name: 'chainChanged', data: chainId),
-      );
+      // Reown waits for the peer's reply to everything it sends, but
+      // @walletconnect/sign-client acknowledges a session update and never
+      // answers a session event. Awaiting the event left the switch request
+      // unanswered and the request queue stuck, so it is sent without waiting.
+      kit
+          .emitSessionEvent(
+            topic: topic,
+            chainId: chain,
+            event: SessionEventParams(name: 'chainChanged', data: chainId),
+          )
+          .ignore();
     }
     _emitSessions();
   }

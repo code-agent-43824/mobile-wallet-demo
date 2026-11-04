@@ -207,7 +207,8 @@ abstract interface class WalletConnectService {
   /// Makes `eip155:[chainId]` the dApp's chain in session [topic]: adds it to
   /// the session's namespace when the dApp never asked for it, then emits
   /// `chainChanged`, which is what a dApp waits for after
-  /// `wallet_switchEthereumChain`.
+  /// `wallet_switchEthereumChain`. Returns once the dApp has the updated
+  /// session; the event is not waited for, because dApps never answer it.
   Future<void> switchSessionChain({
     required String topic,
     required int chainId,

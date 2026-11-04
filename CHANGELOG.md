@@ -13,8 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - CI: actions переведены на Node 24 (предупреждения о Node 20 ушли); на Windows ARM64 развёрнутый
   Flutter SDK кэшируется между прогонами, на x64 пакеты Dart восстанавливаются из кэша один раз.
-- Выпускной smoke на iOS-симуляторе и настольных системах проверяет восстановление того же
-  адреса после перезапуска приложения. Для локального прогона на Xcode 27 добавлена команда
+- Выпускной smoke на iOS-симуляторе, Windows и Linux проверяет восстановление того же адреса после
+  перезапуска приложения; на macOS и Android — только создание кошелька. Для локального прогона на Xcode 27 добавлена команда
   `scripts/smoke/xcode27_simulator.sh`; её можно запустить и вручную через GitHub Actions
   workflow `Xcode 27 simulator smoke`.
 
@@ -42,8 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - WalletConnect: `wallet_getCapabilities` больше не обещает пакеты EIP-5792 (`wallet_sendCalls`),
   которых кошелёк не принимает; dApp сразу отправляет вызовы по одному.
-- WalletConnect: ответ на `wallet_switchEthereumChain` доходит до dApp. Раньше Reown отбрасывал пустой
-  ответ, и запрос dApp истекал, хотя сеть переключалась.
+- WalletConnect: ответ на `wallet_switchEthereumChain` доходит до dApp. Раньше кошелёк ждал от dApp
+  подтверждения события `chainChanged`, которого dApp на `@walletconnect/sign-client` не присылает: ответ
+  не уходил, запрос истекал, хотя сеть переключалась, а следующие запросы не обрабатывались до
+  перезапуска. Кроме того, Reown отбрасывал пустой ответ.
 - WalletConnect: при смене активного кошелька (другая карта, хранилище телефона, новый кошелёк) сессии
   прежнего адреса закрываются вместе с их запросами.
 - WalletConnect: `personal_sign` с параметрами в обратном порядке (`[адрес, сообщение]`) больше не
