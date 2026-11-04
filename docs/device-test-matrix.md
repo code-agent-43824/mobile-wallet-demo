@@ -208,6 +208,9 @@ on a stale dialog (the dialog re-opened with a new timestamp and the first dialo
 consumed). A single tap on fresh bounds always answers — not a product defect, but double-tapping the
 confirm button can silently drop that request's response.
 
-The two cosmetic items still open from the v1.61.0 list: «Scan the request» label clipping and no copy
-button on the preview's From address.
+Carry-over from the v1.61.0 list, with different confidence: the preview has no copy button on
+the From (or To) address — confirmed by code inspection (no copy affordance in
+`eip4527_transaction_preview.dart`); the «Scan the request» top clipping was observed in v1.61.0 at a
+specific scroll position and did not reproduce in this run's step-2 screens, but the exact layout was
+not re-created — treat as not-reproduced rather than fixed.
 
