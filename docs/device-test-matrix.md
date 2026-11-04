@@ -208,9 +208,10 @@ on a stale dialog (the dialog re-opened with a new timestamp and the first dialo
 consumed). A single tap on fresh bounds always answers — not a product defect, but double-tapping the
 confirm button can silently drop that request's response.
 
-Carry-over from the v1.61.0 list, with different confidence: the preview has no copy button on
-the From (or To) address — confirmed by code inspection (no copy affordance in
-`eip4527_transaction_preview.dart`); the «Scan the request» top clipping was observed in v1.61.0 at a
-specific scroll position and did not reproduce in this run's step-2 screens, but the exact layout was
-not re-created — treat as not-reproduced rather than fixed.
+Carry-over cosmetics from the v1.61.0 list, re-verified live on v1.61.1 (fresh stand, WC pairing, crafted AirGap request):
+
+| Cosmetic (v1.61.0) | Re-check result |
+| --- | --- |
+| No copy button on From/To in the AirGap preview | **CONFIRMED on v1.61.1** — live preview (Network Sepolia, From 0x25d4…5026, To 0xfcf9…8d6a, 0.0005 ETH, nonce 0, gas 21000, max fee 0.000042 ETH) shows both addresses as plain text with no copy affordance; matches code inspection (no copy action in `eip4527_transaction_preview.dart`). Still open. |
+| «Scan the request» top clipping at a specific scroll position | **NOT REPRODUCED on v1.61.1** — attempted with collapsed step 2 and with the step-1 account QR expanded (both frames shown), at 5+ scroll positions including hard flicks; the step-2 card never crosses the top edge (it sits near the bottom of the list, so the scroll range does not put it under the header). Text renders fully at every reachable position. Treat as not-reproduced (neither fixed nor refuted — the v1.61.0 layout could not be re-created). |
 
