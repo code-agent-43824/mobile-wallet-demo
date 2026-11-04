@@ -172,7 +172,7 @@ Purpose: verify the fixes from v1.61.0 (ba17be3, 9a1b5a4, 81f6f6f, e937083, 3953
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| wallet_switchEthereumChain (ba17be3) | **FAIL — defect remains** | Session updates (session_update + chainChanged eip155:1 reach the dApp, UI shows both networks), but the JSON-RPC respondResult is never published; the dApp promise hangs until «Request expired. Please try again.» (~3–5 min TTL), after which the WC request queue stays blocked until the app is restarted. Cause: the wallet waited for the dApp to acknowledge `chainChanged`, which `sign-client` never does (`JOURNAL.md`, 2026-11-04). Fixed in `9d73466`, released in v1.61.1; needs a re-run. |
+| wallet_switchEthereumChain (ba17be3) | **FAIL — defect remains** | Session updates (session_update + chainChanged eip155:1 reach the dApp, UI shows both networks), but the JSON-RPC respondResult is never published; the dApp promise hangs until «Request expired. Please try again.» (~3–5 min TTL), after which the WC request queue stays blocked until the app is restarted. Cause: the wallet waited for the dApp to acknowledge `chainChanged`, which `sign-client` never does (`JOURNAL.md`, 2026-11-04). Fixed in `9d73466`, released in v1.61.1; PASS on the v1.61.1 re-check below. |
 | personal_sign (9a1b5a4) | PASS | ecrecover of the returned signature == account 0x25D47340624e4d187a0d3963dB8aD21713335026. |
 | eth_accounts / eth_requestAccounts / eth_chainId (9a1b5a4) | PASS | Accounts `[0x25D4…5026]`, chainId `0xaa36a7`. |
 | wallet_getCapabilities (81f6f6a) | PASS | Returns `{"0xaa36a7":{}}` — no EIP-5792 claimed, as designed. |
@@ -185,10 +185,12 @@ Purpose: verify the fixes from v1.61.0 (ba17be3, 9a1b5a4, 81f6f6f, e937083, 3953
 Cosmetic notes (not blockers): the «Done» modal says «show the QR to MetaMask» but the QR appears only after
 tapping Continue; «Scan the request» label can be clipped at the top; the From address on the preview has no
 copy button. Disposition: the result text now points to step 3 (`cbe9181`); the clipping did not reproduce in a
-layout test and the From address is already selectable — see `docs/PLAN.md`.
+layout test and is closed as not reproducible; the AirGap preview addresses got a copy button in `a60a56d` (after
+v1.61.1) — see `docs/PLAN.md`.
 
-The wallet_switchEthereumChain row above is the only open defect carried over from the earlier session
-(result is applied and propagated, response to the dApp is lost).
+The wallet_switchEthereumChain row above was the only open defect carried over from the earlier session
+(result is applied and propagated, response to the dApp is lost). It is fixed in `9d73466`, released in v1.61.1,
+and passed the re-check below.
 
 ## v1.61.1 re-check of the chain-switch fix and AirGap texts (2026-11-04, x86_64 emulator, API 34, release APK v1.61.1+74)
 
@@ -206,14 +208,15 @@ local dApp (`@walletconnect/sign-client` 2.17.0) on :18080, wallet 1 imported, P
 Process note: an early switch attempt appeared to hang, but it was caused by tapping «Switch network» twice
 on a stale dialog (the dialog re-opened with a new timestamp and the first dialog instance's response was
 consumed). A single tap on fresh bounds always answers — not a product defect, but double-tapping the
-confirm button can silently drop that request's response.
+confirm button can silently drop that request's response. Fixed in `0f196ec` (after v1.61.1): a tap acts only on
+the request its card shows, and the buttons are off until that request is answered.
 
 Carry-over cosmetics from the v1.61.0 list, re-verified live on v1.61.1 (fresh stand, WC pairing, crafted AirGap request):
 
 | Cosmetic (v1.61.0) | Re-check result |
 | --- | --- |
-| No copy button on From/To in the AirGap preview | **CONFIRMED on v1.61.1** — live preview (Network Sepolia, From 0x25d4…5026, To 0xfcf9…8d6a, 0.0005 ETH, nonce 0, gas 21000, max fee 0.000042 ETH) shows both addresses as plain text with no copy affordance; matches code inspection (no copy action in `eip4527_transaction_preview.dart`). Still open. |
-| «Scan the request» top clipping at a specific scroll position | **NOT REPRODUCED on v1.61.1** — attempted with collapsed step 2 and with the step-1 account QR expanded (both frames shown), at 5+ scroll positions including hard flicks; the step-2 card never crosses the top edge (it sits near the bottom of the list, so the scroll range does not put it under the header). Text renders fully at every reachable position. Treat as not-reproduced (neither fixed nor refuted — the v1.61.0 layout could not be re-created). |
+| No copy button on From/To in the AirGap preview | **CONFIRMED on v1.61.1** — live preview (Network Sepolia, From 0x25d4…5026, To 0xfcf9…8d6a, 0.0005 ETH, nonce 0, gas 21000, max fee 0.000042 ETH) shows both addresses as plain text with no copy affordance; matches code inspection (no copy action in `eip4527_transaction_preview.dart`). Copy buttons for From, To and the token counterparty added in `a60a56d` (after v1.61.1). |
+| «Scan the request» top clipping at a specific scroll position | **NOT REPRODUCED on v1.61.1** — attempted with collapsed step 2 and with the step-1 account QR expanded (both frames shown), at 5+ scroll positions including hard flicks; the step-2 card never crosses the top edge (it sits near the bottom of the list, so the scroll range does not put it under the header). Text renders fully at every reachable position. Treat as not-reproduced (neither fixed nor refuted — the v1.61.0 layout could not be re-created). Closed as not reproducible (owner, 2026-11-04). |
 
 
 ## AirGap cosmetics on desktop builds v1.61.1 (2026-11-04, Windows x64 on Legion, Linux x64 on ThinkPad)
@@ -239,4 +242,10 @@ Platform notes (test environment, not product defects):
 
 Bonus finding (Linux stand, import screen, not part of the scoped cosmetics): with exactly 12 valid BIP39
 words the red validation «The seed phrase looks incomplete. At least 12 words are needed.» still shows —
-looks like an off-by-one/stale validation; worth a separate look.
+looks like an off-by-one/stale validation; worth a separate look. Checked 2026-11-04: the import check rejects
+fewer than 12 words and is correct; the error stays on screen until the next tap of «Import», so a message left from
+an earlier attempt with fewer words is the likely explanation. Not changed.
+
+Disposition (2026-11-04): copy buttons added in `a60a56d` (after v1.61.1); the clipping is closed as not
+reproducible. The Windows mouse wheel was tested with synthetic input only; Flutter scrolls on a real wheel by
+default, so it needs a check with a physical mouse before it counts as a defect.
