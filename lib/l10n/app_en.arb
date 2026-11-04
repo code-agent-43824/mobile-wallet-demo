@@ -356,7 +356,7 @@
   "airgapSignTypedData": "Sign the data",
   "airgapTypedDataTitle": "Check the EIP-712 data",
   "airgapSignTransaction": "Sign the transaction",
-  "airgapStep3Body": "Show this code to the MetaMask camera. MetaMask sends the transfer to the network — nothing more is needed from the wallet.",
+  "airgapStep3Body": "Show this code to the MetaMask camera. MetaMask takes it from there: it sends a transaction to the network or hands a signature to the site.",
   "airgapAlreadySigned": "This request was already signed on {when}. Do not sign it again unless you know why it is needed.",
   "@airgapAlreadySigned": {
     "placeholders": {
@@ -877,7 +877,7 @@
   "confirmFailureTitle": "That did not work",
   "wcApproveSuccess": "The app has the response.",
   "airgapExportSuccess": "The account QR is ready — show it to MetaMask.",
-  "airgapSignSuccess": "The signature is ready — show the QR to MetaMask.",
+  "airgapSignSuccess": "The signature is ready. Tap Continue — the QR for MetaMask is in step 3.",
   "cardConnectSuccess": "The card is connected and is now the active wallet.",
   "tapCardSignBody": "Hold the card to the back of the phone until the signature is done. The key never leaves the card.",
   "transferReview": "Review the transfer",

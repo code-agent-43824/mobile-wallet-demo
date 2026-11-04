@@ -890,9 +890,12 @@ void main() {
     await tester.pumpAndSettle();
 
     // PIN → signing → result happen in one sheet; its last step says what to
-    // do next and hands back to the wizard.
+    // do next and hands back to the wizard. The QR is drawn under the sheet,
+    // so the text sends the user on rather than promising it here.
     expect(
-      find.text('Подпись готова — покажите QR в MetaMask.'),
+      find.text(
+        'Подпись готова. Нажмите «Продолжить» — QR для MetaMask будет в шаге 3.',
+      ),
       findsOneWidget,
     );
     await tester.tap(find.text('Продолжить'));
