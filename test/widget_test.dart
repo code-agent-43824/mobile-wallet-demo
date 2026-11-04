@@ -74,6 +74,41 @@ class _NetworkBalanceBlockchainProvider implements BlockchainProvider {
   }
 }
 
+/// A spam-like token whose balance runs far past a phone row's width.
+const String _longTokenBalance =
+    '123456789012345678901234567890.123456789012345678';
+
+class _LongTokenBalanceBlockchainProvider implements BlockchainProvider {
+  @override
+  Future<WalletChainSnapshot> loadSnapshot({
+    required EvmNetwork network,
+    required String address,
+  }) async {
+    return WalletChainSnapshot(
+      network: network,
+      address: address,
+      nativeBalanceWei: BigInt.zero,
+      nativeBalanceFormatted: '0',
+      baseFeeGwei: 1,
+      providerLabel: 'long-token.fake',
+      fetchedAtUtc: DateTime.utc(2026, 11, 4),
+      tokenBalances: <TokenBalanceSnapshot>[
+        TokenBalanceSnapshot(
+          symbol: 'SPAM',
+          name: 'Airdropped Reward Token',
+          balanceFormatted: _longTokenBalance,
+          rawBalance: BigInt.parse(
+            '123456789012345678901234567890123456789012345678',
+          ),
+          decimals: 18,
+          contractAddress: '0x5555555555555555555555555555555555555555',
+        ),
+      ],
+      recentTransactions: const <RecentTransactionSnapshot>[],
+    );
+  }
+}
+
 class _OutOfOrderBlockchainProvider implements BlockchainProvider {
   final Completer<WalletChainSnapshot> mainnetSnapshot =
       Completer<WalletChainSnapshot>();
@@ -641,6 +676,49 @@ void main() {
 
     expect(find.textContaining('Недостаточно'), findsNothing);
     expect(find.text('Проверьте перевод'), findsOneWidget);
+  });
+
+  testWidgets('a long token balance wraps instead of overflowing its row', (
+    WidgetTester tester,
+  ) async {
+    // A phone: 1080 × 2400 at 3× is 360 logical pixels wide.
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        locale: const Locale('ru'),
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _LongTokenBalanceBlockchainProvider(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // On a phone the onboarding buttons sit below the fold.
+    Future<void> tapShown(String text) async {
+      final target = find.text(text).last;
+      await tester.ensureVisible(target);
+      await tester.pumpAndSettle();
+      await tester.tap(target);
+      await tester.pumpAndSettle();
+    }
+
+    await tapShown('Создать кошелёк');
+    final setupFields = find.byType(TextField);
+    await tester.enterText(setupFields.at(0), '1234');
+    await tester.enterText(setupFields.at(1), '1234');
+    await tapShown('Создать кошелёк');
+    await tapShown('Я сохранил seed-фразу');
+    await tapShown('Пока без биометрии');
+
+    // A RenderFlex overflow is reported as an error and fails the test; the
+    // whole balance stays on screen, wrapped, with no digit cut off.
+    final balance = find.text(_longTokenBalance);
+    await tester.ensureVisible(balance);
+    await tester.pumpAndSettle();
+    expect(balance, findsOneWidget);
+    expect(find.text('Airdropped Reward Token'), findsOneWidget);
   });
 
   testWidgets('ignores a late snapshot from the previous network', (

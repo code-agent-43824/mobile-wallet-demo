@@ -1067,43 +1067,56 @@ class _AssetRow extends StatelessWidget {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: NocturneSpacing.x3),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              color: NocturneColors.neutral900,
-              shape: BoxShape.circle,
-            ),
-            child: Text(
-              short.length <= 3 ? short : short.substring(0, 3),
-              style: const TextStyle(
-                fontFamily: NocturneType.family,
-                fontSize: 12,
-                fontWeight: NocturneType.semibold,
-                color: NocturneColors.neutral300,
+      child: LayoutBuilder(
+        builder: (context, constraints) => Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                color: NocturneColors.neutral900,
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                short.length <= 3 ? short : short.substring(0, 3),
+                style: const TextStyle(
+                  fontFamily: NocturneType.family,
+                  fontSize: 12,
+                  fontWeight: NocturneType.semibold,
+                  color: NocturneColors.neutral300,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: NocturneSpacing.x4),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name, style: theme.textTheme.bodyMedium),
-                Text(
-                  sub,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: NocturneColors.textSubtle,
+            const SizedBox(width: NocturneSpacing.x4),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, style: theme.textTheme.bodyMedium),
+                  Text(
+                    sub,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: NocturneColors.textSubtle,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Text(amount, style: theme.textTheme.bodyMedium),
-        ],
+            const SizedBox(width: NocturneSpacing.x3),
+            // A balance can run past the row (a spam token's 30 digits): it gets
+            // at most half the row and wraps, since a cut-off digit would show
+            // a different amount.
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: constraints.maxWidth / 2),
+              child: Text(
+                amount,
+                style: theme.textTheme.bodyMedium,
+                textAlign: TextAlign.end,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
