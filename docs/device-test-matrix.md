@@ -189,3 +189,25 @@ layout test and the From address is already selectable — see `docs/PLAN.md`.
 
 The wallet_switchEthereumChain row above is the only open defect carried over from the earlier session
 (result is applied and propagated, response to the dApp is lost).
+
+## v1.61.1 re-check of the chain-switch fix and AirGap texts (2026-11-04, x86_64 emulator, API 34, release APK v1.61.1+74)
+
+Purpose: verify `9d73466` (respondResult no longer blocked by an awaited `chainChanged` ack) and
+`cbe9181` (Done/step-3 wording) on the released v1.61.1 APK. Same stand and method as the v1.61.0 run:
+local dApp (`@walletconnect/sign-client` 2.17.0) on :18080, wallet 1 imported, PIN 1234.
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| wallet_switchEthereumChain (9d73466) | **PASS** | Switch 0x1 → 0xaa36a7 and back: the dApp receives `respondResult` (`{"result":true}`) within ~5 s of confirming the dialog, the `chainChanged` event arrives, the session network list updates, and subsequent requests (`eth_accounts`, `eth_chainId` → `0xaa36a7`) answer normally — the request queue is never blocked. |
+| AirGap «Done» modal text (cbe9181) | PASS | After signing a crafted EIP-1559 request the modal reads «The signature is ready. Tap Continue — the QR for MetaMask is in step 3.» — the promise about a transfer is gone. |
+| AirGap step 3 text (cbe9181) | PASS | «Show this code to the MetaMask camera. MetaMask takes it from there: it sends a transaction to the network or hands a signature to the site.» |
+| AirGap signature round-trip (regression) | PASS | Crafted `ur:eth-sign-request` (0.0005 ETH, nonce 0, gas 21000) → preview matches → Sign with PIN → 2-frame `ur:eth-signature` QR (frames alternate, both decodable) → assembled UR decodes to a 65-byte sig (r/s/v=1) → offline ecrecover over keccak(signData) == 0x25d47340624e4d187a0d3963db8ad21713335026. |
+
+Process note: an early switch attempt appeared to hang, but it was caused by tapping «Switch network» twice
+on a stale dialog (the dialog re-opened with a new timestamp and the first dialog instance's response was
+consumed). A single tap on fresh bounds always answers — not a product defect, but double-tapping the
+confirm button can silently drop that request's response.
+
+The two cosmetic items still open from the v1.61.0 list: «Scan the request» label clipping and no copy
+button on the preview's From address.
+
