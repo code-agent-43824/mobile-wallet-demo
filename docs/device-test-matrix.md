@@ -172,7 +172,7 @@ Purpose: verify the fixes from v1.61.0 (ba17be3, 9a1b5a4, 81f6f6f, e937083, 3953
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| wallet_switchEthereumChain (ba17be3) | **FAIL — defect remains** | Session updates (session_update + chainChanged eip155:1 reach the dApp, UI shows both networks), but the JSON-RPC respondResult is never published; the dApp promise hangs until «Request expired. Please try again.» (~3–5 min TTL), after which the WC request queue stays blocked until the app is restarted. |
+| wallet_switchEthereumChain (ba17be3) | **FAIL — defect remains** | Session updates (session_update + chainChanged eip155:1 reach the dApp, UI shows both networks), but the JSON-RPC respondResult is never published; the dApp promise hangs until «Request expired. Please try again.» (~3–5 min TTL), after which the WC request queue stays blocked until the app is restarted. Cause: the wallet waited for the dApp to acknowledge `chainChanged`, which `sign-client` never does (`JOURNAL.md`, 2026-11-04). Fixed in `9d73466`; needs a re-run. |
 | personal_sign (9a1b5a4) | PASS | ecrecover of the returned signature == account 0x25D47340624e4d187a0d3963dB8aD21713335026. |
 | eth_accounts / eth_requestAccounts / eth_chainId (9a1b5a4) | PASS | Accounts `[0x25D4…5026]`, chainId `0xaa36a7`. |
 | wallet_getCapabilities (81f6f6a) | PASS | Returns `{"0xaa36a7":{}}` — no EIP-5792 claimed, as designed. |
@@ -184,7 +184,8 @@ Purpose: verify the fixes from v1.61.0 (ba17be3, 9a1b5a4, 81f6f6f, e937083, 3953
 
 Cosmetic notes (not blockers): the «Done» modal says «show the QR to MetaMask» but the QR appears only after
 tapping Continue; «Scan the request» label can be clipped at the top; the From address on the preview has no
-copy button.
+copy button. Disposition: the result text now points to step 3 (`cbe9181`); the clipping did not reproduce in a
+layout test and the From address is already selectable — see `docs/PLAN.md`.
 
 The wallet_switchEthereumChain row above is the only open defect carried over from the earlier session
 (result is applied and propagated, response to the dApp is lost).
