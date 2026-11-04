@@ -215,3 +215,28 @@ Carry-over cosmetics from the v1.61.0 list, re-verified live on v1.61.1 (fresh s
 | No copy button on From/To in the AirGap preview | **CONFIRMED on v1.61.1** — live preview (Network Sepolia, From 0x25d4…5026, To 0xfcf9…8d6a, 0.0005 ETH, nonce 0, gas 21000, max fee 0.000042 ETH) shows both addresses as plain text with no copy affordance; matches code inspection (no copy action in `eip4527_transaction_preview.dart`). Still open. |
 | «Scan the request» top clipping at a specific scroll position | **NOT REPRODUCED on v1.61.1** — attempted with collapsed step 2 and with the step-1 account QR expanded (both frames shown), at 5+ scroll positions including hard flicks; the step-2 card never crosses the top edge (it sits near the bottom of the list, so the scroll range does not put it under the header). Text renders fully at every reachable position. Treat as not-reproduced (neither fixed nor refuted — the v1.61.0 layout could not be re-created). |
 
+
+## AirGap cosmetics on desktop builds v1.61.1 (2026-11-04, Windows x64 on Legion, Linux x64 on ThinkPad)
+
+Scope: only the two carry-over AirGap cosmetics, exercised via the minimal path to the preview screen
+(onboarding → Connections tab → AirGap via MetaMask step 2 → load request QR from file → preview card).
+Wallet W2 imported on both stands; request crafted with `tool_craft.dart otherAccount` (address W2) and
+loaded through the native file dialog. No other checks were run.
+
+Platform notes (test environment, not product defects):
+- Windows (Flutter embedder): the mouse wheel does not scroll the app at all — verified with SendInput
+  (delivery confirmed: cursor over the FlutterView child HWND) and PostMessage WM_MOUSEWHEEL into both the
+  top-level and child windows; the content stays pixel-identical. Mouse drag also does not scroll (desktop
+  Flutter does not treat the mouse as a scroll device). Working alternatives used for the check: Tab focus
+  traversal auto-scrolls `SingleChildScrollView` to the focused widget.
+- Linux (ThinkPad, Xvfb): Impeller renders a black window headless — tested with a TEST-ONLY
+  `fl_dart_project_set_enable_impeller(FALSE)` patch in `linux/runner/my_application.cc` (not committed).
+
+| Cosmetic (v1.61.0) | Windows v1.61.1 | Linux v1.61.1 |
+| --- | --- | --- |
+| No copy button on From/To in the AirGap preview | **CONFIRMED** — full preview captured (From 0xfcf9…8d6a, To 0xfcf9…8d6a, 0.0005 ETH, nonce 0, gas 21000, max fee 0.000042 ETH, origin metamask); zoomed crop of both address rows shows plain text only, no copy affordance next to either address. | **CONFIRMED** — same observation on the zoomed crop of the preview rows (no copy icons at all). |
+| «Scan the request» top clipping at a specific scroll position | **NOT REPRODUCED** — observed across 9 frames including a mid-animation scroll frame: the step-2 title is either fully visible or scrolls cleanly out of view; no half-clipped glyphs at the top edge. | **NOT REPRODUCED** — the title scrolls cleanly behind the top edge at all tested positions. |
+
+Bonus finding (Linux stand, import screen, not part of the scoped cosmetics): with exactly 12 valid BIP39
+words the red validation «The seed phrase looks incomplete. At least 12 words are needed.» still shows —
+looks like an off-by-one/stale validation; worth a separate look.
