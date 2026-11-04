@@ -515,6 +515,64 @@ void main() {
     );
   });
 
+  // A second tap — or a second sheet a double tap opened — used to act on
+  // whichever request was at the head of the queue by then: the next one,
+  // which the user never saw.
+  for (final (name, label) in <(String, String)>[
+    ('approve', 'Переключить сеть'),
+    ('reject', 'Отклонить запрос'),
+  ]) {
+    testWidgets('connections screen: a double tap on $name answers only the '
+        'request shown', (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(1200, 1800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final service = FakeWalletConnectService();
+      await tester.pumpWidget(
+        MobileWalletDemoApp(
+          locale: const Locale('ru'),
+          store: InMemorySecureKeyValueStore(),
+          blockchainProvider: _FakeBlockchainProvider(),
+          walletConnectService: service,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _createUnlock(tester);
+      await _openConnections(tester);
+
+      final shown = service.simulateRequest(
+        topic: 'topic-1',
+        method: 'wallet_switchEthereumChain',
+        params: const <Object?>[
+          <String, Object?>{'chainId': '0xaa36a7'},
+        ],
+      );
+      final queued = service.simulateRequest(
+        topic: 'topic-1',
+        method: 'wallet_switchEthereumChain',
+        params: const <Object?>[
+          <String, Object?>{'chainId': '0x1'},
+        ],
+      );
+      await tester.pumpAndSettle();
+
+      final button = find.text(label);
+      await tester.ensureVisible(button);
+      await tester.tap(button);
+      await tester.tap(button, warnIfMissed: false);
+      await tester.pumpAndSettle();
+
+      final answered = <int>[
+        for (final result in service.respondedResults) result.id,
+        for (final error in service.respondedErrors) error.id,
+      ];
+      expect(answered, <int>[shown.id]);
+      expect(answered, isNot(contains(queued.id)));
+      // The queued request is still waiting for its own decision.
+      expect(find.text(label), findsOneWidget);
+    });
+  }
+
   testWidgets(
     'connections screen: approving a request walks PIN → result in one sheet',
     (WidgetTester tester) async {

@@ -74,10 +74,16 @@ class _ConnectionsStage extends StatefulWidget {
   final Future<void> Function() onApprove;
   final Future<void> Function() onReject;
   // Private-key operations: the credential is collected per-op in this widget
-  // and threaded to the controller. Reject/clear stay auth-free.
-  final Future<void> Function({String? pin, bool useBiometrics})
+  // and threaded to the controller. Reject/clear stay auth-free. Both name the
+  // request the card showed, so a late tap cannot act on the next one.
+  final Future<void> Function({
+    required WalletConnectRequest request,
+    String? pin,
+    bool useBiometrics,
+  })
   onApproveRequest;
-  final Future<void> Function() onRejectRequest;
+  final Future<void> Function({required WalletConnectRequest request})
+  onRejectRequest;
   final Future<void> Function({String? pin, bool useBiometrics})
   onPrepareAirGapAccountExport;
   final Future<void> Function() onScanAirGapRequest;
@@ -94,6 +100,29 @@ class _ConnectionsStage extends StatefulWidget {
 
 class _ConnectionsStageState extends State<_ConnectionsStage> {
   final TextEditingController _uriController = TextEditingController();
+
+  /// True from a tap on a request's Approve or Reject until it is answered (or
+  /// its PIN sheet is dismissed): a second tap must not open a second sheet or
+  /// reach the request queued behind it.
+  bool _requestActionInFlight = false;
+
+  Future<void> _actOnRequest(
+    WalletConnectRequest request,
+    Future<void> Function() action,
+  ) async {
+    if (_requestActionInFlight ||
+        !widget.controller.isPendingRequest(request)) {
+      return;
+    }
+    setState(() => _requestActionInFlight = true);
+    try {
+      await action();
+    } finally {
+      if (mounted) {
+        setState(() => _requestActionInFlight = false);
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -128,35 +157,41 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
     }
   }
 
-  Future<void> _approveRequest() async {
-    final l10n = AppLocalizations.of(context);
-    const codec = WalletConnectV2RequestCodec();
-    final request = widget.pendingRequest;
-    if (request != null && codec.isChainSwitchMethod(request.method)) {
-      // Chain switching changes the dApp context only; it must not unlock the
-      // vault or ask for a PIN. A failure shows in the error banner; success
-      // would otherwise be silent, since the card just goes away.
-      final network = _switchTargetName(request);
-      await widget.onApproveRequest();
-      if (!mounted || widget.controller.errorMessage != null) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.wcChainSwitched(network))));
-      return;
-    }
-    // Cancelling the sheet keeps the request shown; nothing was signed.
-    await _confirmOperation(
-      context,
-      controller: widget.controller,
-      reason: l10n.wcApproveNeedsKey,
-      biometricsOffered: _biometricsOffered,
-      run: (pin, useBiometrics) =>
-          widget.onApproveRequest(pin: pin, useBiometrics: useBiometrics),
-      successBody: () => l10n.wcApproveSuccess,
-    );
-  }
+  Future<void> _approveRequest(WalletConnectRequest request) =>
+      _actOnRequest(request, () async {
+        final l10n = AppLocalizations.of(context);
+        const codec = WalletConnectV2RequestCodec();
+        if (codec.isChainSwitchMethod(request.method)) {
+          // Chain switching changes the dApp context only; it must not unlock
+          // the vault or ask for a PIN. A failure shows in the error banner;
+          // success would otherwise be silent, since the card just goes away.
+          final network = _switchTargetName(request);
+          await widget.onApproveRequest(request: request);
+          if (!mounted || widget.controller.errorMessage != null) {
+            return;
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.wcChainSwitched(network))),
+          );
+          return;
+        }
+        // Cancelling the sheet keeps the request shown; nothing was signed.
+        await _confirmOperation(
+          context,
+          controller: widget.controller,
+          reason: l10n.wcApproveNeedsKey,
+          biometricsOffered: _biometricsOffered,
+          run: (pin, useBiometrics) => widget.onApproveRequest(
+            request: request,
+            pin: pin,
+            useBiometrics: useBiometrics,
+          ),
+          successBody: () => l10n.wcApproveSuccess,
+        );
+      });
+
+  Future<void> _rejectRequest(WalletConnectRequest request) =>
+      _actOnRequest(request, () => widget.onRejectRequest(request: request));
 
   /// Which AirGap step the user is on, derived from state that already exists:
   /// a returned signature means step 3, a scanned request means step 2, and
@@ -291,12 +326,16 @@ class _ConnectionsStageState extends State<_ConnectionsStage> {
         if (request != null) ...[
           const SizedBox(height: 24),
           _RequestCard(
+            // A new request gets a new card, so a tap that began on the
+            // previous one is dropped instead of landing on this one.
+            key: ValueKey<(String, int)>((request.topic, request.id)),
             request: request,
             preview: widget.pendingRequestPreview,
             previewError: widget.pendingRequestPreviewError,
             isPreviewLoading: widget.isPendingRequestPreviewLoading,
-            onApprove: _approveRequest,
-            onReject: widget.onRejectRequest,
+            isBusy: _requestActionInFlight,
+            onApprove: () => _approveRequest(request),
+            onReject: () => _rejectRequest(request),
           ),
         ],
         const SizedBox(height: 24),
@@ -1001,10 +1040,12 @@ class _ProposalCard extends StatelessWidget {
 
 class _RequestCard extends StatelessWidget {
   const _RequestCard({
+    super.key,
     required this.request,
     required this.preview,
     required this.previewError,
     required this.isPreviewLoading,
+    required this.isBusy,
     required this.onApprove,
     required this.onReject,
   });
@@ -1013,6 +1054,9 @@ class _RequestCard extends StatelessWidget {
   final WalletConnectTransactionPreview? preview;
   final String? previewError;
   final bool isPreviewLoading;
+
+  /// The request is being answered: both buttons are off until it is done.
+  final bool isBusy;
   final Future<void> Function() onApprove;
   final Future<void> Function() onReject;
 
@@ -1296,7 +1340,7 @@ class _RequestCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               FilledButton(
-                onPressed: canApproveTransaction && !typedDataBlocked
+                onPressed: canApproveTransaction && !typedDataBlocked && !isBusy
                     ? onApprove
                     : null,
                 child: Text(
@@ -1308,7 +1352,7 @@ class _RequestCard extends StatelessWidget {
                 ),
               ),
               OutlinedButton(
-                onPressed: onReject,
+                onPressed: isBusy ? null : onReject,
                 child: Text(l10n.wcRejectRequest),
               ),
             ],

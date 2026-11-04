@@ -327,6 +327,13 @@ class WalletFlowController extends ChangeNotifier {
 
   int get pendingRequestCount => _pendingRequests.length;
 
+  /// Whether [request] is still the one awaiting a decision: a tap or a PIN
+  /// sheet meant for an answered request must not act on the next one.
+  bool isPendingRequest(WalletConnectRequest request) {
+    final head = pendingRequest;
+    return head != null && head.id == request.id && head.topic == request.topic;
+  }
+
   WalletConnectTransactionPreview? get pendingRequestPreview =>
       _pendingRequestPreview;
 
@@ -1176,15 +1183,21 @@ class WalletFlowController extends ChangeNotifier {
   /// vault; device "tap + PIN" for the external device) and re-locks after.
   /// The queue head is removed after the coordinator has answered the dApp; a
   /// wrong PIN/cancel leaves it visible to retry, while later requests remain
-  /// queued instead of overwriting it.
+  /// queued instead of overwriting it. When [request] is given, nothing happens
+  /// unless it is still the head, so a repeated tap cannot approve the next one.
   Future<void> approvePendingRequest({
+    WalletConnectRequest? request,
     String? pin,
     bool useBiometrics = false,
   }) async {
-    final request = pendingRequest;
+    if (request != null && !isPendingRequest(request)) {
+      return;
+    }
+    request ??= pendingRequest;
     if (request == null || _isHandlingWalletConnectRequest) {
       return;
     }
+    final handled = request;
     _isHandlingWalletConnectRequest = true;
     _notify();
     try {
@@ -1193,11 +1206,11 @@ class WalletFlowController extends ChangeNotifier {
       if (codec.isChainSwitchMethod(request.method)) {
         await _runGuarded(() async {
           try {
-            await coordinator.switchChain(request);
+            await coordinator.switchChain(handled);
           } finally {
             // Answered either way, so the card goes; a failure stays visible
             // in the error banner.
-            _removePendingRequest(request);
+            _removePendingRequest(handled);
           }
         });
         return;
@@ -1216,11 +1229,11 @@ class WalletFlowController extends ChangeNotifier {
         useBiometrics: useBiometrics,
         action: (signer) async {
           await coordinator.handleRequest(
-            request: request,
+            request: handled,
             signer: signer,
             transactionPreview: transactionPreview,
           );
-          _removePendingRequest(request);
+          _removePendingRequest(handled);
         },
       );
     } finally {
@@ -1229,20 +1242,31 @@ class WalletFlowController extends ChangeNotifier {
     }
   }
 
-  /// Rejects [pendingRequest] with a JSON-RPC error to the dApp.
-  Future<void> rejectPendingRequest() async {
-    await _runGuarded(() async {
-      final request = pendingRequest;
-      if (request == null || _isHandlingWalletConnectRequest) {
-        return;
-      }
-      await _walletConnectService.respondError(
-        request: request,
-        code: DappErrorCode.userRejected,
-        message: DappErrorText.userRejected,
-      );
-      _removePendingRequest(request);
-    });
+  /// Rejects [pendingRequest] with a JSON-RPC error to the dApp; when
+  /// [request] is given, only while it is still the head.
+  Future<void> rejectPendingRequest({WalletConnectRequest? request}) async {
+    if (request != null && !isPendingRequest(request)) {
+      return;
+    }
+    final rejected = request ?? pendingRequest;
+    if (rejected == null || _isHandlingWalletConnectRequest) {
+      return;
+    }
+    _isHandlingWalletConnectRequest = true;
+    _notify();
+    try {
+      await _runGuarded(() async {
+        await _walletConnectService.respondError(
+          request: rejected,
+          code: DappErrorCode.userRejected,
+          message: DappErrorText.userRejected,
+        );
+        _removePendingRequest(rejected);
+      });
+    } finally {
+      _isHandlingWalletConnectRequest = false;
+      _notify();
+    }
   }
 
   WalletConnectInboundCoordinator _walletConnectCoordinator() {
