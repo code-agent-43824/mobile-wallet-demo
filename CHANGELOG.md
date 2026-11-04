@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.61.1] - 2026-11-04
+
 ### Fixed
 
 - WalletConnect: ответ на `wallet_switchEthereumChain` теперь действительно доходит до dApp. В 1.61.0
