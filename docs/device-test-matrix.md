@@ -242,6 +242,7 @@ Platform notes (test environment, not product defects):
 
 Bonus finding (Linux stand, import screen, not part of the scoped cosmetics): with exactly 12 valid BIP39
 words the red validation «The seed phrase looks incomplete. At least 12 words are needed.» still shows —
+
 looks like an off-by-one/stale validation; worth a separate look. Checked 2026-11-04: the import check rejects
 fewer than 12 words and is correct; the error stays on screen until the next tap of «Import», so a message left from
 an earlier attempt with fewer words is the likely explanation. Not changed.
@@ -249,3 +250,19 @@ an earlier attempt with fewer words is the likely explanation. Not changed.
 Disposition (2026-11-04): copy buttons added in `a60a56d` (after v1.61.1); the clipping is closed as not
 reproducible. The Windows mouse wheel was tested with synthetic input only; Flutter scrolls on a real wheel by
 default, so it needs a check with a physical mouse before it counts as a defect.
+
+## v1.62.0 re-check of the three v1.61.1 fixes (2026-11-05, x86_64 emulator, release APK v1.62.0+75)
+
+Fresh stand, W1 wallet imported from the `abandon ×11 about` phrase (0x9858EfFD…Eda94), local WC dApp on :18080,
+crafted `ur:eth-sign-request` addressed to W1 (To = 0xFcf9…8D6a).
+
+| Fix | Result | Evidence |
+| --- | --- | --- |
+| Copy buttons in the AirGap preview (a60a56d) | **PASS** | Preview shows copy icons next to both From and To; tapping each copies the exact address (system clipboard preview shows 0x9858…Eda94 for From, 0xfcf9…8D6a for To) with the «Address copied.» toast. |
+| Copy button in the Receive sheet (4d8a327) | **PASS** | «Your address» sheet has a «Copy address» button; tapping it shows «Address copied.» and the clipboard preview contains 0x9858EfFD2…Eda94. |
+| WC double-tap guard (0f196ec) | **PASS** | Double-tap on **Reject** answers the request exactly once (`5000 User rejected`), the next request arrives with its own untouched card. Double-tap on **Approve and sign** opens the PIN sheet ONCE (no second sheet), one signature produced and delivered (RPC broadcast itself failed with `insufficient funds` — 0-balance wallet, expected). Double-tap on **Switch network** answers `{"result":true}` once; a subsequent `personal_sign` still arrives normally (queue alive). |
+| Long balance wrap in the asset row (c7190b2) | **PASS (widget test), not exercised live** | The wallet holds only 4 tokens, longest balance 6 digits (KICK 888888) — the 30-digit spam balance from the v1.58.0 run is no longer present, so the wrap path was not reachable live. Covered by the committed widget test (30-digit balance on a 360 px screen renders wrapped, no overflow); live rows render right-aligned with no overflow. |
+
+Process note: the WC dApp harness expects `chainId` as a decimal integer in `POST /req` (`eip155:NaN` otherwise);
+the file pickers filter to images, so both the AirGap request and the WC pairing URI were pushed as QR PNGs.
+
