@@ -283,3 +283,32 @@ Platform notes / findings:
 - The WC URI request QR (>200 chars) could not be decoded by the app's file-QR decoder on Windows (zbarimg decodes the same PNG fine) — the AirGap request QR (~150 chars) decodes fine. Same-family decoders on Android handled a >200-char URI in the v1.61.1 run; worth a look if desktop WC pairing ever becomes reachable.
 - One transient, unreproduced Windows process exit right after opening a text file via «Загрузить wc: из файла» (the button expects a QR image, shows «На выбранном изображении не найден QR-код»); a later attempt with the same file errored cleanly without exiting. Not counted as a defect.
 - iOS limitation: the headless simulator (no GUI session for input injection; simctl has no tap, AppleEvents blocked by TCC over SSH) allows install/launch/screenshots but not interaction, so the interactive scenarios were not exercised live on iOS this time.
+
+## AirGap full round-trip on Windows x64 (2026-11-05, v1.62.0+75 on Legion)
+
+Previously only the *input* half of the AirGap flow had been exercised live on desktop (through the preview);
+the output half (sign → signature QR → verification) was verified only on Android. Closed the gap.
+
+Setup: fresh storage (PasswordVault wipe + `flutter_secure_storage.dat` removal), wallet imported from
+`abandon ×11 about` with PIN 1234 (address 0x9858EfFD232B4033E47d90003D41EC34EcaEda94), network Sepolia,
+crafted `ur:eth-sign-request` (Sepolia, EIP-1559, 0.0005 ETH, To = 0xFcf9…8D6a, nonce 0, gas 21000,
+max fee 0.000042 ETH, origin metamask) rendered as a QR PNG.
+
+| Stage | Result | Evidence |
+| --- | --- | --- |
+| Step 1 — account QR (PIN-protected) | **PASS** | PIN accepted via the modal numpad, «Готово» modal: QR аккаунта готов. |
+| Step 2 — load request QR from file | **PASS** | The step-2 card button opened the file dialog (NOT the wc: picker — see the v1.61.1 grab); the crafted PNG decoded and the preview appeared. |
+| Preview fidelity | **PASS** | Сеть Sepolia, тип EIP-1559, From 0x9858…eda94 (copy icon present — v1.62.0 fix), To 0xfcf9…8d6a (copy icon present), nonce 0, gas 21000, max fee 0.000042 ETH, данные контракта нет, источник metamask — all fields byte-equal to the crafted `signData` decoded offline. |
+| Sign with PIN | **PASS** | «Подписать транзакцию» → PIN numpad modal → «Готово»: Подпись готова. |
+| Step 3 — 2-frame signature QR | **PASS** | Animated QR «Кадр 1 из 2 / Кадр 2 из 2»; both frames screen-captured and decoded (`UR:ETH-SIGNATURE/1-2/…`, `UR:ETH-SIGNATURE/2-2/…`). |
+| Signature verification | **PASS** | Frames assembled with the repo UR tooling → 65-byte signature (r/s/v=1); offline `ecrecover` over `keccak256(signData)` recovers exactly **0x9858effd232b4033e47d90003d41ec34ecaeda94**. |
+
+Notes:
+- Desktop scroll constraint confirmed again: wheel/PgDn do not scroll the Flutter window; keyboard traversal
+  does. This run `Tab` cycled inside the step-1/2 area without ever reaching the sign button (it is reachable
+  on Android by touch) — arrow keys `{DOWN}` after a click into the page body scrolled reliably. If the sign
+  button becomes the only way to finish the flow on desktop, keyboard-reachability of «Подписать транзакцию»
+  is worth a follow-up look.
+- The animated QR alternates its two frames roughly every ~2 s; screenshots at ~1.1 s intervals caught both.
+  Screenshot crops needed binarization (threshold ~128) before `zbar`/`pyzbar` would decode them; the same
+  crops decoded at threshold ≥128 consistently.
