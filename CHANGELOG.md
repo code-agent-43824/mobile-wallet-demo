@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.62.0] - 2026-11-05
+
 ### Added
 
 - AirGap: у адресов в превью запроса (от кого, кому, получатель или распорядитель токенов) есть кнопка
