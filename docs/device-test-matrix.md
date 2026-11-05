@@ -266,3 +266,20 @@ crafted `ur:eth-sign-request` addressed to W1 (To = 0xFcf9…8D6a).
 Process note: the WC dApp harness expects `chainId` as a decimal integer in `POST /req` (`eip155:NaN` otherwise);
 the file pickers filter to images, so both the AirGap request and the WC pairing URI were pushed as QR PNGs.
 
+
+## v1.62.0 cross-platform re-check (2026-11-05, Windows x64 on Legion, iOS simulator headless on macOS .51)
+
+Android (2026-11-05 run above) is the reference. Same scope: the three fixes plus the preview path.
+
+| Scenario | Android v1.62.0 (reference) | Windows x64 v1.62.0 | iOS simulator v1.62.0 |
+| --- | --- | --- | --- |
+| AirGap preview copy buttons | PASS | **PASS** — copy icons next to both From and To; clipboard content verified byte-for-byte via the interactive session (`0xfcf9…8d6a` From, `0x25d4…5026` To). | not exercised live (see limitation below); covered by the committed widget test |
+| Receive sheet copy button | PASS | **PASS** — «Копировать адрес» → inline «Адрес скопирован.» state; clipboard verified (`0xFcf9…8D6a`). | not exercised live; widget test |
+| WC double-tap guard | PASS (Reject/Approve/Switch) | **N/A by design** — WC is intentionally mobile-only: `app.dart` instantiates the real Reown service only when `Platform.isAndroid || Platform.isIOS`; desktop builds show «WalletConnect не настроен» and the Connect button stays disabled. The guard cannot regress on desktop because WC cannot be reached there. | same design; on iOS the Reown service is available, but the check was not exercised live |
+| Long balance wrap | PASS (widget test) | not reachable live — same 4-token wallet, longest balance 6 digits; rows render right-aligned, no overflow | same |
+
+Platform notes / findings:
+- **WC is disabled on desktop builds by design** (`UnavailableWalletConnectService`): the double-tap guard is a mobile-only surface today. If desktop WC lands later, the guard needs a desktop re-check.
+- The WC URI request QR (>200 chars) could not be decoded by the app's file-QR decoder on Windows (zbarimg decodes the same PNG fine) — the AirGap request QR (~150 chars) decodes fine. Same-family decoders on Android handled a >200-char URI in the v1.61.1 run; worth a look if desktop WC pairing ever becomes reachable.
+- One transient, unreproduced Windows process exit right after opening a text file via «Загрузить wc: из файла» (the button expects a QR image, shows «На выбранном изображении не найден QR-код»); a later attempt with the same file errored cleanly without exiting. Not counted as a defect.
+- iOS limitation: the headless simulator (no GUI session for input injection; simctl has no tap, AppleEvents blocked by TCC over SSH) allows install/launch/screenshots but not interaction, so the interactive scenarios were not exercised live on iOS this time.
