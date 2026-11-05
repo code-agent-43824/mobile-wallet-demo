@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemChannels;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/app.dart';
 import 'package:mobile_wallet_demo/src/auth/biometric_auth.dart';
@@ -719,6 +720,62 @@ void main() {
     await tester.pumpAndSettle();
     expect(balance, findsOneWidget);
     expect(find.text('Airdropped Reward Token'), findsOneWidget);
+  });
+
+  testWidgets('the receive sheet copies the address', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final copied = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied.add(
+            (call.arguments as Map<Object?, Object?>)['text']! as String,
+          );
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MobileWalletDemoApp(
+        locale: const Locale('ru'),
+        store: InMemorySecureKeyValueStore(),
+        blockchainProvider: _NetworkBalanceBlockchainProvider(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Создать кошелёк'));
+    await tester.pumpAndSettle();
+    final setupFields = find.byType(TextField);
+    await tester.enterText(setupFields.at(0), '1234');
+    await tester.enterText(setupFields.at(1), '1234');
+    await tester.tap(find.text('Создать кошелёк'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Я сохранил seed-фразу'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Пока без биометрии'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Получить'));
+    await tester.pumpAndSettle();
+    final address = tester
+        .widget<SelectableText>(find.byType(SelectableText).last)
+        .data!;
+    await tester.tap(find.text('Копировать адрес'));
+    await tester.pumpAndSettle();
+
+    expect(copied, <String>[address]);
+    expect(find.text('Адрес скопирован.'), findsOneWidget);
   });
 
   testWidgets('ignores a late snapshot from the previous network', (

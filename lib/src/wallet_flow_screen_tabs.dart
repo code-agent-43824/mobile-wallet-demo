@@ -768,6 +768,9 @@ class _WalletTabState extends State<_WalletTab> {
       shape: RoundedRectangleBorder(borderRadius: style.sheetBorderRadius),
       builder: (sheetContext) {
         final theme = Theme.of(sheetContext);
+        // The sheet covers where a snack bar would appear, so the button
+        // itself says the address was copied.
+        var copied = false;
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(NocturneSpacing.gutter),
@@ -781,7 +784,22 @@ class _WalletTabState extends State<_WalletTab> {
                   widget.address,
                   style: theme.textTheme.bodyMedium,
                 ),
-                const SizedBox(height: NocturneSpacing.x8),
+                const SizedBox(height: NocturneSpacing.x6),
+                StatefulBuilder(
+                  builder: (context, setSheetState) => FilledButton.icon(
+                    onPressed: () async {
+                      await Clipboard.setData(
+                        ClipboardData(text: widget.address),
+                      );
+                      setSheetState(() => copied = true);
+                    },
+                    icon: Icon(copied ? Icons.check : Icons.copy_outlined),
+                    label: Text(
+                      copied ? l10n.addressCopied : l10n.actionCopyAddress,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: NocturneSpacing.x3),
                 OutlinedButton(
                   onPressed: () => Navigator.of(sheetContext).pop(),
                   child: Text(l10n.actionClose),
