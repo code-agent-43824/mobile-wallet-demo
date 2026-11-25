@@ -195,6 +195,9 @@
 
 ### Запланировано, не начато
 
+- [ ] **AGP 9.3.1 и Gradle 9.5.0** — версии шаблона Flutter 3.50; ниже них сборка Android предупреждает
+  (ниже AGP 9.1.1 — падает, поэтому поднят патч 9.1.1). Проверить совместимость с Kotlin 2.4.0 и
+  `builtInKotlin=false` (см. `CLAUDE.md`).
 - [ ] **Переход на `material_ui` / `cupertino_ui`** — решение владельца. Flutter 3.50 пометил
   `package:flutter/material.dart` устаревшим в пользу пакетов flutter.dev `material_ui` 1.11 и
   `cupertino_ui` 1.1. Пока импорты оставлены с `// ignore: deprecated_member_use`, а сгенерированные

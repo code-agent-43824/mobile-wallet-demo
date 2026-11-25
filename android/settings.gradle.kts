@@ -19,7 +19,7 @@ pluginManagement {
 
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
-    id("com.android.application") version "9.1.0" apply false
+    id("com.android.application") version "9.1.1" apply false
     // No module declares KGP. In the current legacy mode (gradle.properties)
     // Flutter applies it from this classpath; under built-in Kotlin it still
     // sets the Kotlin version (AGP 9.1 alone embeds 2.2.10, below Flutter's
