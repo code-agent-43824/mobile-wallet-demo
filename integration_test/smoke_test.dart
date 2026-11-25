@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:mobile_wallet_demo/src/app.dart';
+import 'package:uikit_tab_bar/uikit_tab_bar.dart';
 
 /// PIN-derived key stretching (600k PBKDF2 rounds) and the first chain read
 /// are real here, so each step may take a while on a slow emulator.
@@ -31,15 +32,22 @@ void main() {
     await _tapWhenShown(tester, find.text('Я сохранил seed-фразу'));
     await _tapWhenShown(tester, find.text('Пока без биометрии'));
 
-    // The dashboard: the four tabs and the wallet's balance card.
-    for (final label in <String>[
-      'Кошелёк',
-      'Активность',
-      'Связи',
-      'Настройки',
-      'Баланс',
-      'Получить',
-    ]) {
+    // The dashboard: the four tabs and the wallet's balance card. On iOS 26+
+    // the tabs are UIKit's own bar, drawn natively: its labels are not in the
+    // widget tree, only the platform view that hosts it.
+    if (UIKitTabBar.isNativeSupported) {
+      await _waitFor(tester, find.byType(UIKitTabBar));
+    } else {
+      for (final label in <String>[
+        'Кошелёк',
+        'Активность',
+        'Связи',
+        'Настройки',
+      ]) {
+        await _waitFor(tester, find.text(label));
+      }
+    }
+    for (final label in <String>['Баланс', 'Получить']) {
       await _waitFor(tester, find.text(label));
     }
 
@@ -60,9 +68,12 @@ void main() {
   });
 }
 
+/// Reads the address from the «Получить» sheet on the wallet tab, where the
+/// app opens. A test cannot tap UIKit's native tab bar on iOS 26+, so the
+/// smoke stays off the other tabs.
 Future<String> _readAddress(WidgetTester tester) async {
-  await _tapWhenShown(tester, find.text('Настройки'));
-  await _waitFor(tester, find.text('Активный адрес'));
+  await _tapWhenShown(tester, find.text('Получить'));
+  await _waitFor(tester, find.text('Копировать адрес'));
   final addressFinder = find.byWidgetPredicate(
     (widget) =>
         widget is SelectableText && _addressPattern.hasMatch(widget.data ?? ''),
