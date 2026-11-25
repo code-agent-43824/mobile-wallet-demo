@@ -86,11 +86,11 @@ report's own reproduction notes were not handed over.
 | AirGap T6: transaction with data | PASS | Full round trip, confirmed on-chain. |
 | AirGap T7: the same request loaded again | FAIL | Loaded and signable again with nothing said. A notice with the earlier signing time was added in `3953331`; needs a re-run. |
 | AirGap T8: envelope chainId 1 over a Sepolia transaction | FAIL | The mismatch is refused, but the request loaded before it stayed on screen and Sign signed that one. Fixed in `e937083`; needs a re-run. |
-| AirGap `personal_sign` from MetaMask (added after this run, `06b89e7`) | NOT RUN | The message preview matches the request; MetaMask accepts the signature and `ecrecover` gives the wallet address. |
-| AirGap multipart request from image files (added after this run, `def4852`) | NOT RUN | All frames picked at once rebuild the request; too few frames say how many are missing. |
+| AirGap `personal_sign` from MetaMask (added after this run, `06b89e7`) | PASS | Live 2026-11-25 on Windows v1.62.0+75 (Legion): 7-frame multipart UR loaded from image files, full readable 518-byte message in the preview, PIN sign, 2-frame signature QR assembled, offline EIP-191 `ecrecover` == the wallet address (see the 2026-11-25 section below). |
+| AirGap multipart request from image files (added after this run, `def4852`) | PASS | Live 2026-11-25 on Windows v1.62.0+75: all frames picked at once via the file dialog (multiple names in quotes) rebuild the request; three runs (8-frame EIP-712, 7-frame personal_sign, 2-frame ERC-20) all assembled. |
 | WalletConnect EIP-712 Permit preview (added after this run, `a7623e4`) | NOT RUN | The card warns that the signature lets someone spend tokens and lists spender, amount and deadline; a domain `chainId` other than the session chain disables Approve. |
-| AirGap EIP-712 from MetaMask (added after this run, `22fa735`) | NOT RUN | The same preview; MetaMask accepts the signature and it verifies for the wallet address. |
-| AirGap T10: 0-ETH transaction with ERC-20 calldata | INCONCLUSIVE | The preview showed function `0x0a9059cb`. The wallet prints the first four data bytes as they are (`0xa9059cbb` for `transfer`), so that transaction's data starts with `0a9059cb`: shifted by half a byte, it does not call `transfer`. Check its receipt for a Transfer event. Token calls are now decoded in both previews (`c5e6c9a`). |
+| AirGap EIP-712 from MetaMask (added after this run, `22fa735`) | PASS | Live 2026-11-25 on Windows v1.62.0+75: 8-frame multipart UR, preview showed Mail / Ether Mail 1 / Sepolia / full Person fields / «Hello, Bob!»; PIN sign; signature QR ecrecovers the wallet address (section below). |
+| AirGap T10: 0-ETH transaction with ERC-20 calldata | PARTIAL | The original T10 receipt was never checked (hash not recorded); the transfer-decode half is now covered live: a crafted typed transaction with a **proper** `transfer()` calldata (`0xa9059cbb`, To 0xFcf9…8D6a, 1.5e18) shows «Перевод токена ERC-20», the recipient and `1500000000000000000` in the preview, signs, and the signature ecrecovers the wallet address (2026-11-25, section below). A malformed-RLP crafted request is correctly refused («Транзакция из MetaMask повреждена (invalid RLP list boundary)»). |
 
 ## Phase 10 Rutoken gate
 
@@ -312,3 +312,30 @@ Notes:
 - The animated QR alternates its two frames roughly every ~2 s; screenshots at ~1.1 s intervals caught both.
   Screenshot crops needed binarization (threshold ~128) before `zbar`/`pyzbar` would decode them; the same
   crops decoded at threshold ≥128 consistently.
+
+## AirGap EIP-712, multipart personal_sign and ERC-20 preview on Windows x64 (2026-11-25, v1.62.0+75 on Legion)
+
+Closes the three remaining "cheap on desktops" gaps: EIP-712 through AirGap (full round trip),
+a multi-frame `personal_sign` request loaded from image files, and ERC-20 calldata decoding in the
+transaction preview. One session, fresh storage, same W1 wallet (`abandon ×11 about`, PIN 1234,
+address 0x9858EfFD232B4033E47d90003D41EC34EcaEda94, Sepolia). All requests were crafted offline with
+the repo codecs, rendered to QR PNGs (python `qrcode`), and verified before use: each frame decodes
+with `pyzbar`, and the frames reassemble (repo `UrQrAssembler`) to the original UR byte-for-byte.
+
+| Scenario | Result | Evidence |
+| --- | --- | --- |
+| AirGap EIP-712 full round trip | **PASS** | 8-frame `ur:eth-sign-request` (canonical Ether Mail from the spec, `chainId` 11155111, `requestId b2c3…8f91`). Preview: «Тип данных: Mail», «Приложение: Ether Mail 1», «Сеть: Ethereum Sepolia», full Person fields + «Hello, Bob!», from = W1 address, origin metamask. PIN sign → «Готово» → step-3 animated QR (2 frames, ~350 ms per frame) → both frames captured and decoded → assembled → `r/s/v=27`, offline EIP-712 `ecrecover` (digest `0x3a5b1f05…`, reference for the spec example) == **0x9858effd…eda94**. `requestId` matches the request. |
+| Multipart `personal_sign` from image files | **PASS** | 7-frame `ur:eth-sign-request` (`rawBytes`, readable 518-byte message, `requestId c3d4…8f92`). Preview: «Проверьте сообщение» with the full text visible, 518 байт, from = W1. PIN sign → 2-frame signature QR → assembled → `v=27`, offline EIP-191 `ecrecover` == the W1 address. |
+| ERC-20 calldata in the transaction preview | **PASS** | 2-frame `ur:eth-sign-request` (`typedTransaction`, EIP-1559, To = token contract 0x1f98…F984, data = `transfer(0xFcf9…8D6a, 1.5e18)`). Preview: «Перевод токена ERC-20», data 68 байт, функция `0xa9059cbb`, получатель 0xfcf9…8d6a, «1500000000000000000 в минимальных единицах». Sign → signature QR → `v=0` (yParity, per the EIP-4527 typed-transaction mapping) → offline `ecrecover` over the EIP-1559 signing hash == the W1 address. |
+| Negative: malformed RLP is refused | **PASS** | A crafted request whose RLP list prefix was one byte short was rejected with «Транзакция из MetaMask повреждена (invalid RLP list boundary)» — fail-closed, no preview, no sign button. |
+
+Notes:
+- The first ERC-20 attempt with a buggy crafted RLP (long-list prefix written as `0xf7` instead of
+  `0xf8`) was correctly refused — the earlier T10 «shifted selector» mystery was a craft-side bug all
+  along; the wallet decodes proper `transfer()` calldata as expected (`c5e6c9a` behaviour confirmed live).
+- Desktop scroll: mouse wheel does not scroll the Flutter window; `{DOWN}` arrows after a click into
+  the page body do (same as the 2026-11-05 run; this time the sign buttons were reached and pressed).
+- The file dialog accepts multiple files by typing the quoted-name list
+  (`"f1.png" "f2.png" …`) into the filename field; Ctrl+A through SendKeys did not work in this dialog.
+- Signature-QR animation alternates frames every ~350 ms; a burst of screenshots at ~200–400 ms
+  intervals catches both. Crops of the QR area need binarization (threshold ≥128) before pyzbar decodes.
