@@ -993,6 +993,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.0"
+  uikit_tab_bar:
+    dependency: "direct main"
+    description:
+      name: uikit_tab_bar
+      sha256: a251cecd556d9e86eaa149473778fdcbc5a562ab3bf1ef495c984014daf39022
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.5.0"
   unorm_dart:
     dependency: "direct main"
     description:

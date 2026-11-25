@@ -4,6 +4,7 @@ import 'dart:ui' show ImageFilter;
 // see docs/PLAN.md for the migration.
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:uikit_tab_bar/uikit_tab_bar.dart';
 
 import 'nocturne.dart';
 import 'platform_style.dart';
@@ -23,11 +24,15 @@ class AppTabItem {
     required this.tab,
     required this.label,
     required this.icon,
+    this.iosSymbol,
   });
 
   final AppTab tab;
   final String label;
   final IconData icon;
+
+  /// The SF Symbol the system tab bar shows on iOS; [icon] when null.
+  final String? iosSymbol;
 }
 
 /// The redesigned app shell: a platform-appropriate header, the tab body, and
@@ -43,7 +48,12 @@ class AppTabItem {
 /// Windows reuses the Android pattern set but constrains the content width so
 /// the mobile layout stays legible in a wide window.
 ///
-/// On iOS and Android a window at least [sideNavigationMinWidth] wide — an
+/// On iOS 26 and later the tabs are the system's own `UITabBarController`
+/// (via `uikit_tab_bar`), because only a system tab bar is moved by iOS into
+/// iPhone Duo's vertical strip beside the status bar; where that does not
+/// apply the shell draws its own bar (docs/JOURNAL.md, 2026-11-25).
+///
+/// Elsewhere on iOS and on Android a window at least [sideNavigationMinWidth] wide — an
 /// open iPhone Duo, an iPhone in landscape, an Android tablet or foldable —
 /// gets the tabs as a column on the leading side and the content as a centred
 /// column at most [wideContentMaxWidth] wide, instead of a phone layout
@@ -101,12 +111,60 @@ class AppShell extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        if (style.isIos && UIKitTabBar.isNativeSupported) {
+          return _buildSystemTabBar(
+            body,
+            wide: constraints.maxWidth >= sideNavigationMinWidth,
+          );
+        }
         if (!style.isDesktop &&
             constraints.maxWidth >= sideNavigationMinWidth) {
           return _buildWide(style, body);
         }
         return _buildNarrow(style, body);
       },
+    );
+  }
+
+  /// The system tab bar decides its own place: along the bottom, or on iPhone
+  /// Duo a column under the status bar. Its insets reach the content as
+  /// `MediaQuery` padding, which the [SafeArea] keeps clear. It never
+  /// minimizes on scroll: a pan on a sheet over the content would count too.
+  Widget _buildSystemTabBar(Widget body, {required bool wide}) {
+    return UIKitTabScaffold(
+      tabBar: UIKitTabBar(
+        tabs: <UIKitTab>[
+          for (final item in tabs)
+            UIKitTab(
+              id: item.tab.name,
+              label: item.label,
+              icon: switch (item.iosSymbol) {
+                final String symbol => UIKitTabIcon.symbol(symbol),
+                null => UIKitTabIcon.icon(item.icon),
+              },
+            ),
+        ],
+        selectedId: currentTab.name,
+        onSelected: (id) => onTabSelected(AppTab.values.byName(id)),
+        minimizeBehavior: UIKitTabBarMinimizeBehavior.never,
+        style: const UIKitTabBarStyle(tintColor: NocturneColors.accent),
+      ),
+      body: Scaffold(
+        backgroundColor: NocturneColors.bg,
+        body: SafeArea(
+          top: false,
+          child: wide
+              ? Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxWidth: wideContentMaxWidth,
+                    ),
+                    child: body,
+                  ),
+                )
+              : body,
+        ),
+      ),
     );
   }
 

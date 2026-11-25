@@ -87,7 +87,7 @@ of its way. Don't stack a PIN sheet under the overlay again. «Новая кар
 only way to add a card from an existing wallet; lock-on-open (`setLockOnOpen`, `appBackgrounded/appResumed`,
 one-minute grace) puts `WalletFlowStage.locked` in front, and unlocking keeps no key material.
 The Nocturne design system lives in `lib/src/design/` (`nocturne.dart` tokens, `app_theme.dart`,
-`platform_style.dart` for the iOS/Android/desktop pattern seam, `app_shell.dart` for the four-tab shell: bottom tabs below `AppShell.sideNavigationMinWidth`, side tabs and a centred column above it on iOS/Android; `test/adaptive_layout_test.dart` walks the app in every iPhone Duo pose). New
+`platform_style.dart` for the iOS/Android/desktop pattern seam, `app_shell.dart` for the four-tab shell: on iOS 26+ the tabs are the system `UITabBarController` through `uikit_tab_bar` (owner decision 2026-11-25 — only a system bar is moved into iPhone Duo's strip; the plugin needs iOS 15.6, and `test/system_tab_bar_test.dart` fakes the native side), elsewhere bottom tabs below `AppShell.sideNavigationMinWidth`, side tabs and a centred column above it on iOS/Android; `test/adaptive_layout_test.dart` walks the app in every iPhone Duo pose). New
 user-visible text goes into both ARB files (`lib/l10n/`), never inline; the persisted language choice is in
 `app_locale.dart`.
 
