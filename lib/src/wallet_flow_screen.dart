@@ -25,6 +25,7 @@ import 'app_locale.dart';
 import 'chain_data_controller.dart';
 import 'design/app_shell.dart';
 import 'design/nocturne.dart';
+import 'design/nocturne_palette.dart';
 import 'design/platform_style.dart';
 import 'error_text.dart';
 import 'errors/app_error.dart';
@@ -383,8 +384,8 @@ class _WalletFlowScreenState extends State<WalletFlowScreen>
           // whichever tab is showing.
           child: RefreshIndicator(
             onRefresh: _chainData.refresh,
-            color: NocturneColors.accent,
-            backgroundColor: NocturneColors.surface,
+            color: context.nocturne.accent,
+            backgroundColor: context.nocturne.surface,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(

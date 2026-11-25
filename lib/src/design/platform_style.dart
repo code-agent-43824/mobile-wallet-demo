@@ -4,7 +4,7 @@
 import 'package:flutter/material.dart' show Theme;
 import 'package:flutter/widgets.dart';
 
-import 'nocturne.dart';
+import 'nocturne_palette.dart';
 
 /// Which platform pattern set the UI renders with.
 ///
@@ -60,14 +60,14 @@ class PlatformStyle {
 
   /// iOS / Apple HIG: a 44pt navigation bar, circular keypad keys, a plain
   /// accent-tinted tab item and a text back label.
-  factory PlatformStyle.ios() => const PlatformStyle(
+  factory PlatformStyle.ios(NocturnePalette palette) => PlatformStyle(
     platform: AppUiPlatform.ios,
     headerHeight: 44,
     sheetRadius: 14,
     showBackLabel: true,
     keypadKeyRadius: 999,
-    keypadKeyFill: NocturneColors.fillFaint,
-    activeTabColor: NocturneColors.accent,
+    keypadKeyFill: palette.fillFaint,
+    activeTabColor: palette.accent,
     activeTabPill: null,
     fallbackBottomInset: 34,
     maxContentWidth: double.infinity,
@@ -75,42 +75,45 @@ class PlatformStyle {
 
   /// Android / Material 3: a 56dp top app bar, 16dp keypad keys and a filled
   /// pill behind the active navigation-bar item.
-  factory PlatformStyle.android() => const PlatformStyle(
+  factory PlatformStyle.android(NocturnePalette palette) => PlatformStyle(
     platform: AppUiPlatform.android,
     headerHeight: 56,
     sheetRadius: 28,
     showBackLabel: false,
     keypadKeyRadius: 16,
-    keypadKeyFill: NocturneColors.surface,
-    activeTabColor: NocturneColors.accent100,
-    activeTabPill: NocturneColors.accent800,
+    keypadKeyFill: palette.surface,
+    activeTabColor: palette.accent100,
+    activeTabPill: palette.accent800,
     fallbackBottomInset: 24,
     maxContentWidth: double.infinity,
   );
 
   /// Windows/Linux: the Android pattern set, centred and width-limited so the
   /// mobile layout stays legible on a wide window.
-  factory PlatformStyle.desktop() => const PlatformStyle(
+  factory PlatformStyle.desktop(NocturnePalette palette) => PlatformStyle(
     platform: AppUiPlatform.desktop,
     headerHeight: 56,
     sheetRadius: 28,
     showBackLabel: false,
     keypadKeyRadius: 16,
-    keypadKeyFill: NocturneColors.surface,
-    activeTabColor: NocturneColors.accent100,
-    activeTabPill: NocturneColors.accent800,
+    keypadKeyFill: palette.surface,
+    activeTabColor: palette.accent100,
+    activeTabPill: palette.accent800,
     fallbackBottomInset: 24,
     maxContentWidth: 460,
   );
 
-  static PlatformStyle forPlatform(AppUiPlatform platform) {
+  static PlatformStyle forPlatform(
+    AppUiPlatform platform,
+    NocturnePalette palette,
+  ) {
     switch (platform) {
       case AppUiPlatform.ios:
-        return PlatformStyle.ios();
+        return PlatformStyle.ios(palette);
       case AppUiPlatform.android:
-        return PlatformStyle.android();
+        return PlatformStyle.android(palette);
       case AppUiPlatform.desktop:
-        return PlatformStyle.desktop();
+        return PlatformStyle.desktop(palette);
     }
   }
 
@@ -119,8 +122,10 @@ class PlatformStyle {
   /// Uses `Theme.of(context).platform` so a widget test can pin the pattern
   /// set with `ThemeData(platform: TargetPlatform.iOS)` without touching a
   /// global override.
-  static PlatformStyle of(BuildContext context) =>
-      forPlatform(AppUiPlatform.resolve(Theme.of(context).platform));
+  static PlatformStyle of(BuildContext context) => forPlatform(
+    AppUiPlatform.resolve(Theme.of(context).platform),
+    NocturnePalette.of(context),
+  );
 
   final AppUiPlatform platform;
 

@@ -524,17 +524,17 @@ class _AirGapStepCard extends StatelessWidget {
                 width: 24,
                 height: 24,
                 alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  color: NocturneColors.accent800,
+                decoration: BoxDecoration(
+                  color: context.nocturne.accent800,
                   shape: BoxShape.circle,
                 ),
                 child: Text(
                   '$stepNumber',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: NocturneType.family,
                     fontSize: 12,
                     fontWeight: NocturneType.semibold,
-                    color: NocturneColors.accent100,
+                    color: context.nocturne.accent100,
                   ),
                 ),
               ),
@@ -1446,8 +1446,8 @@ class _AirGapProgress extends StatelessWidget {
                 height: 3,
                 decoration: BoxDecoration(
                   color: step <= currentStep
-                      ? NocturneColors.accent
-                      : NocturneColors.neutral800,
+                      ? context.nocturne.accent
+                      : context.nocturne.neutral800,
                   borderRadius: NocturneRadius.smAll,
                 ),
               ),

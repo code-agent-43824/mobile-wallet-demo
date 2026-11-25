@@ -25,7 +25,7 @@ Future<bool> _confirmOperation(
       isScrollControlled: true,
       isDismissible: false,
       enableDrag: false,
-      backgroundColor: NocturneColors.surface,
+      backgroundColor: context.nocturne.surface,
       shape: RoundedRectangleBorder(borderRadius: style.sheetBorderRadius),
       builder: (sheetContext) => _ConfirmationSheet(
         controller: controller,
@@ -215,7 +215,7 @@ class _PinEntryPanelState extends State<_PinEntryPanel> {
         widget.reason,
         textAlign: TextAlign.center,
         style: theme.textTheme.bodyMedium?.copyWith(
-          color: NocturneColors.textMuted,
+          color: context.nocturne.textMuted,
         ),
       ),
       const SizedBox(height: NocturneSpacing.x8),
@@ -322,7 +322,7 @@ class _OperationProgress extends StatelessWidget {
               awaitingCard ? l10n.tapCardSignBody : l10n.busyTakesSeconds,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: NocturneColors.textMuted,
+                color: context.nocturne.textMuted,
               ),
             ),
             if (controller.canCancelBusyOperation) ...[
@@ -381,7 +381,7 @@ class _OperationResult extends StatelessWidget {
         Icon(
           success ? Icons.check_circle_outline : Icons.error_outline,
           size: 48,
-          color: success ? NocturneColors.success : NocturneColors.danger,
+          color: success ? context.nocturne.success : context.nocturne.danger,
         ),
         const SizedBox(height: NocturneSpacing.x4),
         Text(
@@ -394,7 +394,7 @@ class _OperationResult extends StatelessWidget {
           body,
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: NocturneColors.textMuted,
+            color: context.nocturne.textMuted,
           ),
         ),
         if (details case final Widget extra) ...[

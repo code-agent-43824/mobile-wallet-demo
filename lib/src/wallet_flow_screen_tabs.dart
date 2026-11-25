@@ -92,7 +92,7 @@ class _ActivityTab extends StatelessWidget {
           child: Text(
             l10n.activityEmpty,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: NocturneColors.textMuted,
+              color: context.nocturne.textMuted,
             ),
           ),
         ),
@@ -273,7 +273,7 @@ class _SettingsTab extends StatelessWidget {
     final style = PlatformStyle.of(context);
     final pin = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: NocturneColors.surface,
+      backgroundColor: context.nocturne.surface,
       shape: RoundedRectangleBorder(borderRadius: style.sheetBorderRadius),
       isScrollControlled: true,
       builder: (sheetContext) => SafeArea(
@@ -315,7 +315,7 @@ class _SettingsTab extends StatelessWidget {
       // Sized by its content and scrollable, so large Dynamic Type or a short
       // window still reaches every row.
       isScrollControlled: true,
-      backgroundColor: NocturneColors.surface,
+      backgroundColor: context.nocturne.surface,
       shape: RoundedRectangleBorder(borderRadius: style.sheetBorderRadius),
       builder: (sheetContext) => SafeArea(
         child: SingleChildScrollView(
@@ -332,7 +332,7 @@ class _SettingsTab extends StatelessWidget {
                   title: Text(option.label),
                   trailing:
                       option.locale?.languageCode == scope.locale?.languageCode
-                      ? const Icon(Icons.check, color: NocturneColors.accent)
+                      ? Icon(Icons.check, color: context.nocturne.accent)
                       : null,
                   onTap: () {
                     Navigator.of(sheetContext).pop();
@@ -355,7 +355,7 @@ class _SettingsTab extends StatelessWidget {
     final style = PlatformStyle.of(context);
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: NocturneColors.surface,
+      backgroundColor: context.nocturne.surface,
       shape: RoundedRectangleBorder(borderRadius: style.sheetBorderRadius),
       isScrollControlled: true,
       builder: (sheetContext) {
@@ -388,13 +388,13 @@ class _SettingsTab extends StatelessWidget {
                             style: theme.textTheme.bodySmall,
                           ),
                           leading: data.isActive(wallet, currentBackendId)
-                              ? const Icon(
+                              ? Icon(
                                   Icons.check,
-                                  color: NocturneColors.accent,
+                                  color: context.nocturne.accent,
                                 )
-                              : const Icon(
+                              : Icon(
                                   Icons.circle_outlined,
-                                  color: NocturneColors.textFaint,
+                                  color: context.nocturne.textFaint,
                                 ),
                           // Forgetting is per card and only offered for a card
                           // the phone actually remembers.
@@ -504,7 +504,7 @@ class _SettingsTab extends StatelessWidget {
 
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: NocturneColors.surface,
+      backgroundColor: context.nocturne.surface,
       shape: RoundedRectangleBorder(borderRadius: style.sheetBorderRadius),
       isScrollControlled: true,
       builder: (sheetContext) {
@@ -573,13 +573,13 @@ class _OfflineCacheBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(NocturneSpacing.x4),
       decoration: BoxDecoration(
-        color: NocturneColors.warning.withValues(alpha: 0.12),
+        color: context.nocturne.warning.withValues(alpha: 0.12),
         borderRadius: NocturneRadius.mdAll,
-        border: Border.all(color: NocturneColors.warning),
+        border: Border.all(color: context.nocturne.warning),
       ),
       child: Row(
         children: [
-          const Icon(Icons.cloud_off, size: 18, color: NocturneColors.warning),
+          Icon(Icons.cloud_off, size: 18, color: context.nocturne.warning),
           const SizedBox(width: NocturneSpacing.x3),
           Expanded(
             child: Text(
@@ -701,7 +701,7 @@ class _WalletTabState extends State<_WalletTab> {
     controller.beginInlineConfirmation();
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: NocturneColors.surface,
+      backgroundColor: context.nocturne.surface,
       shape: RoundedRectangleBorder(borderRadius: style.sheetBorderRadius),
       isScrollControlled: true,
       // Dismissal goes through the sheet's own close action and back gesture,
@@ -740,7 +740,7 @@ class _WalletTabState extends State<_WalletTab> {
       // Sized by its content and scrollable, so large Dynamic Type or a short
       // window still reaches every row.
       isScrollControlled: true,
-      backgroundColor: NocturneColors.surface,
+      backgroundColor: context.nocturne.surface,
       shape: RoundedRectangleBorder(borderRadius: style.sheetBorderRadius),
       builder: (sheetContext) => SafeArea(
         child: SingleChildScrollView(
@@ -754,7 +754,7 @@ class _WalletTabState extends State<_WalletTab> {
                     _networkLabel(AppLocalizations.of(sheetContext), network),
                   ),
                   trailing: network == widget.chainData.selectedNetwork
-                      ? const Icon(Icons.check, color: NocturneColors.accent)
+                      ? Icon(Icons.check, color: context.nocturne.accent)
                       : null,
                   onTap: () {
                     Navigator.of(sheetContext).pop();
@@ -778,7 +778,7 @@ class _WalletTabState extends State<_WalletTab> {
       // scrollable, so a short window (a phone or a closed iPhone Duo on its
       // side) still reaches «Закрыть».
       isScrollControlled: true,
-      backgroundColor: NocturneColors.surface,
+      backgroundColor: context.nocturne.surface,
       shape: RoundedRectangleBorder(borderRadius: style.sheetBorderRadius),
       builder: (sheetContext) {
         final theme = Theme.of(sheetContext);
@@ -844,9 +844,9 @@ class _NetworkChip extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
-            color: NocturneColors.surface,
+            color: context.nocturne.surface,
             borderRadius: const BorderRadius.all(Radius.circular(999)),
-            border: Border.all(color: NocturneColors.neutral800),
+            border: Border.all(color: context.nocturne.neutral800),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -854,8 +854,8 @@ class _NetworkChip extends StatelessWidget {
               Container(
                 width: 7,
                 height: 7,
-                decoration: const BoxDecoration(
-                  color: NocturneColors.accent,
+                decoration: BoxDecoration(
+                  color: context.nocturne.accent,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -868,10 +868,10 @@ class _NetworkChip extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: NocturneSpacing.x2),
-              const Icon(
+              Icon(
                 Icons.keyboard_arrow_down,
                 size: 16,
-                color: NocturneColors.textSubtle,
+                color: context.nocturne.textSubtle,
               ),
             ],
           ),
@@ -898,7 +898,7 @@ class _BalanceHero extends StatelessWidget {
           l10n.walletBalance,
           style: Theme.of(
             context,
-          ).textTheme.bodySmall?.copyWith(color: NocturneColors.textSubtle),
+          ).textTheme.bodySmall?.copyWith(color: context.nocturne.textSubtle),
         ),
         const SizedBox(height: NocturneSpacing.x2),
         Row(
@@ -910,23 +910,23 @@ class _BalanceHero extends StatelessWidget {
                 amount,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: NocturneType.family,
                   fontSize: 40,
                   height: 1.05,
                   letterSpacing: -0.8,
                   fontWeight: NocturneType.medium,
-                  color: NocturneColors.text,
+                  color: context.nocturne.text,
                 ),
               ),
             ),
             const SizedBox(width: NocturneSpacing.x3),
             Text(
               symbol,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: NocturneType.family,
                 fontSize: 17,
-                color: NocturneColors.textSubtle,
+                color: context.nocturne.textSubtle,
               ),
             ),
           ],
@@ -948,7 +948,7 @@ class _BalanceSkeleton extends StatelessWidget {
       height: height,
       margin: const EdgeInsets.only(bottom: NocturneSpacing.x4),
       decoration: BoxDecoration(
-        color: NocturneColors.neutral900,
+        color: context.nocturne.neutral900,
         borderRadius: NocturneRadius.smAll,
       ),
     );
@@ -1018,8 +1018,8 @@ class _QuickAction extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = onTap != null;
     final color = enabled
-        ? NocturneColors.accent
-        : NocturneColors.text.withValues(alpha: 0.45);
+        ? context.nocturne.accent
+        : context.nocturne.text.withValues(alpha: 0.45);
 
     return InkWell(
       onTap: onTap,
@@ -1112,17 +1112,17 @@ class _AssetRow extends StatelessWidget {
               width: 36,
               height: 36,
               alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                color: NocturneColors.neutral900,
+              decoration: BoxDecoration(
+                color: context.nocturne.neutral900,
                 shape: BoxShape.circle,
               ),
               child: Text(
                 short.length <= 3 ? short : short.substring(0, 3),
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: NocturneType.family,
                   fontSize: 12,
                   fontWeight: NocturneType.semibold,
-                  color: NocturneColors.neutral300,
+                  color: context.nocturne.neutral300,
                 ),
               ),
             ),
@@ -1135,7 +1135,7 @@ class _AssetRow extends StatelessWidget {
                   Text(
                     sub,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: NocturneColors.textSubtle,
+                      color: context.nocturne.textSubtle,
                     ),
                   ),
                 ],
@@ -1176,7 +1176,7 @@ class _EmptyWallet extends StatelessWidget {
         Text(
           l10n.walletEmptyBody,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: NocturneColors.textMuted,
+            color: context.nocturne.textMuted,
           ),
         ),
       ],
@@ -1203,7 +1203,7 @@ class _NoDataYet extends StatelessWidget {
         Text(
           l10n.walletNoDataBody,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: NocturneColors.textMuted,
+            color: context.nocturne.textMuted,
           ),
         ),
         const SizedBox(height: NocturneSpacing.x4),
@@ -1245,11 +1245,11 @@ class _PinDots extends StatelessWidget {
             margin: const EdgeInsets.symmetric(horizontal: NocturneSpacing.x2),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: i < length ? NocturneColors.accent : Colors.transparent,
+              color: i < length ? context.nocturne.accent : Colors.transparent,
               border: Border.all(
                 color: i < length
-                    ? NocturneColors.accent
-                    : NocturneColors.outlineFaint,
+                    ? context.nocturne.accent
+                    : context.nocturne.outlineFaint,
               ),
             ),
           ),
@@ -1344,11 +1344,11 @@ class _PinKey extends StatelessWidget {
                 ? const Icon(Icons.backspace_outlined, size: 20)
                 : Text(
                     label,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: NocturneType.family,
                       fontSize: 24,
                       fontWeight: NocturneType.medium,
-                      color: NocturneColors.text,
+                      color: context.nocturne.text,
                     ),
                   ),
           ),

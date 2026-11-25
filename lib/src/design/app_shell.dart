@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:uikit_tab_bar/uikit_tab_bar.dart';
 
 import 'nocturne.dart';
+import 'nocturne_palette.dart';
 import 'platform_style.dart';
 
 /// The four destinations of the redesigned app.
@@ -113,15 +114,16 @@ class AppShell extends StatelessWidget {
       builder: (context, constraints) {
         if (style.isIos && UIKitTabBar.isNativeSupported) {
           return _buildSystemTabBar(
+            context.nocturne,
             body,
             wide: constraints.maxWidth >= sideNavigationMinWidth,
           );
         }
         if (!style.isDesktop &&
             constraints.maxWidth >= sideNavigationMinWidth) {
-          return _buildWide(style, body);
+          return _buildWide(context.nocturne, style, body);
         }
-        return _buildNarrow(style, body);
+        return _buildNarrow(context.nocturne, style, body);
       },
     );
   }
@@ -130,7 +132,11 @@ class AppShell extends StatelessWidget {
   /// Duo a column under the status bar. Its insets reach the content as
   /// `MediaQuery` padding, which the [SafeArea] keeps clear. It never
   /// minimizes on scroll: a pan on a sheet over the content would count too.
-  Widget _buildSystemTabBar(Widget body, {required bool wide}) {
+  Widget _buildSystemTabBar(
+    NocturnePalette palette,
+    Widget body, {
+    required bool wide,
+  }) {
     return UIKitTabScaffold(
       tabBar: UIKitTabBar(
         tabs: <UIKitTab>[
@@ -147,10 +153,10 @@ class AppShell extends StatelessWidget {
         selectedId: currentTab.name,
         onSelected: (id) => onTabSelected(AppTab.values.byName(id)),
         minimizeBehavior: UIKitTabBarMinimizeBehavior.never,
-        style: const UIKitTabBarStyle(tintColor: NocturneColors.accent),
+        style: UIKitTabBarStyle(tintColor: palette.accent),
       ),
       body: Scaffold(
-        backgroundColor: NocturneColors.bg,
+        backgroundColor: palette.bg,
         body: SafeArea(
           top: false,
           child: wide
@@ -170,9 +176,9 @@ class AppShell extends StatelessWidget {
 
   /// Tabs on the leading side, content centred. Every inset is honoured edge by
   /// edge: iPhone Duo puts the status bar and camera on a side, not the top.
-  Widget _buildWide(PlatformStyle style, Widget body) {
+  Widget _buildWide(NocturnePalette palette, PlatformStyle style, Widget body) {
     return Scaffold(
-      backgroundColor: NocturneColors.bg,
+      backgroundColor: palette.bg,
       body: SafeArea(
         top: false,
         child: Row(
@@ -200,9 +206,13 @@ class AppShell extends StatelessWidget {
     );
   }
 
-  Widget _buildNarrow(PlatformStyle style, Widget body) {
+  Widget _buildNarrow(
+    NocturnePalette palette,
+    PlatformStyle style,
+    Widget body,
+  ) {
     return Scaffold(
-      backgroundColor: NocturneColors.bg,
+      backgroundColor: palette.bg,
       body: SafeArea(
         top: false,
         bottom: false,
@@ -246,9 +256,9 @@ class _ShellSideBar extends StatelessWidget {
     return Container(
       width: 88,
       decoration: BoxDecoration(
-        color: style.isIos ? NocturneColors.bg : NocturneColors.surface,
-        border: const BorderDirectional(
-          end: BorderSide(color: NocturneColors.divider, width: 1),
+        color: style.isIos ? context.nocturne.bg : context.nocturne.surface,
+        border: BorderDirectional(
+          end: BorderSide(color: context.nocturne.divider, width: 1),
         ),
       ),
       padding: const EdgeInsets.symmetric(vertical: NocturneSpacing.x4),
@@ -347,10 +357,10 @@ class _ShellTabBar extends StatelessWidget {
         // iOS: a translucent bar over the content with a hairline rule.
         // Android: an opaque surface, per Material's navigation bar.
         color: style.isIos
-            ? NocturneColors.bg.withValues(alpha: 0.82)
-            : NocturneColors.surface,
-        border: const Border(
-          top: BorderSide(color: NocturneColors.divider, width: 1),
+            ? context.nocturne.bg.withValues(alpha: 0.82)
+            : context.nocturne.surface,
+        border: Border(
+          top: BorderSide(color: context.nocturne.divider, width: 1),
         ),
       ),
       padding: EdgeInsets.only(
@@ -402,7 +412,7 @@ class _ShellTabButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final foreground = selected
         ? style.activeTabColor
-        : NocturneColors.textSubtle;
+        : context.nocturne.textSubtle;
     final pill = selected ? style.activeTabPill : null;
 
     return Semantics(

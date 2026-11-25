@@ -167,8 +167,6 @@ class _MobileWalletDemoAppState extends State<MobileWalletDemoApp> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = buildNocturneTheme();
-
     return AppLocaleScope(
       locale: widget._locale ?? _selectedLocale,
       onLocaleChanged: (locale) => unawaited(_handleLocaleChanged(locale)),
@@ -176,12 +174,12 @@ class _MobileWalletDemoAppState extends State<MobileWalletDemoApp> {
         onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
         debugShowCheckedModeBanner: false,
         navigatorKey: _appNavigatorKey,
-        // Nocturne is a dark-only system, so both slots carry the same theme
-        // and the mode is pinned — the OS light/dark setting must not change
-        // the app.
-        theme: theme,
-        darkTheme: theme,
-        themeMode: ThemeMode.dark,
+        // Follows the system's light or dark setting. The light palette is
+        // derived from Nocturne's dark one (owner decision, JOURNAL
+        // 2026-11-25).
+        theme: buildNocturneTheme(brightness: Brightness.light),
+        darkTheme: buildNocturneTheme(brightness: Brightness.dark),
+        themeMode: ThemeMode.system,
         // A test pin wins, then the user's choice in Настройки; null hands the
         // decision to the system locale and the resolution callback below.
         locale: widget._locale ?? _selectedLocale,

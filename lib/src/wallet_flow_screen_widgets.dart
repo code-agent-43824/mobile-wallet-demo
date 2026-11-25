@@ -140,7 +140,7 @@ class _CardsUnsupportedNote extends StatelessWidget {
       AppLocalizations.of(context).cardsUnsupportedOnDevice,
       textAlign: TextAlign.center,
       style: theme.textTheme.bodySmall?.copyWith(
-        color: NocturneColors.textMuted,
+        color: context.nocturne.textMuted,
       ),
     );
   }
@@ -280,10 +280,10 @@ class _CardTapPulseState extends State<_CardTapPulse>
               // Two rings a half-cycle apart, so one is always expanding.
               for (final phase in const <double>[0, 0.5])
                 _PulseRing(progress: (_controller.value + phase) % 1),
-              const Icon(
+              Icon(
                 Icons.contactless_outlined,
                 size: 44,
-                color: NocturneColors.accent,
+                color: context.nocturne.accent,
               ),
             ],
           );
@@ -309,7 +309,7 @@ class _PulseRing extends StatelessWidget {
         height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: NocturneColors.accent),
+          border: Border.all(color: context.nocturne.accent),
         ),
       ),
     );
