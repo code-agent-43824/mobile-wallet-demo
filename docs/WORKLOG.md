@@ -18,6 +18,11 @@ Entry template:
 
 ---
 
+## 2026-11-25 — Flutter 3.50.1: устаревший `material.dart` — branch main — done
+- Plan: Flutter stable сменился с 3.47.9 на 3.50.1 (18.11). Под ним `flutter analyze` находит 15 замечаний и завершается с ошибкой — в CI это красный Validate: `package:flutter/material.dart` помечен устаревшим (замена — пакеты flutter.dev `material_ui` / `cupertino_ui`), а сгенерированный `app_localizations.dart` использует устаревшие `GlobalMaterialLocalizations` / `GlobalCupertinoLocalizations`. Переход на новые пакеты — новая зависимость и вопрос совместимости с плагинами, поэтому — решение владельца (пункт в `PLAN.md`). Сейчас: `// ignore: deprecated_member_use` у каждого импорта `material.dart` и исключение сгенерированных локализаций из анализа.
+- Done: `76baf1b` — `pubspec.lock` переразрешён под 3.50.1 (`test_api` 0.7.14, транзитивный `listen` 1.0.1). Импорты в 12 файлах и `analysis_options.yaml`; analyze чист, весь `flutter test` (304 теста) зелёный на 3.50.1.
+- Заметка: после пересоздания контейнера рабочей веткой оказалась `claude/friendly-hawking-hpbpbv`; коммиты `10df12d`, `d8ddb4c`, `9126042`, `76baf1b` легли в неё, а `git push origin main` отправлял неизменённую `main`. Коммиты перенесены на `main` перемоткой, локальная ветка удалена; на GitHub она не попадала.
+
 ## 2026-11-25 — Вёрстка для iPhone Duo и iOS 27 — branch main — in progress
 - Plan: владелец поручил обновить вёрстку под последние iOS и iPhone Duo. Исследование (Apple «Preparing your app for iPhone Duo», LeanCode, Somnio, flutter/flutter#192515, образы GitHub runner-images) — в `JOURNAL.md`. Выводы для нас: (1) iOS собирается на `macos-latest` с Xcode 26.6 — на Duo это режим совместимости (окно телефона с полями); нужен Xcode 27.1, он есть на превью-раннере `xcode-27` вместе с симулятором «iPhone Duo»; (2) оболочка растягивает телефонную раскладку и нижнюю панель на всю ширину — на раскрытом Duo (951×669 pt) это ~870 pt; (3) Flutter на iOS не сообщает о сгибе (`displayFeatures` пуст), раскладку строить по ширине окна, отступы — по каждому краю. Шаги: CI iOS на `xcode-27` и смоук на симуляторе Duo; адаптивная оболочка (боковые вкладки от 600 pt, колонка до 640 pt); тесты раскладки на размерах Duo. Настольные сборки не меняются. Версию не поднимать до решения владельца.
 - Next / open: CI → оболочка → тесты → проверка владельцем.

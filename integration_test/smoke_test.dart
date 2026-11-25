@@ -1,5 +1,8 @@
 // Release smoke scenario with real platform storage and network. The create
 // and verify phases run in separate app processes on an isolated CI runner.
+// Flutter 3.50 deprecates the library in favour of package:material_ui;
+// see docs/PLAN.md for the migration.
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';

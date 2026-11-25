@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+// Flutter 3.50 deprecates the library in favour of package:material_ui;
+// see docs/PLAN.md for the migration.
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemChannels;
 import 'package:flutter_test/flutter_test.dart';
