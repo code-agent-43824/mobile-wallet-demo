@@ -34,6 +34,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-xcode27-cocoapods-
 
+      # iPhone Duo needs the iOS 27.1 SDK; the log shows which Xcode built it.
+      - name: Xcode version
+        run: xcodebuild -version
+
       - name: Build iOS simulator app
         run: flutter build ios --simulator --debug --dart-define-from-file=dart_defines.json
 
@@ -81,6 +85,9 @@ jobs:
           else
             echo "No iOS signing secrets configured -> building an UNSIGNED device app (technical artifact)."
           fi
+
+      - name: Xcode version
+        run: xcodebuild -version
 
       - name: Build iOS device app (unsigned)
         run: flutter build ios --release --no-codesign --dart-define-from-file=dart_defines.json
