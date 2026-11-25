@@ -277,7 +277,7 @@ class _SettingsTab extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: style.sheetBorderRadius),
       isScrollControlled: true,
       builder: (sheetContext) => SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: EdgeInsets.only(
             left: NocturneSpacing.x6,
             right: NocturneSpacing.x6,
@@ -312,31 +312,36 @@ class _SettingsTab extends StatelessWidget {
     final style = PlatformStyle.of(context);
     showModalBottomSheet<void>(
       context: context,
+      // Sized by its content and scrollable, so large Dynamic Type or a short
+      // window still reaches every row.
+      isScrollControlled: true,
       backgroundColor: NocturneColors.surface,
       shape: RoundedRectangleBorder(borderRadius: style.sheetBorderRadius),
       builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: NocturneSpacing.x6),
-            for (final option in <({Locale? locale, String label})>[
-              (locale: null, label: l10n.settingsLanguageSystem),
-              for (final locale in selectableLocales)
-                (locale: locale, label: _languageName(locale)),
-            ])
-              ListTile(
-                title: Text(option.label),
-                trailing:
-                    option.locale?.languageCode == scope.locale?.languageCode
-                    ? const Icon(Icons.check, color: NocturneColors.accent)
-                    : null,
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  scope.onLocaleChanged(option.locale);
-                },
-              ),
-            const SizedBox(height: NocturneSpacing.x4),
-          ],
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: NocturneSpacing.x6),
+              for (final option in <({Locale? locale, String label})>[
+                (locale: null, label: l10n.settingsLanguageSystem),
+                for (final locale in selectableLocales)
+                  (locale: locale, label: _languageName(locale)),
+              ])
+                ListTile(
+                  title: Text(option.label),
+                  trailing:
+                      option.locale?.languageCode == scope.locale?.languageCode
+                      ? const Icon(Icons.check, color: NocturneColors.accent)
+                      : null,
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    scope.onLocaleChanged(option.locale);
+                  },
+                ),
+              const SizedBox(height: NocturneSpacing.x4),
+            ],
+          ),
         ),
       ),
     );
@@ -732,28 +737,33 @@ class _WalletTabState extends State<_WalletTab> {
     final style = PlatformStyle.of(context);
     showModalBottomSheet<void>(
       context: context,
+      // Sized by its content and scrollable, so large Dynamic Type or a short
+      // window still reaches every row.
+      isScrollControlled: true,
       backgroundColor: NocturneColors.surface,
       shape: RoundedRectangleBorder(borderRadius: style.sheetBorderRadius),
       builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: NocturneSpacing.x6),
-            for (final network in EvmNetwork.values)
-              ListTile(
-                title: Text(
-                  _networkLabel(AppLocalizations.of(sheetContext), network),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: NocturneSpacing.x6),
+              for (final network in EvmNetwork.values)
+                ListTile(
+                  title: Text(
+                    _networkLabel(AppLocalizations.of(sheetContext), network),
+                  ),
+                  trailing: network == widget.chainData.selectedNetwork
+                      ? const Icon(Icons.check, color: NocturneColors.accent)
+                      : null,
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    widget.chainData.selectNetwork(network);
+                  },
                 ),
-                trailing: network == widget.chainData.selectedNetwork
-                    ? const Icon(Icons.check, color: NocturneColors.accent)
-                    : null,
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  widget.chainData.selectNetwork(network);
-                },
-              ),
-            const SizedBox(height: NocturneSpacing.x4),
-          ],
+              const SizedBox(height: NocturneSpacing.x4),
+            ],
+          ),
         ),
       ),
     );
@@ -850,7 +860,13 @@ class _NetworkChip extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: NocturneSpacing.x3),
-              Text(label, style: Theme.of(context).textTheme.bodySmall),
+              // Wraps rather than overflows at large Dynamic Type.
+              Flexible(
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
               const SizedBox(width: NocturneSpacing.x2),
               const Icon(
                 Icons.keyboard_arrow_down,

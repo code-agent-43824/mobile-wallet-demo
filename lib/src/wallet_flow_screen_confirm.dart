@@ -87,8 +87,10 @@ class _ConfirmationSheetState extends State<_ConfirmationSheet> {
       // Leaving mid-signature would orphan the operation's progress, so the
       // back gesture waits for the result like the buttons do.
       canPop: _step != _ConfirmStep.working,
+      // Scrolls when the content outgrows the window: large Dynamic Type, or a
+      // short window on its side.
       child: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: EdgeInsets.only(
             left: NocturneSpacing.gutter,
             right: NocturneSpacing.gutter,

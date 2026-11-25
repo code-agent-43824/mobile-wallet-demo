@@ -8,6 +8,7 @@
 // see docs/PLAN.md for the migration.
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/app.dart';
 import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
@@ -114,52 +115,75 @@ void main() {
   setUp(() => PhoneSecureVault.debugIterationsOverride = 2);
   tearDown(() => PhoneSecureVault.debugIterationsOverride = null);
 
-  for (final pose in _duoPoses) {
-    testWidgets('iPhone Duo ${pose.name}: every screen fits', (tester) async {
-      _setPose(tester, pose);
-      await tester.pumpWidget(
-        MobileWalletDemoApp(
-          locale: const Locale('ru'),
-          store: InMemorySecureKeyValueStore(),
-          blockchainProvider: _FakeBlockchainProvider(),
-          walletConnectService: FakeWalletConnectService(),
-          qrScanner: FakeQrScanner(),
-        ),
+  // 1.0 is the default text size; 2.0 is between iOS's AX2 and AX3 Dynamic
+  // Type sizes, where every screen must still fit (scrolling where needed).
+  for (final textScale in <double>[1, 2]) {
+    for (final pose in _duoPoses) {
+      testWidgets(
+        'iPhone Duo ${pose.name}, text ×$textScale: every screen fits',
+        (tester) async {
+          _setPose(tester, pose);
+          tester.platformDispatcher.textScaleFactorTestValue = textScale;
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+          await tester.pumpWidget(
+            MobileWalletDemoApp(
+              locale: const Locale('ru'),
+              store: InMemorySecureKeyValueStore(),
+              blockchainProvider: _FakeBlockchainProvider(),
+              walletConnectService: FakeWalletConnectService(),
+              qrScanner: FakeQrScanner(),
+            ),
+          );
+          await tester.pumpAndSettle();
+          await _createWallet(tester);
+
+          // No tab label is cut short, at any text size.
+          for (final label in <String>[
+            'Кошелёк',
+            'Активность',
+            'Связи',
+            'Настройки',
+          ]) {
+            final paragraph = tester.renderObject<RenderParagraph>(
+              find.text(label).last,
+            );
+            expect(paragraph.didExceedMaxLines, isFalse, reason: label);
+          }
+
+          // The tabs sit on the side of a wide window and along the bottom of a
+          // narrow one.
+          final tab = tester.getCenter(find.text('Связи'));
+          if (pose.isWide) {
+            expect(tab.dx, lessThan(pose.padding.left + 120));
+          } else {
+            expect(tab.dy, greaterThan(pose.size.height - 120));
+          }
+
+          for (final name in <String>['Активность', 'Связи', 'Настройки']) {
+            await tester.tap(find.text(name).last);
+            await tester.pumpAndSettle();
+          }
+
+          // The PIN sheet a private-key operation opens.
+          await tester.tap(find.text('Связи').last);
+          await tester.pumpAndSettle();
+          await _tapShown(tester, find.text('Показать QR аккаунта'));
+          expect(find.text('Отмена'), findsWidgets);
+          await _tapShown(tester, find.text('Отмена'));
+
+          await tester.tap(find.text('Кошелёк').last);
+          await tester.pumpAndSettle();
+          await _tapShown(tester, find.text('Получить'));
+          await _tapShown(tester, find.text('Закрыть'));
+
+          // The send sheet and the network picker.
+          await _tapShown(tester, find.text('Отправить'));
+          await _tapShown(tester, find.byTooltip('Закрыть'));
+          await _tapShown(tester, find.text('Ethereum Mainnet'));
+          await _tapShown(tester, find.text('Ethereum Mainnet'));
+        },
+        variant: TargetPlatformVariant.only(TargetPlatform.iOS),
       );
-      await tester.pumpAndSettle();
-      await _createWallet(tester);
-
-      // The tabs sit on the side of a wide window and along the bottom of a
-      // narrow one.
-      final tab = tester.getCenter(find.text('Связи'));
-      if (pose.isWide) {
-        expect(tab.dx, lessThan(pose.padding.left + 120));
-      } else {
-        expect(tab.dy, greaterThan(pose.size.height - 120));
-      }
-
-      for (final name in <String>['Активность', 'Связи', 'Настройки']) {
-        await tester.tap(find.text(name).last);
-        await tester.pumpAndSettle();
-      }
-
-      // The PIN sheet a private-key operation opens.
-      await tester.tap(find.text('Связи').last);
-      await tester.pumpAndSettle();
-      await _tapShown(tester, find.text('Показать QR аккаунта'));
-      expect(find.text('Отмена'), findsWidgets);
-      await _tapShown(tester, find.text('Отмена'));
-
-      await tester.tap(find.text('Кошелёк').last);
-      await tester.pumpAndSettle();
-      await _tapShown(tester, find.text('Получить'));
-      await _tapShown(tester, find.text('Закрыть'));
-
-      // The send sheet and the network picker.
-      await _tapShown(tester, find.text('Отправить'));
-      await _tapShown(tester, find.byTooltip('Закрыть'));
-      await _tapShown(tester, find.text('Ethereum Mainnet'));
-      await _tapShown(tester, find.text('Ethereum Mainnet'));
-    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+    }
   }
 }

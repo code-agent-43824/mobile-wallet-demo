@@ -432,16 +432,21 @@ class _ShellTabButton extends StatelessWidget {
                 child: Icon(item.icon, size: 22, color: foreground),
               ),
               const SizedBox(height: 3),
-              Text(
-                item.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontFamily: NocturneType.family,
-                  fontSize: 11,
-                  height: 1.2,
-                  fontWeight: NocturneType.medium,
-                  color: foreground,
+              // Shrinks to fit instead of cutting the word short at large
+              // Dynamic Type; the system tab bar does the same on iOS 26+.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  item.label,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: TextStyle(
+                    fontFamily: NocturneType.family,
+                    fontSize: 11,
+                    height: 1.2,
+                    fontWeight: NocturneType.medium,
+                    color: foreground,
+                  ),
                 ),
               ),
             ],
