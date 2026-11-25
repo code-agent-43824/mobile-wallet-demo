@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.63.0] - 2026-11-25
+
 ### Added
 
 - На iOS 26 и новее панель вкладок — системная (`UITabBarController`, Liquid Glass): на iPhone Duo система
