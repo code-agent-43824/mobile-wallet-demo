@@ -191,49 +191,89 @@ class _PinEntryPanelState extends State<_PinEntryPanel> {
     widget.onPin(pin);
   }
 
+  /// A window lower than this cannot stack the keypad under the prompt — a
+  /// phone or a closed iPhone Duo on its side — so the two go side by side
+  /// when there is the width for it.
+  static const double _sideBySideBelowHeight = 600;
+  static const double _sideBySideMinWidth = 560;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final style = PlatformStyle.of(context);
     final l10n = AppLocalizations.of(context);
+    final prompt = <Widget>[
+      Text(
+        widget.title ?? l10n.authConfirmTitle,
+        style: theme.textTheme.titleLarge,
+        textAlign: TextAlign.center,
+      ),
+      const SizedBox(height: NocturneSpacing.x3),
+      Text(
+        widget.reason,
+        textAlign: TextAlign.center,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: NocturneColors.textMuted,
+        ),
+      ),
+      const SizedBox(height: NocturneSpacing.x8),
+      _PinDots(length: _pin.length),
+      if (widget.biometricsOffered) ...[
+        const SizedBox(height: NocturneSpacing.x3),
+        TextButton.icon(
+          onPressed: widget.onBiometrics,
+          icon: const Icon(Icons.fingerprint, size: 20),
+          label: Text(l10n.unlockWithBiometrics),
+        ),
+      ],
+    ];
+    final keypad = _PinKeypad(
+      style: style,
+      onDigit: _append,
+      onBackspace: _backspace,
+    );
+    final actions = <Widget>[
+      OutlinedButton(
+        onPressed: _pin.isEmpty ? null : _submit,
+        child: Text(widget.confirmLabel ?? l10n.authConfirmAction),
+      ),
+      if (widget.onCancel case final VoidCallback cancel) ...[
+        const SizedBox(height: NocturneSpacing.x3),
+        TextButton(onPressed: cancel, child: Text(l10n.actionCancel)),
+      ],
+    ];
+
+    final window = MediaQuery.sizeOf(context);
+    if (window.height < _sideBySideBelowHeight &&
+        window.width >= _sideBySideMinWidth) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ...prompt,
+                const SizedBox(height: NocturneSpacing.x6),
+                ...actions,
+              ],
+            ),
+          ),
+          const SizedBox(width: NocturneSpacing.x8),
+          Expanded(child: keypad),
+        ],
+      );
+    }
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          widget.title ?? l10n.authConfirmTitle,
-          style: theme.textTheme.titleLarge,
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: NocturneSpacing.x3),
-        Text(
-          widget.reason,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: NocturneColors.textMuted,
-          ),
-        ),
+        ...prompt,
         const SizedBox(height: NocturneSpacing.x8),
-        _PinDots(length: _pin.length),
-        if (widget.biometricsOffered) ...[
-          const SizedBox(height: NocturneSpacing.x3),
-          TextButton.icon(
-            onPressed: widget.onBiometrics,
-            icon: const Icon(Icons.fingerprint, size: 20),
-            label: Text(l10n.unlockWithBiometrics),
-          ),
-        ],
-        const SizedBox(height: NocturneSpacing.x8),
-        _PinKeypad(style: style, onDigit: _append, onBackspace: _backspace),
+        keypad,
         const SizedBox(height: NocturneSpacing.x6),
-        OutlinedButton(
-          onPressed: _pin.isEmpty ? null : _submit,
-          child: Text(widget.confirmLabel ?? l10n.authConfirmAction),
-        ),
-        if (widget.onCancel case final VoidCallback cancel) ...[
-          const SizedBox(height: NocturneSpacing.x3),
-          TextButton(onPressed: cancel, child: Text(l10n.actionCancel)),
-        ],
+        ...actions,
       ],
     );
   }
