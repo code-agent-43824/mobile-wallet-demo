@@ -42,6 +42,14 @@ class AppTabItem {
 ///
 /// Windows reuses the Android pattern set but constrains the content width so
 /// the mobile layout stays legible in a wide window.
+///
+/// On iOS and Android a window at least [sideNavigationMinWidth] wide — an
+/// open iPhone Duo, an iPhone in landscape, an Android tablet or foldable —
+/// gets the tabs as a column on the leading side and the content as a centred
+/// column at most [wideContentMaxWidth] wide, instead of a phone layout
+/// stretched across the screen. The decision follows the window's width only:
+/// on iOS, Flutter reports no fold, and the device's orientation says nothing
+/// about the window's shape (docs/JOURNAL.md, 2026-11-25).
 class AppShell extends StatelessWidget {
   const AppShell({
     super.key,
@@ -71,6 +79,15 @@ class AppShell extends StatelessWidget {
   /// notice and error messages use this slot.
   final Widget? banner;
 
+  /// The narrowest window that gets the side navigation: Material's
+  /// compact/medium boundary. A closed iPhone Duo (466 pt) and an app beside
+  /// another in Split View (469 pt) stay below it; an open one (669 pt and
+  /// wider) is above.
+  static const double sideNavigationMinWidth = 600;
+
+  /// The widest the content column grows next to the side navigation.
+  static const double wideContentMaxWidth = 640;
+
   @override
   Widget build(BuildContext context) {
     final style = PlatformStyle.of(context);
@@ -82,6 +99,50 @@ class AppShell extends StatelessWidget {
       ],
     );
 
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (!style.isDesktop &&
+            constraints.maxWidth >= sideNavigationMinWidth) {
+          return _buildWide(style, body);
+        }
+        return _buildNarrow(style, body);
+      },
+    );
+  }
+
+  /// Tabs on the leading side, content centred. Every inset is honoured edge by
+  /// edge: iPhone Duo puts the status bar and camera on a side, not the top.
+  Widget _buildWide(PlatformStyle style, Widget body) {
+    return Scaffold(
+      backgroundColor: NocturneColors.bg,
+      body: SafeArea(
+        top: false,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _ShellSideBar(
+              tabs: tabs,
+              currentTab: currentTab,
+              onTabSelected: onTabSelected,
+              style: style,
+            ),
+            Expanded(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: wideContentMaxWidth,
+                  ),
+                  child: body,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNarrow(PlatformStyle style, Widget body) {
     return Scaffold(
       backgroundColor: NocturneColors.bg,
       body: SafeArea(
@@ -101,6 +162,55 @@ class AppShell extends StatelessWidget {
         currentTab: currentTab,
         onTabSelected: onTabSelected,
         style: style,
+      ),
+    );
+  }
+}
+
+/// The tabs as a column on the leading side of a wide window, with the same
+/// buttons as the bottom bar: the iOS set over the background, the Android set
+/// on the surface with the active pill.
+class _ShellSideBar extends StatelessWidget {
+  const _ShellSideBar({
+    required this.tabs,
+    required this.currentTab,
+    required this.onTabSelected,
+    required this.style,
+  });
+
+  final List<AppTabItem> tabs;
+  final AppTab currentTab;
+  final ValueChanged<AppTab> onTabSelected;
+  final PlatformStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 88,
+      decoration: BoxDecoration(
+        color: style.isIos ? NocturneColors.bg : NocturneColors.surface,
+        border: const BorderDirectional(
+          end: BorderSide(color: NocturneColors.divider, width: 1),
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: NocturneSpacing.x4),
+      child: SingleChildScrollView(
+        child: Column(
+          children: [
+            for (final item in tabs)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: NocturneSpacing.x2,
+                ),
+                child: _ShellTabButton(
+                  item: item,
+                  selected: item.tab == currentTab,
+                  onTap: () => onTabSelected(item.tab),
+                  style: style,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

@@ -18,11 +18,17 @@ class VersionBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final topInset = MediaQuery.viewPaddingOf(context).top;
+    // iPhone Duo can put the status bar and camera on a side instead of the
+    // top, so the label keeps clear of every edge's inset.
+    final insets = MediaQuery.viewPaddingOf(context);
     return Material(
       color: NocturneColors.neutral900,
       child: Padding(
-        padding: EdgeInsets.only(top: topInset),
+        padding: EdgeInsets.only(
+          top: insets.top,
+          left: insets.left,
+          right: insets.right,
+        ),
         child: SizedBox(
           width: double.infinity,
           height: 18,
