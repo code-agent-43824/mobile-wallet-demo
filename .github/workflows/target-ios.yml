@@ -1,8 +1,12 @@
 name: target · iOS
 
 # Called by ci.yml. Builds the simulator app and the unsigned device app; on a
-# smoke run, launches the simulator app and runs the in-app scenario on a
-# simulator. The unsigned device app has nothing to run on.
+# smoke run, launches the simulator app and runs the in-app scenario on the
+# iPhone Duo simulator. The unsigned device app has nothing to run on.
+#
+# Every job runs on the xcode-27 preview image (Xcode 27.1 by default): an app
+# built with an older SDK runs on iPhone Duo as a phone-sized window with empty
+# space around it (docs/JOURNAL.md, 2026-11-25). macos-latest has Xcode 26.
 on:
   workflow_call:
     inputs:
@@ -16,7 +20,7 @@ on:
 jobs:
   build_simulator:
     name: Build simulator app
-    runs-on: macos-latest
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: ./.github/actions/setup-flutter
@@ -26,9 +30,9 @@ jobs:
           path: |
             ~/Library/Caches/CocoaPods
             ios/Pods
-          key: ${{ runner.os }}-cocoapods-${{ hashFiles('ios/Podfile.lock') }}
+          key: ${{ runner.os }}-xcode27-cocoapods-${{ hashFiles('ios/Podfile.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cocoapods-
+            ${{ runner.os }}-xcode27-cocoapods-
 
       - name: Build iOS simulator app
         run: flutter build ios --simulator --debug --dart-define-from-file=dart_defines.json
@@ -50,7 +54,7 @@ jobs:
 
   build_device:
     name: Build device app (unsigned)
-    runs-on: macos-latest
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: ./.github/actions/setup-flutter
@@ -60,9 +64,9 @@ jobs:
           path: |
             ~/Library/Caches/CocoaPods
             ios/Pods
-          key: ${{ runner.os }}-cocoapods-${{ hashFiles('ios/Podfile.lock') }}
+          key: ${{ runner.os }}-xcode27-cocoapods-${{ hashFiles('ios/Podfile.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cocoapods-
+            ${{ runner.os }}-xcode27-cocoapods-
 
       - name: Report code-signing status
         env:
@@ -98,7 +102,7 @@ jobs:
     name: Smoke simulator
     needs: build_simulator
     if: inputs.smoke
-    runs-on: macos-latest
+    runs-on: xcode-27
     timeout-minutes: 60
     outputs:
       result: ${{ steps.result.outputs.result }}

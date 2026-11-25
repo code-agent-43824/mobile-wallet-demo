@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# iOS smoke on a fresh simulator: boots the newest available iPhone, checks
-# that the built simulator app launches and stays alive, then runs the in-app
-# scenario from a clean install.
+# iOS smoke on a fresh simulator: boots iPhone Duo on the newest runtime that
+# has it (else the newest available iPhone), checks that the built simulator
+# app launches and stays alive, then runs the in-app scenario from a clean
+# install.
 #
 #   bash scripts/smoke/ios_simulator_smoke.sh <path/to/App.app> [simulator-udid]
 set -euo pipefail
@@ -13,16 +14,26 @@ else
   udid="$(xcrun simctl list devices available -j | python3 -c '
 import json, sys
 devices = json.load(sys.stdin)["devices"]
-for runtime in sorted(devices, reverse=True):
-    if "iOS" not in runtime:
-        continue
-    for device in devices[runtime]:
-        if device["name"].startswith("iPhone"):
-            print(device["udid"])
-            sys.exit(0)
+runtimes = [r for r in sorted(devices, reverse=True) if "iOS" in r]
+for wanted in (lambda name: name == "iPhone Duo",
+               lambda name: name.startswith("iPhone")):
+    for runtime in runtimes:
+        for device in devices[runtime]:
+            if wanted(device["name"]):
+                print(device["udid"])
+                sys.exit(0)
 sys.exit("no available iPhone simulator")
 ')"
 fi
+echo "== Simulator: $(xcrun simctl list devices -j | python3 -c '
+import json, sys
+udid = sys.argv[1]
+for runtime, devices in json.load(sys.stdin)["devices"].items():
+    for device in devices:
+        if device["udid"] == udid:
+            print(device["name"], "/", runtime.rsplit(".", 1)[-1])
+' "$udid") =="
+
 echo "== Booting simulator $udid =="
 xcrun simctl boot "$udid" 2>/dev/null || true
 xcrun simctl bootstatus "$udid" -b
