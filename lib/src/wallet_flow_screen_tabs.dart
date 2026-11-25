@@ -764,6 +764,10 @@ class _WalletTabState extends State<_WalletTab> {
     final style = PlatformStyle.of(context);
     showModalBottomSheet<void>(
       context: context,
+      // Sized by its content rather than capped at 9/16 of the window, and
+      // scrollable, so a short window (a phone or a closed iPhone Duo on its
+      // side) still reaches «Закрыть».
+      isScrollControlled: true,
       backgroundColor: NocturneColors.surface,
       shape: RoundedRectangleBorder(borderRadius: style.sheetBorderRadius),
       builder: (sheetContext) {
@@ -772,7 +776,7 @@ class _WalletTabState extends State<_WalletTab> {
         // itself says the address was copied.
         var copied = false;
         return SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(NocturneSpacing.gutter),
             child: Column(
               mainAxisSize: MainAxisSize.min,
