@@ -32,15 +32,16 @@ final String _airGapSinglePart = const Eip4527Codec()
     )
     .toUpperCase();
 
-/// Draws a QR code of [text] into [image] (8 px modules, 4-module quiet zone)
-/// and returns it as PNG bytes, the way an image tool would save it.
+/// Draws a QR code of [text] into [image] ([scale] px modules, 4-module quiet
+/// zone) and returns it as PNG bytes, the way an image tool would save it.
 Uint8List _qrPng(
   String text,
   img.Image Function(int size) blank,
-  img.Color Function(img.Image image, bool dark) colour,
-) {
-  final matrix = Encoder.encode(text, ErrorCorrectionLevel.m).matrix!;
-  const scale = 8;
+  img.Color Function(img.Image image, bool dark) colour, {
+  ErrorCorrectionLevel? level,
+  int scale = 8,
+}) {
+  final matrix = Encoder.encode(text, level ?? ErrorCorrectionLevel.m).matrix!;
   const quiet = 4;
   final size = (matrix.width + quiet * 2) * scale;
   final image = blank(size);
@@ -186,6 +187,84 @@ void main() {
     test('returns null when the picker is cancelled', () async {
       expect(await scanner(const <Uint8List>[]).loadUrFromFiles(), isNull);
     });
+  });
+
+  group('a long wc: URI as a high-version QR (Windows v1.62.0 finding)', () {
+    // 213 characters at error correction H is version 15. At 10 px per module
+    // zxing2 misjudges the module size and finds no code; zbar reads it.
+    const uri =
+        'wc:7f6e504bfad60b485450578e05678ed3e8e8c4751d3c6160be17160d63ec90f9@2'
+        '?relay-protocol=irn'
+        '&symKey=587d5484ce2a2a6ee3ba1962fdd7e8588e06200c46823bd18fbd67def96ad303'
+        '&expiryTimestamp=1732612345&methods=wc_sessionPropose';
+    img.Image white(int size) =>
+        img.Image(width: size, height: size)
+          ..clear(img.ColorRgb8(255, 255, 255));
+    img.Color ink(img.Image image, bool dark) =>
+        dark ? img.ColorRgb8(0, 0, 0) : img.ColorRgb8(255, 255, 255);
+    final png = _qrPng(
+      uri,
+      white,
+      ink,
+      level: ErrorCorrectionLevel.h,
+      scale: 10,
+    );
+
+    test('saved as an image of its own', () {
+      expect(
+        Encoder.encode(uri, ErrorCorrectionLevel.h).version!.versionNumber,
+        15,
+      );
+      expect(const ZxingQrImageDecoder().decode(png), uri);
+    });
+
+    test('in a screenshot, beside other dark shapes', () {
+      final code = img.decodePng(png)!;
+      final screen = img.Image(width: 1400, height: 1100)
+        ..clear(img.ColorRgb8(255, 255, 255));
+      img.fillRect(
+        screen,
+        x1: 40,
+        y1: 40,
+        x2: 1360,
+        y2: 110,
+        color: img.ColorRgb8(30, 30, 40),
+      );
+      img.fillRect(
+        screen,
+        x1: 1000,
+        y1: 300,
+        x2: 1300,
+        y2: 900,
+        color: img.ColorRgb8(90, 80, 160),
+      );
+      img.compositeImage(screen, code, dstX: 80, dstY: 180);
+      expect(const ZxingQrImageDecoder().decode(img.encodePng(screen)), uri);
+    });
+
+    test('through FileQrScanner, decoded off the UI isolate', () async {
+      final scanner = FileQrScanner(pickImageBytes: () async => png);
+      expect(await scanner.loadFromFile(), uri);
+    });
+  });
+
+  test('ZxingQrImageDecoder: a text file is no QR, and no failure', () {
+    // The Windows tester picked a text file once and the app closed; it did
+    // not happen again. The decoder must turn such a file into "no QR".
+    final text = Uint8List.fromList(
+      'wc:7f6e504b@2?relay-protocol=irn&symKey=587d5484\n'.codeUnits,
+    );
+    expect(const ZxingQrImageDecoder().decode(text), isNull);
+  });
+
+  test('ZxingQrImageDecoder refuses a header claiming a huge image', () {
+    // A real 1 × 1 PNG whose header says 20000 × 20000: refused from the
+    // header, before anything that size is allocated.
+    final png = img.encodePng(img.Image(width: 1, height: 1));
+    final header = ByteData.sublistView(png);
+    header.setUint32(16, 20000);
+    header.setUint32(20, 20000);
+    expect(const ZxingQrImageDecoder().decode(png), isNull);
   });
 
   test('ZxingQrImageDecoder returns null on a non-image input', () {

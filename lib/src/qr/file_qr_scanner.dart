@@ -1,3 +1,4 @@
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
@@ -19,37 +20,99 @@ abstract interface class QrImageDecoder {
 class ZxingQrImageDecoder implements QrImageDecoder {
   const ZxingQrImageDecoder();
 
+  /// Images with more pixels are refused from their header, before any
+  /// decoding: a 7000 × 7000 photo is far beyond what a QR needs, and a header
+  /// that claims more could be crafted to exhaust memory.
+  static const int maxPixels = 50 * 1000 * 1000;
+
+  /// The smallest side worth reading after scaling down; below it the modules
+  /// of a large QR blur together.
+  static const int _minScaledSide = 80;
+
   @override
   String? decode(Uint8List imageBytes) {
+    final img.Image? image;
     try {
-      final image = img.decodeImage(imageBytes);
-      if (image == null) {
+      final decoder = img.findDecoderForData(imageBytes);
+      final info = decoder?.startDecode(imageBytes);
+      if (decoder == null ||
+          info == null ||
+          info.width * info.height > maxPixels) {
         return null;
       }
-
-      // Channels are read normalized: a 1-bit PNG keeps its pixels in 0..1
-      // and a 16-bit one in 0..65535, and a grey image has no green or blue.
-      // Transparency is laid over white, the paper a QR code is printed on.
-      final pixels = Int32List(image.width * image.height);
-      var i = 0;
-      for (var y = 0; y < image.height; y++) {
-        for (var x = 0; x < image.width; x++) {
-          final p = image.getPixel(x, y);
-          final alpha = p.aNormalized;
-          final grey = (255 * (p.luminanceNormalized * alpha + 1 - alpha))
-              .round();
-          pixels[i++] = (grey << 16) | (grey << 8) | grey;
-        }
-      }
-
-      final source = RGBLuminanceSource(image.width, image.height, pixels);
-      final bitmap = BinaryBitmap(HybridBinarizer(source));
-      return QRCodeReader().decode(bitmap).text;
+      image = decoder.decode(imageBytes);
     } catch (_) {
-      // `decodeImage` can throw on a non-image/truncated file, and zxing2 throws
-      // NotFound/Format/Checksum when there's no readable QR — all "no QR".
+      // A non-image or truncated file: no QR.
       return null;
     }
+    if (image == null) {
+      return null;
+    }
+    // zxing2 misjudges the module size of a large, high-version QR (a 200+
+    // character wc: URI at 10 px per module is version 15) and reports no
+    // code; zbar reads the same file. So after the plain read come two more:
+    // the image as a lone code on its page, which reads the grid without
+    // looking for finder patterns (a QR saved as an image), and smaller copies
+    // of it, at which the detector's estimate comes out right (a screenshot
+    // with the code among other things).
+    final luminance = _luminance(image);
+    return _read(luminance) ??
+        _read(luminance, pureBarcode: true) ??
+        _readScaledDown(image);
+  }
+
+  String? _readScaledDown(img.Image image) {
+    for (var divisor = 2; divisor <= 10; divisor++) {
+      final width = image.width ~/ divisor;
+      final height = image.height ~/ divisor;
+      if (width < _minScaledSide || height < _minScaledSide) {
+        return null;
+      }
+      final smaller = img.copyResize(
+        image,
+        width: width,
+        height: height,
+        interpolation: img.Interpolation.average,
+      );
+      final text = _read(_luminance(smaller));
+      if (text != null) {
+        return text;
+      }
+    }
+    return null;
+  }
+
+  static String? _read(LuminanceSource source, {bool pureBarcode = false}) {
+    try {
+      final hints = DecodeHints();
+      if (pureBarcode) {
+        hints.put(DecodeHintType.pureBarcode);
+      }
+      return QRCodeReader()
+          .decode(BinaryBitmap(HybridBinarizer(source)), hints: hints)
+          .text;
+    } catch (_) {
+      // NotFound/Format/Checksum: no readable QR this way.
+      return null;
+    }
+  }
+
+  /// Channels are read normalized: a 1-bit PNG keeps its pixels in 0..1 and a
+  /// 16-bit one in 0..65535, and a grey image has no green or blue.
+  /// Transparency is laid over white, the paper a QR code is printed on.
+  static LuminanceSource _luminance(img.Image image) {
+    final pixels = Int32List(image.width * image.height);
+    var i = 0;
+    for (var y = 0; y < image.height; y++) {
+      for (var x = 0; x < image.width; x++) {
+        final p = image.getPixel(x, y);
+        final alpha = p.aNormalized;
+        final grey = (255 * (p.luminanceNormalized * alpha + 1 - alpha))
+            .round();
+        pixels[i++] = (grey << 16) | (grey << 8) | grey;
+      }
+    }
+    return RGBLuminanceSource(image.width, image.height, pixels);
   }
 }
 
@@ -91,13 +154,22 @@ class FileQrScanner implements QrScanner {
     throw const QrScannerException.coded(AppErrorCode.qrCameraUnavailable);
   }
 
+  /// The production decoder runs on a background isolate: a large picture
+  /// takes long enough to read that the window would stop responding.
+  Future<String?> _decode(Uint8List bytes) {
+    if (_decoder is ZxingQrImageDecoder) {
+      return Isolate.run(() => const ZxingQrImageDecoder().decode(bytes));
+    }
+    return Future<String?>.value(_decoder.decode(bytes));
+  }
+
   @override
   Future<String?> loadFromFile() async {
     final bytes = await _pickImageBytes();
     if (bytes == null) {
       return null; // user cancelled the picker
     }
-    final text = _decoder.decode(bytes);
+    final text = await _decode(bytes);
     if (text == null) {
       throw const QrScannerException.coded(AppErrorCode.qrImageNotRecognized);
     }
@@ -115,7 +187,7 @@ class FileQrScanner implements QrScanner {
     final assembler = UrQrAssembler(expectedType: expectedType);
     var withQr = 0;
     for (final bytes in images) {
-      final text = _decoder.decode(bytes);
+      final text = await _decode(bytes);
       if (text == null) {
         continue;
       }
