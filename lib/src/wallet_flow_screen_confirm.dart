@@ -89,7 +89,7 @@ class _ConfirmationSheetState extends State<_ConfirmationSheet> {
       canPop: _step != _ConfirmStep.working,
       // Scrolls when the content outgrows the window: large Dynamic Type, or a
       // short window on its side.
-      child: SafeArea(
+      child: _SheetSafeArea(
         child: SingleChildScrollView(
           padding: EdgeInsets.only(
             left: NocturneSpacing.gutter,
@@ -156,7 +156,20 @@ class _PinEntryPanel extends StatefulWidget {
     this.leading,
     this.sideBySide,
     this.keyHeight = _PinKeypad.defaultKeyHeight,
+    this.splitAtY,
   });
+
+  /// Free of keys around the window's middle, where a foldable bends. Flutter
+  /// on iOS reports no fold (`displayFeatures` is empty on iPhone Duo), so the
+  /// panel keeps the band around the window's centre lines clear instead: two
+  /// columns sit either side of the vertical one, and on the lock screen of a
+  /// tall window the keypad starts below the horizontal one (owner, iPhone Duo,
+  /// 2026-11-26: keys landed on the fold).
+  static const double middleGap = 64;
+
+  /// Each column's least width when they part around the middle; a narrower
+  /// panel keeps its two columns together (a closed iPhone Duo on its side).
+  static const double _minHalfWidth = 260;
 
   final String reason;
   final bool biometricsOffered;
@@ -179,6 +192,12 @@ class _PinEntryPanel extends StatefulWidget {
   final bool? sideBySide;
 
   final double keyHeight;
+
+  /// Where, from the panel's top, the window's middle falls: the prompt ends
+  /// above it and the keypad starts below, [middleGap] apart. Only the lock
+  /// screen sets it — a sheet grows from the bottom, so its middle would move
+  /// with its own height.
+  final double? splitAtY;
 
   @override
   State<_PinEntryPanel> createState() => _PinEntryPanelState();
@@ -268,16 +287,20 @@ class _PinEntryPanelState extends State<_PinEntryPanel> {
     ];
 
     final window = MediaQuery.sizeOf(context);
-    final sideBySide =
-        widget.sideBySide ??
-        (window.height < _sideBySideBelowHeight &&
-            window.width >= _sideBySideMinWidth);
-    if (sideBySide) {
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Column(
+    return _WindowMiddle(
+      builder: (context, middle) => LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          const gap = _PinEntryPanel.middleGap;
+          const minHalf = _PinEntryPanel._minHalfWidth;
+          final parts = width >= 2 * minHalf + gap;
+          final sideBySide =
+              widget.sideBySide ??
+              (parts ||
+                  (window.height < _sideBySideBelowHeight &&
+                      window.width >= _sideBySideMinWidth));
+          if (sideBySide) {
+            final promptColumn = Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -285,36 +308,162 @@ class _PinEntryPanelState extends State<_PinEntryPanel> {
                 const SizedBox(height: NocturneSpacing.x6),
                 ...actions,
               ],
-            ),
-          ),
-          const SizedBox(width: NocturneSpacing.x8),
-          Expanded(
-            child: Center(
+            );
+            final keypadColumn = Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: _stackedMaxWidth),
                 child: keypad,
               ),
+            );
+            if (!parts) {
+              return Row(
+                children: [
+                  Expanded(child: promptColumn),
+                  const SizedBox(width: NocturneSpacing.x8),
+                  Expanded(child: keypadColumn),
+                ],
+              );
+            }
+            final split = middle?.dx ?? width / 2;
+            final leftWidth = (split - gap / 2).clamp(
+              minHalf,
+              width - gap - minHalf,
+            );
+            return Row(
+              children: [
+                SizedBox(
+                  width: leftWidth,
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: _stackedMaxWidth,
+                      ),
+                      child: promptColumn,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: gap),
+                Expanded(child: keypadColumn),
+              ],
+            );
+          }
+          final splitAtY = widget.splitAtY;
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: _stackedMaxWidth),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (splitAtY == null) ...[
+                    ...prompt,
+                    const SizedBox(height: NocturneSpacing.x8),
+                  ] else ...[
+                    // At least down to the band; a taller prompt pushes the
+                    // keypad lower still, never into the band.
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: (splitAtY - gap / 2).clamp(
+                          0,
+                          double.infinity,
+                        ),
+                      ),
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: prompt,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: gap),
+                  ],
+                  keypad,
+                  const SizedBox(height: NocturneSpacing.x6),
+                  ...actions,
+                ],
+              ),
             ),
-          ),
-        ],
-      );
-    }
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: _stackedMaxWidth),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ...prompt,
-            const SizedBox(height: NocturneSpacing.x8),
-            keypad,
-            const SizedBox(height: NocturneSpacing.x6),
-            ...actions,
-          ],
-        ),
+          );
+        },
       ),
     );
+  }
+}
+
+/// [SafeArea] for a bottom sheet with a keypad. A sheet is at most 640 pt
+/// wide and centred, so a side inset only reaches it where the window is
+/// narrower than that; plain [SafeArea] would pad it anyway — 84 pt on the
+/// right of an open iPhone Duo on its side — and push the keypad off-centre,
+/// onto the fold.
+class _SheetSafeArea extends StatelessWidget {
+  const _SheetSafeArea({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final window = MediaQuery.sizeOf(context);
+        final insets = MediaQuery.paddingOf(context);
+        final margin = (window.width - constraints.maxWidth) / 2;
+        double overlap(double inset) =>
+            (inset - margin).clamp(0.0, double.infinity);
+        return SafeArea(
+          left: false,
+          right: false,
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: overlap(insets.left),
+              right: overlap(insets.right),
+            ),
+            child: MediaQuery.removePadding(
+              context: context,
+              removeLeft: true,
+              removeRight: true,
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Hands [builder] the point, in this widget's own coordinates, where the
+/// middle of the window falls — measured after layout, so null on the first
+/// frame. Use it only where this widget's position does not depend on what
+/// [builder] returns, or the measurement chases itself.
+class _WindowMiddle extends StatefulWidget {
+  const _WindowMiddle({required this.builder});
+
+  final Widget Function(BuildContext context, Offset? middle) builder;
+
+  @override
+  State<_WindowMiddle> createState() => _WindowMiddleState();
+}
+
+class _WindowMiddleState extends State<_WindowMiddle> {
+  Offset? _middle;
+
+  @override
+  Widget build(BuildContext context) {
+    final window = MediaQuery.sizeOf(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measure(window));
+    return widget.builder(context, _middle);
+  }
+
+  void _measure(Size window) {
+    if (!mounted) return;
+    final box = context.findRenderObject();
+    if (box is! RenderBox || !box.hasSize || !box.attached) return;
+    final middle = box.globalToLocal(window.center(Offset.zero));
+    final previous = _middle;
+    if (previous == null || (middle - previous).distance > 0.5) {
+      setState(() => _middle = middle);
+    }
   }
 }
 

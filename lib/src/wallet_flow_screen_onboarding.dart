@@ -910,6 +910,9 @@ class _LockedStage extends StatelessWidget {
   static const double _fullKeysMinHeight = 680;
   static const double _compactKeyHeight = 48;
 
+  /// The unlock button under the keypad, for the fit check.
+  static const double _buttonHeight = 48;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -948,58 +951,83 @@ class _LockedStage extends StatelessWidget {
       ],
     );
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const padding = NocturneSpacing.gutter;
-        final width = constraints.maxWidth - 2 * padding;
-        final height = constraints.maxHeight - 2 * padding;
-        final sideBySide =
-            width >= _sideBySideMinWidth && height < _stackedMinHeight;
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(padding),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: height < 0 ? 0 : height),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 840),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (errorMessage != null) ...[
-                      _ErrorBanner(message: errorMessage),
-                      const SizedBox(height: NocturneSpacing.x6),
+    // The window's middle is measured on the whole screen area, whose place
+    // does not depend on the content laid out in it.
+    return _WindowMiddle(
+      builder: (context, middle) => LayoutBuilder(
+        builder: (context, constraints) {
+          const padding = NocturneSpacing.gutter;
+          final width = constraints.maxWidth - 2 * padding;
+          final height = constraints.maxHeight - 2 * padding;
+          final sideBySide =
+              width >= _sideBySideMinWidth && height < _stackedMinHeight;
+          final keyHeight = !sideBySide && height < _fullKeysMinHeight
+              ? _compactKeyHeight
+              : _PinKeypad.defaultKeyHeight;
+          // In a tall window the keypad goes below the window's middle — the
+          // fold of an open iPhone Duo held upright — when it still fits there;
+          // the content then starts at the top, so the middle stays put.
+          const gap = _PinEntryPanel.middleGap;
+          final keypadBlock =
+              4 * (keyHeight + NocturneSpacing.x3) +
+              NocturneSpacing.x6 +
+              _buttonHeight;
+          final middleY = middle == null ? null : middle.dy - padding;
+          final splitAtY =
+              !sideBySide &&
+                  middleY != null &&
+                  middleY - gap / 2 >= 0 &&
+                  middleY + gap / 2 + keypadBlock <= height
+              ? middleY
+              : null;
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(padding),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: height < 0 ? 0 : height),
+              child: Align(
+                alignment: splitAtY == null
+                    ? Alignment.center
+                    : Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 840),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (errorMessage != null) ...[
+                        _ErrorBanner(message: errorMessage),
+                        const SizedBox(height: NocturneSpacing.x6),
+                      ],
+                      // The same keypad as every signature: the PIN never reaches
+                      // the system keyboard. For a card the PIN is the card's,
+                      // and the tap follows.
+                      _PinEntryPanel(
+                        leading: identity,
+                        sideBySide: sideBySide,
+                        keyHeight: keyHeight,
+                        splitAtY: splitAtY,
+                        title: isExternalBackend
+                            ? l10n.lockedTitleCard
+                            : l10n.lockedTitlePhone,
+                        reason: isExternalBackend
+                            ? l10n.lockedBodyCard
+                            : l10n.lockedBodyPhone,
+                        confirmLabel: isExternalBackend
+                            ? l10n.lockedUnlockCard
+                            : l10n.lockedUnlockPhone,
+                        biometricsOffered: biometrics != null,
+                        onPin: onUnlock,
+                        onBiometrics: () => biometrics?.call(),
+                        onCancel: null,
+                      ),
                     ],
-                    // The same keypad as every signature: the PIN never reaches
-                    // the system keyboard. For a card the PIN is the card's,
-                    // and the tap follows.
-                    _PinEntryPanel(
-                      leading: identity,
-                      sideBySide: sideBySide,
-                      keyHeight: !sideBySide && height < _fullKeysMinHeight
-                          ? _compactKeyHeight
-                          : _PinKeypad.defaultKeyHeight,
-                      title: isExternalBackend
-                          ? l10n.lockedTitleCard
-                          : l10n.lockedTitlePhone,
-                      reason: isExternalBackend
-                          ? l10n.lockedBodyCard
-                          : l10n.lockedBodyPhone,
-                      confirmLabel: isExternalBackend
-                          ? l10n.lockedUnlockCard
-                          : l10n.lockedUnlockPhone,
-                      biometricsOffered: biometrics != null,
-                      onPin: onUnlock,
-                      onBiometrics: () => biometrics?.call(),
-                      onCancel: null,
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }

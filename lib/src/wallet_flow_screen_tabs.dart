@@ -353,7 +353,7 @@ class _SettingsTab extends StatelessWidget {
       backgroundColor: context.nocturne.surface,
       shape: RoundedRectangleBorder(borderRadius: style.sheetBorderRadius),
       isScrollControlled: true,
-      builder: (sheetContext) => SafeArea(
+      builder: (sheetContext) => _SheetSafeArea(
         child: SingleChildScrollView(
           padding: EdgeInsets.only(
             left: NocturneSpacing.x6,

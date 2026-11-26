@@ -19,14 +19,40 @@ import 'package:mobile_wallet_demo/src/qr/qr_scanner.dart';
 import 'package:mobile_wallet_demo/src/walletconnect/wallet_connect_service.dart';
 
 class _Pose {
-  const _Pose(this.name, this.size, this.padding);
+  const _Pose(this.name, this.size, this.padding, {this.fold});
 
   final String name;
   final Size size;
   final EdgeInsets padding;
 
+  /// The line the open device bends along: across the middle of the window's
+  /// long side (owner's screenshot, open on its side, 2026-11-26). Flutter
+  /// does not report it; the test knows it.
+  final Axis? fold;
+
   /// Wide enough for the side navigation (see `AppShell`).
   bool get isWide => size.width >= 600;
+}
+
+/// No PIN key comes within 24 pt of the fold.
+void _expectKeysOffFold(WidgetTester tester, _Pose pose) {
+  final fold = pose.fold;
+  if (fold == null) return;
+  const clearance = 24.0;
+  for (final key in <String>[
+    for (var digit = 0; digit <= 9; digit++) '$digit',
+    'del',
+  ]) {
+    final rect = tester.getRect(find.byKey(ValueKey<String>('pin-key-$key')));
+    final (start, end, line) = fold == Axis.vertical
+        ? (rect.left, rect.right, pose.size.width / 2)
+        : (rect.top, rect.bottom, pose.size.height / 2);
+    expect(
+      end <= line - clearance || start >= line + clearance,
+      isTrue,
+      reason: 'key $key spans $start..$end, fold at $line',
+    );
+  }
 }
 
 const List<_Pose> _duoPoses = <_Pose>[
@@ -40,11 +66,17 @@ const List<_Pose> _duoPoses = <_Pose>[
     Size(678, 466),
     EdgeInsets.only(left: 84, bottom: 34),
   ),
-  _Pose('open, portrait', Size(669, 951), EdgeInsets.only(top: 82, bottom: 34)),
+  _Pose(
+    'open, portrait',
+    Size(669, 951),
+    EdgeInsets.only(top: 82, bottom: 34),
+    fold: Axis.horizontal,
+  ),
   _Pose(
     'open, landscape',
     Size(951, 669),
     EdgeInsets.only(right: 84, bottom: 34),
+    fold: Axis.vertical,
   ),
   _Pose('open, Split View', Size(469, 669), EdgeInsets.only(bottom: 34)),
 ];
@@ -184,6 +216,7 @@ void main() {
           await tester.pumpAndSettle();
           await _tapShown(tester, find.text('Показать QR аккаунта'));
           expect(find.text('Отмена'), findsWidgets);
+          if (textScale == 1) _expectKeysOffFold(tester, pose);
           await _tapShown(tester, find.text('Отмена'));
 
           await tester.tap(find.text('Кошелёк').last);
@@ -227,6 +260,7 @@ void main() {
             expect(rect.top, greaterThanOrEqualTo(top), reason: '$finder');
             expect(rect.bottom, lessThanOrEqualTo(bottom), reason: '$finder');
           }
+          _expectKeysOffFold(tester, pose);
           // Keys keep a key's proportions, not a bar's.
           expect(
             tester
