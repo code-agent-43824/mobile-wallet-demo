@@ -9,6 +9,7 @@ import 'package:mobile_wallet_demo/src/blockchain/blockchain_provider.dart';
 import 'package:mobile_wallet_demo/src/blockchain/network_config.dart';
 import 'package:mobile_wallet_demo/src/key_storage/custody_backend.dart';
 import 'package:mobile_wallet_demo/src/key_storage/key_storage_backend.dart';
+import 'package:mobile_wallet_demo/src/key_storage/phone_secure_vault.dart';
 import 'package:mobile_wallet_demo/src/key_storage/rutoken_biometric_pin_store.dart';
 import 'package:mobile_wallet_demo/src/key_storage/rutoken_method_channel_adapter.dart';
 import 'package:mobile_wallet_demo/src/key_storage/rutoken_provisioning.dart';
@@ -262,6 +263,44 @@ void main() {
       isNotNull,
       reason: 'recording the serial must not drop the retained xpub',
     );
+  });
+
+  test('switching wallets drops the previous account QR', () async {
+    PhoneSecureVault.debugIterationsOverride = 2;
+    addTearDown(() => PhoneSecureVault.debugIterationsOverride = null);
+    final store = InMemorySecureKeyValueStore();
+    final controller = WalletFlowController(
+      store: store,
+      biometricAuthGateway: const SimulatedBiometricAuthGateway(),
+      rutokenNativeAdapter: _ProvisioningAdapter(serial: 'RT-A'),
+    );
+    await controller.loadInitialState();
+    await controller.createWallet(pin: '1234');
+    controller.finishSeedBackup();
+    await controller.completeBiometricChoice(false);
+    final phoneAddress = controller.summary!.address;
+    controller.openAddCard();
+    await controller.provisionImportedRutoken(
+      mnemonic: _mnemonic,
+      passphrase: '',
+      pin: '1234',
+    );
+    final wallets = await controller.listSwitchableWallets();
+    final phone = wallets.firstWhere(
+      (wallet) => wallet.address == phoneAddress,
+    );
+    final card = wallets.firstWhere((wallet) => wallet.isCard);
+
+    await controller.switchActiveWallet(phone);
+    await controller.prepareAirGapAccountExport(pin: '1234');
+    expect(controller.airGapAccountExportPayload, isNotNull);
+
+    // MetaMask would import the phone's account from a QR left on screen
+    // under the card's address.
+    await controller.switchActiveWallet(card);
+    expect(controller.summary!.address, card.address);
+    expect(controller.airGapAccountExportPayload, isNull);
+    controller.dispose();
   });
 
   test('adopts a second card instead of refusing it', () async {
