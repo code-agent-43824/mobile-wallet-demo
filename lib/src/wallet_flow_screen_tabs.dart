@@ -147,6 +147,7 @@ class _SettingsTab extends StatelessWidget {
     required this.onSelectedCardProfileId,
     required this.onForgetCard,
     required this.onConnectAnotherCard,
+    required this.onDeleteWallet,
   });
 
   final ChainDataController chainData;
@@ -177,9 +178,14 @@ class _SettingsTab extends StatelessWidget {
   /// adapter) — the switcher then offers no way to add one.
   final VoidCallback? onConnectAnotherCard;
 
+  /// Deletes the phone wallet; null for a card, whose key the phone does not
+  /// hold (forgetting a card lives in the wallet switcher).
+  final Future<void> Function()? onDeleteWallet;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final deleteWallet = onDeleteWallet;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -257,8 +263,79 @@ class _SettingsTab extends StatelessWidget {
             ),
           ],
         ),
+        if (deleteWallet != null) ...[
+          const SizedBox(height: NocturneSpacing.x8 * 2),
+          _DangerZone(
+            onDeleteWallet: () => _confirmDeleteWallet(context, deleteWallet),
+          ),
+        ],
       ],
     );
+  }
+
+  /// Deleting is the one action here that can lose money, so it asks twice:
+  /// a warning naming the address and what is lost, and a box to tick before
+  /// the button wakes up.
+  Future<void> _confirmDeleteWallet(
+    BuildContext context,
+    Future<void> Function() deleteWallet,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        var acknowledged = false;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final theme = Theme.of(context);
+            return AlertDialog(
+              icon: Icon(
+                Icons.warning_amber_rounded,
+                color: theme.colorScheme.error,
+              ),
+              title: Text(l10n.deleteWalletTitle),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(l10n.deleteWalletBody(address)),
+                    const SizedBox(height: NocturneSpacing.x4),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      value: acknowledged,
+                      onChanged: (value) =>
+                          setDialogState(() => acknowledged = value ?? false),
+                      title: Text(l10n.deleteWalletConfirmCheck),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: Text(l10n.actionCancel),
+                ),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: theme.colorScheme.error,
+                    foregroundColor: theme.colorScheme.onError,
+                  ),
+                  onPressed: acknowledged
+                      ? () => Navigator.of(dialogContext).pop(true)
+                      : null,
+                  child: Text(l10n.deleteWalletAction),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (confirmed == true) {
+      await deleteWallet();
+    }
   }
 
   /// Toggles biometric quick unlock from Settings. Turning it off is a single
@@ -1362,6 +1439,53 @@ class _PinKey extends StatelessWidget {
                   ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The bottom of Settings, set apart by colour, for what cannot be undone.
+class _DangerZone extends StatelessWidget {
+  const _DangerZone({required this.onDeleteWallet});
+
+  final VoidCallback onDeleteWallet;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final danger = theme.colorScheme.error;
+    return Container(
+      padding: const EdgeInsets.all(NocturneSpacing.x6),
+      decoration: BoxDecoration(
+        border: Border.all(color: danger.withValues(alpha: 0.5)),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.settingsDangerZone,
+            style: theme.textTheme.titleMedium?.copyWith(color: danger),
+          ),
+          const SizedBox(height: NocturneSpacing.x2),
+          Text(
+            l10n.settingsDangerZoneBody,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: context.nocturne.textMuted,
+            ),
+          ),
+          const SizedBox(height: NocturneSpacing.x4),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: danger,
+              side: BorderSide(color: danger),
+            ),
+            onPressed: onDeleteWallet,
+            icon: const Icon(Icons.delete_forever_outlined),
+            label: Text(l10n.settingsDeleteWallet),
+          ),
+        ],
       ),
     );
   }

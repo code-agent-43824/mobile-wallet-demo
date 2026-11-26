@@ -76,6 +76,14 @@ class SnapshotCache {
     }
   }
 
+  /// Drops the cached snapshots of [address] on every network, so a deleted
+  /// wallet leaves no balances or history behind.
+  Future<void> forget(String address) async {
+    for (final network in EvmNetwork.values) {
+      await _store.delete(_cacheKey(network: network, address: address));
+    }
+  }
+
   Future<void> write(WalletChainSnapshot snapshot) async {
     await _store.write(
       _cacheKey(network: snapshot.network, address: snapshot.address),

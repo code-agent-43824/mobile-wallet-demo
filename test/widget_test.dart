@@ -421,6 +421,8 @@ void main() {
     await tester.tap(find.text('Настройки').last);
     await tester.pumpAndSettle();
     expect(find.text(_ReadyCardAdapter.address), findsOneWidget);
+    // The phone holds no key of a card, so there is nothing to delete here.
+    expect(find.text('Опасная зона'), findsNothing);
   });
 
   testWidgets('lock-on-open: the next start asks for the PIN on the keypad', (

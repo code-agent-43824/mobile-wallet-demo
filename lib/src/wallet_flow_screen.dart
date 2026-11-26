@@ -20,6 +20,7 @@ import 'auth/external_digest_signer.dart';
 import 'auth/wallet_operation_auth.dart';
 import 'blockchain/blockchain_provider.dart';
 import 'blockchain/network_config.dart';
+import 'blockchain/snapshot_cache.dart';
 import '../l10n/app_localizations.dart';
 import 'app_locale.dart';
 import 'chain_data_controller.dart';
@@ -451,7 +452,19 @@ class _WalletFlowScreenState extends State<WalletFlowScreen>
           onConnectAnotherCard: widget.rutokenNativeAdapter == null
               ? null
               : _controller.openAddCard,
+          onDeleteWallet: _controller.activeBackend is WalletCustodyBackend
+              ? null
+              : _deletePhoneWallet,
         );
+    }
+  }
+
+  /// After deleting, the next wallet starts on its first tab, not on the
+  /// Settings tab the deletion was made from.
+  Future<void> _deletePhoneWallet() async {
+    await _controller.deletePhoneWallet();
+    if (mounted) {
+      setState(() => _selectedTab = AppTab.wallet);
     }
   }
 

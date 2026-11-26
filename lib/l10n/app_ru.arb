@@ -402,5 +402,13 @@
   "errBiometricLockedOut": "Биометрия заблокирована после нескольких неудачных попыток. Используйте PIN.",
   "wcChainSwitched": "Приложение переключено на сеть {network}.",
   "errWcPairingNoResponse": "dApp не ответил на подключение. Обновите страницу dApp и отсканируйте новый QR-код.",
-  "errWcApproveNoResponse": "dApp не подтвердил подключение: страница dApp, похоже, потеряла связь с WalletConnect. Обновите её и подключитесь заново."
+  "errWcApproveNoResponse": "dApp не подтвердил подключение: страница dApp, похоже, потеряла связь с WalletConnect. Обновите её и подключитесь заново.",
+  "settingsDangerZone": "Опасная зона",
+  "settingsDangerZoneBody": "Действия здесь не отменить.",
+  "settingsDeleteWallet": "Удалить кошелёк с телефона",
+  "deleteWalletTitle": "Удалить кошелёк?",
+  "deleteWalletBody": "Ключ кошелька {address} будет стёрт с этого телефона. Вернуть кошелёк можно только seed-фразой — приложение её больше не покажет. Если вы её не сохранили, все средства на этом адресе будут потеряны навсегда.",
+  "deleteWalletConfirmCheck": "Я сохранил seed-фразу или согласен потерять средства",
+  "deleteWalletAction": "Удалить навсегда",
+  "busyDeletingWallet": "Удаляем кошелёк…"
 }

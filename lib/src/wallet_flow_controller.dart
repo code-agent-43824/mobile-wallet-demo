@@ -620,6 +620,7 @@ class WalletFlowController extends ChangeNotifier {
       _selectedBackendId = wallet.backendId;
       _summary = summary;
       _material = null;
+      _forgetAccountQrState();
       _biometricsEnabled = await backend.isBiometricUnlockEnabled();
       _biometricsAvailable = await backend.isBiometricUnlockAvailable();
       // A backend with no wallet yet starts its own onboarding rather than
@@ -653,6 +654,7 @@ class WalletFlowController extends ChangeNotifier {
       if (backend == null || effectiveBackendId != backend.backendId) {
         return;
       }
+      _forgetAccountQrState();
       final summary = await backend.getWalletSummary();
       if (summary != null) {
         _summary = summary;
@@ -677,6 +679,60 @@ class WalletFlowController extends ChangeNotifier {
       _errorMessage = null;
       await _closeWalletConnectSessionsOfOtherAccounts();
     });
+  }
+
+  /// Deletes the phone wallet: the encrypted seed phrase, its biometric key
+  /// and the cached balances of its address. Without the seed phrase saved
+  /// elsewhere this cannot be undone — the settings ask before calling it.
+  ///
+  /// WalletConnect sessions and the AirGap account QR of that address go with
+  /// it. The app moves to a registered card if there is one, otherwise back to
+  /// the welcome screen.
+  Future<void> deletePhoneWallet() async {
+    if (effectiveBackendId != _vault.backendId) return;
+    await _runBusy(_messages.busyDeletingWallet, () async {
+      final address = (await _vault.getWalletSummary())?.address;
+      await _vault.clear();
+      if (address != null) {
+        await SnapshotCache(_store).forget(address);
+      }
+      _material = null;
+      _forgetAccountQrState();
+
+      final card = _rutokenBackend;
+      final cardSummary = await card?.getWalletSummary();
+      if (card != null && cardSummary != null) {
+        await _backendRegistry.selectBackend(card.backendId);
+        _selectedBackendId = card.backendId;
+        _summary = cardSummary;
+        _biometricsEnabled = await card.isBiometricUnlockEnabled();
+        _biometricsAvailable = await card.isBiometricUnlockAvailable();
+        _stage = WalletFlowStage.unlocked;
+      } else {
+        await _backendRegistry.selectBackend(_vault.backendId);
+        _selectedBackendId = _vault.backendId;
+        _summary = null;
+        _biometricsEnabled = false;
+        _biometricsAvailable = await _vault.isBiometricUnlockAvailable();
+        _stage = WalletFlowStage.welcome;
+      }
+      _errorMessage = null;
+      await _closeWalletConnectSessionsOfOtherAccounts();
+    });
+  }
+
+  /// The account QR and any AirGap request belong to the account they were
+  /// made for; once that account is gone or another is active, showing them
+  /// would hand MetaMask the wrong key.
+  void _forgetAccountQrState() {
+    _airGapAccountExportPayload = null;
+    _airGapRequestPayload = null;
+    _airGapRequest = null;
+    _airGapRequestPreview = null;
+    _airGapMessagePreview = null;
+    _airGapTypedDataPreview = null;
+    _airGapRequestSignedBefore = null;
+    _airGapResponsePayload = null;
   }
 
   Future<void> selectBackend(String backendId) async {
