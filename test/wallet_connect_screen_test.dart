@@ -5,7 +5,7 @@ import 'dart:typed_data';
 // see docs/PLAN.md for the migration.
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show SystemChannels;
+import 'package:flutter/services.dart' show LogicalKeyboardKey, SystemChannels;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_wallet_demo/src/app.dart';
 import 'package:mobile_wallet_demo/src/airgap/airgap_signed_requests.dart';
@@ -1071,6 +1071,70 @@ void main() {
 
       expect(find.text('wc:scanned@2'), findsOneWidget);
     },
+  );
+  testWidgets(
+    'Windows: Tab walks the content to «Подписать транзакцию» before the tabs',
+    (tester) async {
+      // The tester's v1.62.0 finding: Tab circled through the first AirGap
+      // steps and the tabs and never reached the sign button.
+      await tester.binding.setSurfaceSize(const Size(1280, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MobileWalletDemoApp(
+          locale: const Locale('ru'),
+          store: InMemorySecureKeyValueStore(),
+          blockchainProvider: _FakeBlockchainProvider(),
+          walletConnectService: FakeWalletConnectService(),
+          qrScanner: FakeQrScanner(nextResult: _airGapRequestUr()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _createUnlock(tester);
+      await _openConnections(tester);
+      final scan = find.text('Сканировать запрос');
+      await tester.ensureVisible(scan);
+      await tester.tap(scan);
+      await tester.pumpAndSettle();
+
+      /// The first text inside the focused control: its label.
+      String focusedLabel() {
+        final context = FocusManager.instance.primaryFocus?.context;
+        if (context == null) return '';
+        String? label;
+        void visit(Element element) {
+          final widget = element.widget;
+          if (widget is Text && widget.data != null) {
+            label = widget.data;
+            return;
+          }
+          if (label == null) element.visitChildren(visit);
+        }
+
+        (context as Element).visitChildren(visit);
+        return label ?? '';
+      }
+
+      const tabs = <String>{'Кошелёк', 'Активность', 'Связи', 'Настройки'};
+      final visited = <String>[];
+      for (var i = 0; i < 40; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pumpAndSettle();
+        visited.add(focusedLabel());
+        if (visited.last == 'Подписать транзакцию') break;
+      }
+      expect(visited.last, 'Подписать транзакцию', reason: '$visited');
+      expect(visited.where(tabs.contains), isEmpty, reason: '$visited');
+
+      // Past the content come the tabs, and then the content again.
+      final after = <String>[];
+      for (var i = 0; i < 6; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pumpAndSettle();
+        after.add(focusedLabel());
+      }
+      expect(after, containsAllInOrder(tabs), reason: '$after');
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.windows),
   );
 }
 

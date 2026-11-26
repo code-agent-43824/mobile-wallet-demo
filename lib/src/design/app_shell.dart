@@ -102,12 +102,19 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = PlatformStyle.of(context);
-    final body = Column(
-      children: [
-        _ShellHeader(title: title, actions: actions, style: style),
-        if (banner case final Widget shellBanner) shellBanner,
-        Expanded(child: child),
-      ],
+    // The content and the tabs are separate groups for the keyboard: Tab
+    // walks the content through before it reaches the tabs. In one group,
+    // reading order by position interleaved the two — after each control
+    // came the tabs beside it — and scrolling reshuffled them, so on Windows
+    // Tab circled without reaching «Подписать транзакцию» (tester, v1.62.0).
+    final body = FocusTraversalGroup(
+      child: Column(
+        children: [
+          _ShellHeader(title: title, actions: actions, style: style),
+          if (banner case final Widget shellBanner) shellBanner,
+          Expanded(child: child),
+        ],
+      ),
     );
 
     return LayoutBuilder(
@@ -184,11 +191,13 @@ class AppShell extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _ShellSideBar(
-              tabs: tabs,
-              currentTab: currentTab,
-              onTabSelected: onTabSelected,
-              style: style,
+            FocusTraversalGroup(
+              child: _ShellSideBar(
+                tabs: tabs,
+                currentTab: currentTab,
+                onTabSelected: onTabSelected,
+                style: style,
+              ),
             ),
             Expanded(
               child: Center(
@@ -225,11 +234,13 @@ class AppShell extends StatelessWidget {
               )
             : body,
       ),
-      bottomNavigationBar: _ShellTabBar(
-        tabs: tabs,
-        currentTab: currentTab,
-        onTabSelected: onTabSelected,
-        style: style,
+      bottomNavigationBar: FocusTraversalGroup(
+        child: _ShellTabBar(
+          tabs: tabs,
+          currentTab: currentTab,
+          onTabSelected: onTabSelected,
+          style: style,
+        ),
       ),
     );
   }
