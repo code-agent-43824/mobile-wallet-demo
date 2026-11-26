@@ -154,8 +154,6 @@
   "lockedTitlePhone": "Кошелёк заблокирован",
   "lockedBodyCard": "Чтобы открыть кошелёк, введите PIN карты и приложите её к телефону.",
   "lockedBodyPhone": "Кошелёк готов. Для входа нужен PIN.",
-  "lockedAddress": "Адрес",
-  "lockedStorage": "Хранилище",
   "lockedUnlockCard": "Разблокировать картой",
   "lockedUnlockPhone": "Разблокировать",
   "authConfirmTitle": "Подтвердите операцию",

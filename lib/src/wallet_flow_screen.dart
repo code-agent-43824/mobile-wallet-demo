@@ -319,6 +319,11 @@ class _WalletFlowScreenState extends State<WalletFlowScreen>
     if (_isMainAppStage) {
       return _buildMainApp(context);
     }
+    if (_controller.stage == WalletFlowStage.locked) {
+      // A screen of its own, not the onboarding card: the card's header and
+      // margins left no room for the keypad (owner, iPhone Duo, 2026-11-26).
+      return Scaffold(body: SafeArea(child: _buildStageBody()));
+    }
     return _buildOnboarding(context);
   }
 
@@ -583,6 +588,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen>
           backendLabel: controller.backendLabel,
           isExternalBackend: controller.isExternalBackendSelected,
           biometricsEnabled: controller.biometricsEnabled,
+          errorMessage: controller.errorMessage,
           onUnlock: controller.unlockWallet,
           onUnlockWithBiometrics: controller.canUnlockWithBiometrics
               ? controller.unlockWithBiometrics

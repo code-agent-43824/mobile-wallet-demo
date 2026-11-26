@@ -1265,9 +1265,13 @@ class _PinKeypad extends StatelessWidget {
     required this.style,
     required this.onDigit,
     required this.onBackspace,
+    this.keyHeight = defaultKeyHeight,
   });
 
+  static const double defaultKeyHeight = 56;
+
   final PlatformStyle style;
+  final double keyHeight;
   final ValueChanged<String> onDigit;
   final VoidCallback onBackspace;
 
@@ -1297,6 +1301,7 @@ class _PinKeypad extends StatelessWidget {
                         key: ValueKey<String>('pin-key-$key'),
                         label: key,
                         style: style,
+                        height: keyHeight,
                         onTap: key.isEmpty
                             ? null
                             : key == 'del'
@@ -1319,8 +1324,10 @@ class _PinKey extends StatelessWidget {
     required this.label,
     required this.style,
     required this.onTap,
+    required this.height,
   });
 
+  final double height;
   final String label;
   final PlatformStyle style;
   final VoidCallback? onTap;
@@ -1328,7 +1335,7 @@ class _PinKey extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (label.isEmpty) {
-      return const SizedBox(height: 56);
+      return SizedBox(height: height);
     }
     final radius = BorderRadius.circular(style.keypadKeyRadius);
     return Material(
@@ -1338,7 +1345,7 @@ class _PinKey extends StatelessWidget {
         onTap: onTap,
         borderRadius: radius,
         child: SizedBox(
-          height: 56,
+          height: height,
           child: Center(
             child: label == 'del'
                 ? const Icon(Icons.backspace_outlined, size: 20)

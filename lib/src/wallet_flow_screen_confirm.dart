@@ -153,6 +153,9 @@ class _PinEntryPanel extends StatefulWidget {
     required this.onCancel,
     this.title,
     this.confirmLabel,
+    this.leading,
+    this.sideBySide,
+    this.keyHeight = _PinKeypad.defaultKeyHeight,
   });
 
   final String reason;
@@ -166,6 +169,16 @@ class _PinEntryPanel extends StatefulWidget {
   /// Defaults to the confirmation wording; the lock screen names itself.
   final String? title;
   final String? confirmLabel;
+
+  /// Shown above the title, in the prompt's column (the lock screen's wallet).
+  final Widget? leading;
+
+  /// Whether the keypad goes beside the prompt rather than under it. Null
+  /// decides by the window, which suits a sheet: a sheet scrolls, so the space
+  /// it is given says nothing about the space it has.
+  final bool? sideBySide;
+
+  final double keyHeight;
 
   @override
   State<_PinEntryPanel> createState() => _PinEntryPanelState();
@@ -199,12 +212,20 @@ class _PinEntryPanelState extends State<_PinEntryPanel> {
   static const double _sideBySideBelowHeight = 600;
   static const double _sideBySideMinWidth = 560;
 
+  /// Wider than this, the keys would stretch into long bars; the column of
+  /// prompt, keypad and button keeps a phone's proportions instead.
+  static const double _stackedMaxWidth = 400;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final style = PlatformStyle.of(context);
     final l10n = AppLocalizations.of(context);
     final prompt = <Widget>[
+      if (widget.leading case final Widget leading) ...[
+        leading,
+        const SizedBox(height: NocturneSpacing.x6),
+      ],
       Text(
         widget.title ?? l10n.authConfirmTitle,
         style: theme.textTheme.titleLarge,
@@ -231,6 +252,7 @@ class _PinEntryPanelState extends State<_PinEntryPanel> {
     ];
     final keypad = _PinKeypad(
       style: style,
+      keyHeight: widget.keyHeight,
       onDigit: _append,
       onBackspace: _backspace,
     );
@@ -246,8 +268,11 @@ class _PinEntryPanelState extends State<_PinEntryPanel> {
     ];
 
     final window = MediaQuery.sizeOf(context);
-    if (window.height < _sideBySideBelowHeight &&
-        window.width >= _sideBySideMinWidth) {
+    final sideBySide =
+        widget.sideBySide ??
+        (window.height < _sideBySideBelowHeight &&
+            window.width >= _sideBySideMinWidth);
+    if (sideBySide) {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -263,20 +288,32 @@ class _PinEntryPanelState extends State<_PinEntryPanel> {
             ),
           ),
           const SizedBox(width: NocturneSpacing.x8),
-          Expanded(child: keypad),
+          Expanded(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: _stackedMaxWidth),
+                child: keypad,
+              ),
+            ),
+          ),
         ],
       );
     }
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ...prompt,
-        const SizedBox(height: NocturneSpacing.x8),
-        keypad,
-        const SizedBox(height: NocturneSpacing.x6),
-        ...actions,
-      ],
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _stackedMaxWidth),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ...prompt,
+            const SizedBox(height: NocturneSpacing.x8),
+            keypad,
+            const SizedBox(height: NocturneSpacing.x6),
+            ...actions,
+          ],
+        ),
+      ),
     );
   }
 }

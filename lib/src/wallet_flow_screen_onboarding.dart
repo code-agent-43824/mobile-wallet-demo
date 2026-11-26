@@ -874,12 +874,17 @@ class _BiometricPromptStage extends StatelessWidget {
   }
 }
 
+/// The lock screen: the wallet it opens, and the PIN keypad, on a screen of
+/// its own rather than in the onboarding card. Everything fits the window at
+/// the default text size — beside each other when the window is wide and low,
+/// one above the other otherwise — and scrolls only when larger text needs it.
 class _LockedStage extends StatelessWidget {
   const _LockedStage({
     required this.summary,
     required this.backendLabel,
     required this.isExternalBackend,
     required this.biometricsEnabled,
+    required this.errorMessage,
     required this.onUnlock,
     required this.onUnlockWithBiometrics,
   });
@@ -888,42 +893,121 @@ class _LockedStage extends StatelessWidget {
   final String backendLabel;
   final bool isExternalBackend;
   final bool biometricsEnabled;
+  final String? errorMessage;
   final Future<void> Function(String pin) onUnlock;
   final Future<void> Function()? onUnlockWithBiometrics;
+
+  /// Lower than this, the prompt and the keypad no longer fit one above the
+  /// other, so a window with the width for it puts them side by side.
+  static const double _stackedMinHeight = 640;
+
+  /// Of the content, inside the margins: a closed iPhone Duo on its side
+  /// leaves 554 pt, which holds both halves.
+  static const double _sideBySideMinWidth = 480;
+
+  /// Lower than this, a column of full-height keys would push the button out
+  /// of the window.
+  static const double _fullKeysMinHeight = 680;
+  static const double _compactKeyHeight = 48;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     final summary = this.summary;
     final biometrics = onUnlockWithBiometrics;
+    final errorMessage = this.errorMessage;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    final identity = Column(
       children: [
-        if (summary != null) ...[
-          _SummaryTile(label: l10n.lockedAddress, value: summary.address),
-          const SizedBox(height: 10),
-          _SummaryTile(label: l10n.lockedStorage, value: backendLabel),
-          const SizedBox(height: 20),
-        ],
-        // The same keypad as every signature: the PIN never reaches the system
-        // keyboard. For a card the PIN is the card's, and the tap follows.
-        _PinEntryPanel(
-          title: isExternalBackend
-              ? l10n.lockedTitleCard
-              : l10n.lockedTitlePhone,
-          reason: isExternalBackend
-              ? l10n.lockedBodyCard
-              : l10n.lockedBodyPhone,
-          confirmLabel: isExternalBackend
-              ? l10n.lockedUnlockCard
-              : l10n.lockedUnlockPhone,
-          biometricsOffered: biometrics != null,
-          onPin: onUnlock,
-          onBiometrics: () => biometrics?.call(),
-          onCancel: null,
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Icon(
+            isExternalBackend
+                ? Icons.credit_card_outlined
+                : Icons.account_balance_wallet_outlined,
+            size: 24,
+            color: theme.colorScheme.primary,
+          ),
         ),
+        if (summary != null) ...[
+          const SizedBox(height: NocturneSpacing.x3),
+          Text(
+            '$backendLabel · ${_shortLockAddress(summary.address)}',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: context.nocturne.textMuted,
+            ),
+          ),
+        ],
       ],
     );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const padding = NocturneSpacing.gutter;
+        final width = constraints.maxWidth - 2 * padding;
+        final height = constraints.maxHeight - 2 * padding;
+        final sideBySide =
+            width >= _sideBySideMinWidth && height < _stackedMinHeight;
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(padding),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: height < 0 ? 0 : height),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 840),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (errorMessage != null) ...[
+                      _ErrorBanner(message: errorMessage),
+                      const SizedBox(height: NocturneSpacing.x6),
+                    ],
+                    // The same keypad as every signature: the PIN never reaches
+                    // the system keyboard. For a card the PIN is the card's,
+                    // and the tap follows.
+                    _PinEntryPanel(
+                      leading: identity,
+                      sideBySide: sideBySide,
+                      keyHeight: !sideBySide && height < _fullKeysMinHeight
+                          ? _compactKeyHeight
+                          : _PinKeypad.defaultKeyHeight,
+                      title: isExternalBackend
+                          ? l10n.lockedTitleCard
+                          : l10n.lockedTitlePhone,
+                      reason: isExternalBackend
+                          ? l10n.lockedBodyCard
+                          : l10n.lockedBodyPhone,
+                      confirmLabel: isExternalBackend
+                          ? l10n.lockedUnlockCard
+                          : l10n.lockedUnlockPhone,
+                      biometricsOffered: biometrics != null,
+                      onPin: onUnlock,
+                      onBiometrics: () => biometrics?.call(),
+                      onCancel: null,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
+}
+
+/// `0x928c54…6cab1`: enough of the address to recognise the wallet.
+String _shortLockAddress(String address) {
+  if (address.length <= 14) {
+    return address;
+  }
+  return '${address.substring(0, 8)}…${address.substring(address.length - 6)}';
 }

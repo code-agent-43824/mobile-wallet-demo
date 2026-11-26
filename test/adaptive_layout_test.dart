@@ -111,6 +111,29 @@ Future<void> _createWallet(WidgetTester tester) async {
   await _tapShown(tester, find.text('Пока без биометрии'));
 }
 
+Widget _app(SecureKeyValueStore store) => MobileWalletDemoApp(
+  locale: const Locale('ru'),
+  store: store,
+  blockchainProvider: _FakeBlockchainProvider(),
+  walletConnectService: FakeWalletConnectService(),
+  qrScanner: FakeQrScanner(),
+);
+
+/// Turns on «Запрашивать PIN при открытии» and starts the app again on the
+/// same storage, which opens on the lock screen.
+Future<void> _restartLocked(
+  WidgetTester tester,
+  SecureKeyValueStore store,
+) async {
+  await tester.tap(find.text('Настройки').last);
+  await tester.pumpAndSettle();
+  await _tapShown(tester, find.text('Запрашивать PIN при открытии'));
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pumpWidget(_app(store));
+  await tester.pumpAndSettle();
+  expect(find.text('Кошелёк заблокирован'), findsOneWidget);
+}
+
 void main() {
   setUp(() => PhoneSecureVault.debugIterationsOverride = 2);
   tearDown(() => PhoneSecureVault.debugIterationsOverride = null);
@@ -125,15 +148,7 @@ void main() {
           _setPose(tester, pose);
           tester.platformDispatcher.textScaleFactorTestValue = textScale;
           addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-          await tester.pumpWidget(
-            MobileWalletDemoApp(
-              locale: const Locale('ru'),
-              store: InMemorySecureKeyValueStore(),
-              blockchainProvider: _FakeBlockchainProvider(),
-              walletConnectService: FakeWalletConnectService(),
-              qrScanner: FakeQrScanner(),
-            ),
-          );
+          await tester.pumpWidget(_app(InMemorySecureKeyValueStore()));
           await tester.pumpAndSettle();
           await _createWallet(tester);
 
@@ -184,6 +199,53 @@ void main() {
         },
         variant: TargetPlatformVariant.only(TargetPlatform.iOS),
       );
+
+      testWidgets('iPhone Duo ${pose.name}, text ×$textScale: the lock screen '
+          '${textScale == 1 ? 'fits without scrolling' : 'fits'}', (
+        tester,
+      ) async {
+        _setPose(tester, pose);
+        tester.platformDispatcher.textScaleFactorTestValue = textScale;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final store = InMemorySecureKeyValueStore();
+        await tester.pumpWidget(_app(store));
+        await tester.pumpAndSettle();
+        await _createWallet(tester);
+        await _restartLocked(tester, store);
+
+        if (textScale == 1) {
+          // Everything is on screen at once: the wallet, the bottom row of
+          // keys and the button, inside the window's safe area.
+          final top = pose.padding.top;
+          final bottom = pose.size.height - pose.padding.bottom;
+          for (final finder in <Finder>[
+            find.byIcon(Icons.account_balance_wallet_outlined),
+            find.byKey(const ValueKey<String>('pin-key-0')),
+            find.text('Разблокировать'),
+          ]) {
+            final rect = tester.getRect(finder);
+            expect(rect.top, greaterThanOrEqualTo(top), reason: '$finder');
+            expect(rect.bottom, lessThanOrEqualTo(bottom), reason: '$finder');
+          }
+          // Keys keep a key's proportions, not a bar's.
+          expect(
+            tester
+                .getSize(find.byKey(const ValueKey<String>('pin-key-5')))
+                .width,
+            lessThan(140),
+          );
+        }
+
+        for (final digit in <String>['1', '2', '3', '4']) {
+          await _tapShown(
+            tester,
+            find.byKey(ValueKey<String>('pin-key-$digit')),
+          );
+        }
+        await _tapShown(tester, find.text('Разблокировать'));
+        expect(find.text('Кошелёк заблокирован'), findsNothing);
+        expect(find.text('Отправить'), findsOneWidget);
+      }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
     }
   }
 }

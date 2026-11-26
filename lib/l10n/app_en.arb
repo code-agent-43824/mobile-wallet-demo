@@ -216,8 +216,6 @@
   "lockedTitlePhone": "The wallet is locked",
   "lockedBodyCard": "Enter the card PIN and hold the card to the phone to open the wallet.",
   "lockedBodyPhone": "The wallet is ready. Enter the PIN to get in.",
-  "lockedAddress": "Address",
-  "lockedStorage": "Storage",
   "lockedUnlockCard": "Unlock with the card",
   "lockedUnlockPhone": "Unlock",
   "authConfirmTitle": "Confirm the operation",
