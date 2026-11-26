@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.64.1] - 2026-11-26
+
 ### Fixed
 
 - iPhone Duo: клавиши PIN больше не стоят на сгибе раскрытого устройства — ни на экране блокировки, ни в листе
