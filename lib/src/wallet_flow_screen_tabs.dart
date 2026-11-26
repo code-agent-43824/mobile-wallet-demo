@@ -1224,35 +1224,37 @@ class _NoDataYet extends StatelessWidget {
 ///
 /// Shows length only — never the digits — so a shoulder-surfer learns nothing
 /// beyond how long the PIN is.
+/// One filled dot per digit typed, then one faint dot where the next goes.
+/// There are no empty places to fill: a PIN is 4 to 12 digits and its length
+/// is stored nowhere, so a fixed row would suggest a length — four dots made
+/// the owner, with a six-digit PIN, think four were expected (2026-11-26).
 class _PinDots extends StatelessWidget {
-  const _PinDots({required this.length});
+  const _PinDots({required this.length, required this.maxLength});
 
   final int length;
-
-  /// Dots always drawn, so the row does not jump as the PIN grows.
-  static const int _slots = 4;
+  final int maxLength;
 
   @override
   Widget build(BuildContext context) {
-    final count = length > _slots ? length : _slots;
+    final palette = context.nocturne;
+    Widget dot({required bool filled}) => Container(
+      width: 12,
+      height: 12,
+      margin: const EdgeInsets.symmetric(horizontal: NocturneSpacing.x2),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: filled ? palette.accent : Colors.transparent,
+        border: Border.all(
+          color: filled ? palette.accent : palette.outlineFaint,
+        ),
+      ),
+    );
     return Row(
+      key: const ValueKey<String>('pin-dots'),
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        for (var i = 0; i < count; i++)
-          Container(
-            width: 12,
-            height: 12,
-            margin: const EdgeInsets.symmetric(horizontal: NocturneSpacing.x2),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: i < length ? context.nocturne.accent : Colors.transparent,
-              border: Border.all(
-                color: i < length
-                    ? context.nocturne.accent
-                    : context.nocturne.outlineFaint,
-              ),
-            ),
-          ),
+        for (var i = 0; i < length; i++) dot(filled: true),
+        if (length < maxLength) dot(filled: false),
       ],
     );
   }

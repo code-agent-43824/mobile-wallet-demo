@@ -470,6 +470,22 @@ void main() {
 
     expect(find.text('Кошелёк заблокирован'), findsOneWidget);
     expect(find.text('Кошелёк'), findsNothing, reason: 'no tabs behind it');
+
+    // The dots count what was typed and never suggest a length: one faint
+    // dot marks the next digit, and six digits show six (owner, 2026-11-26).
+    int dots() => tester
+        .widget<Row>(find.byKey(const ValueKey<String>('pin-dots')))
+        .children
+        .length;
+    expect(dots(), 1);
+    await _enterOperationPin(tester, '123456');
+    expect(dots(), 7);
+    for (var i = 0; i < 6; i++) {
+      await tester.tap(find.byKey(const ValueKey<String>('pin-key-del')));
+    }
+    await tester.pump();
+    expect(dots(), 1);
+
     await _enterOperationPin(tester, '1234');
     await tester.tap(find.text('Разблокировать'));
     await tester.pump();

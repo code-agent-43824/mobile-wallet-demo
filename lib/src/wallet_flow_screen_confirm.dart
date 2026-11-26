@@ -240,7 +240,7 @@ class _PinEntryPanelState extends State<_PinEntryPanel> {
         ),
       ),
       const SizedBox(height: NocturneSpacing.x8),
-      _PinDots(length: _pin.length),
+      _PinDots(length: _pin.length, maxLength: _maxPinLength),
       if (widget.biometricsOffered) ...[
         const SizedBox(height: NocturneSpacing.x3),
         TextButton.icon(
