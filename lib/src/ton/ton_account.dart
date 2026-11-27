@@ -6,14 +6,16 @@ import 'package:ton_dart/ton_dart.dart';
 
 import '../errors/app_error.dart';
 import '../key_storage/key_storage_backend.dart';
+import 'ton_network.dart';
 
-/// A public, recoverable Wallet V5R1 identity for the first TON testnet account.
+/// The first Wallet V5R1 account derived from a public key on a specific network.
 final class TonAccount {
-  TonAccount(List<int> bytes) : publicKey = _validatePublicKey(bytes) {
+  TonAccount(List<int> bytes, {this.network = TonNetwork.testnet})
+    : publicKey = _validatePublicKey(bytes) {
     wallet = WalletV5R1.create(
       publicKey: publicKey,
       context: V5R1ClientContext(
-        chainId: TonChainId.testnet,
+        chainId: network.chainId,
         workchain: TonWorkChain.basechain,
         subwalletNumber: 0,
       ),
@@ -21,18 +23,22 @@ final class TonAccount {
   }
 
   final Uint8List publicKey;
+  final TonNetwork network;
   late final WalletV5R1 wallet;
 
   String get publicKeyHex => hex.encode(publicKey);
   String get address => wallet.address.address;
   String get rawAddress => wallet.address.toRawAddress();
 
+  TonAccount onNetwork(TonNetwork target) =>
+      target == network ? this : TonAccount(publicKey, network: target);
+
   void checkRecoveryAddress(String? address) {
     final expected = address?.trim();
     if (expected == null || expected.isEmpty) return;
     try {
       final candidate = TonAddress(expected);
-      if ((!candidate.isFriendly || candidate.isTestOnly) &&
+      if (network.accepts(candidate) &&
           candidate.workchain == wallet.address.workchain &&
           hex.encode(candidate.hash) == hex.encode(wallet.address.hash)) {
         return;

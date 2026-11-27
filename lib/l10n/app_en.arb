@@ -921,9 +921,9 @@
   "deleteWalletConfirmCheck": "I have saved the seed phrase or accept losing the funds",
   "deleteWalletAction": "Delete for good",
   "busyDeletingWallet": "Deleting the wallet…",
-  "errTonApiUnavailable": "TON Testnet is temporarily unavailable. Try again.",
+  "errTonApiUnavailable": "TON is temporarily unavailable. Try again.",
   "errTonAccountUnavailable": "The TON account cannot process this transfer. Check the wallet and recipient address.",
-  "errTonOtherNetwork": "Use a TON Testnet address for this transfer.",
+  "errTonOtherNetwork": "Use an address for the selected TON network.",
   "errTonQuoteExpired": "The TON wallet state or the transfer deadline changed. Review a new quote.",
   "errTonTransferPending": "A GRAM transfer is still awaiting confirmation.",
   "errTonSignatureInvalid": "The Ed25519 signature does not match the TON account.",
@@ -944,7 +944,9 @@
   "tonTapCard": "Hold the Rutoken card against the phone until the operation finishes.",
   "tonSubmitted": "The message was sent. The network is still processing the transfer.",
   "tonSubmissionUncertain": "Waiting for confirmation from the network. Check the activity before trying again.",
-  "tonRestoreContract": "Restore a Wallet V5R1 account in TON Testnet.",
+  "tonRestoreContract": "Restore a Wallet V5R1 account for the selected network.",
   "tonExpectedAddress": "Expected address (optional)",
-  "errTonRestoreAddressMismatch": "This phrase gives a different Wallet V5R1 address in TON Testnet."
+  "errTonRestoreAddressMismatch": "This phrase gives a different Wallet V5R1 address on the selected network.",
+  "tonOpenWallet": "TON",
+  "tonMainnet": "TON Mainnet"
 }

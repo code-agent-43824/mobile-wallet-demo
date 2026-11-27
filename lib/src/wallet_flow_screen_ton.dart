@@ -60,7 +60,7 @@ class _TonWalletPageState extends State<_TonWalletPage> {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.tonNetwork),
+        title: Text(l10n.tonOpenWallet),
         actions: [
           ListenableBuilder(
             listenable: _wallet,
@@ -90,6 +90,21 @@ class _TonWalletPageState extends State<_TonWalletPage> {
                 child: ListView(
                   padding: const EdgeInsets.all(NocturneSpacing.gutter),
                   children: [
+                    DropdownButtonFormField<TonNetwork>(
+                      key: ValueKey(_wallet.network),
+                      initialValue: _wallet.network,
+                      items: [
+                        for (final network in TonNetwork.values)
+                          DropdownMenuItem(
+                            value: network,
+                            child: Text(_tonNetworkLabel(l10n, network)),
+                          ),
+                      ],
+                      onChanged: (network) {
+                        if (network != null) _wallet.selectNetwork(network);
+                      },
+                    ),
+                    const SizedBox(height: 12),
                     if (_wallet.error case final Object failure)
                       _ErrorBanner(message: _tonError(l10n, failure)),
                     if (selected != null) ...[
@@ -110,7 +125,7 @@ class _TonWalletPageState extends State<_TonWalletPage> {
                             DropdownMenuItem(
                               value: card,
                               child: Text(
-                                '${l10n.tonCard} · ${card.account.address.substring(0, 12)}…',
+                                '${l10n.tonCard} · ${_wallet.accountFor(card).address.substring(0, 12)}…',
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -251,7 +266,7 @@ class _TonWalletPageState extends State<_TonWalletPage> {
 
   void _receive(TonWalletSelection selected) {
     final l10n = AppLocalizations.of(context);
-    final address = selected.account.address;
+    final address = _wallet.accountFor(selected).address;
     // TON's address is case-sensitive. The UR encoder uppercases its payloads.
     final matrix = Encoder.encode(address, ErrorCorrectionLevel.m).matrix!;
     _tonShowSheet(
@@ -259,7 +274,7 @@ class _TonWalletPageState extends State<_TonWalletPage> {
       _TonSheet(
         title: l10n.receiveTitle,
         children: [
-          Text(l10n.tonNetwork),
+          Text(_tonNetworkLabel(l10n, _wallet.network)),
           SelectableText(address),
           Center(
             child: Semantics(
@@ -443,7 +458,7 @@ class _TonSetupSheetState extends State<_TonSetupSheet> {
       title: _tonSetupLabel(l10n, method),
       busy: _busy,
       children: [
-        Text(l10n.tonNetwork),
+        Text(_tonNetworkLabel(l10n, widget.wallet.network)),
         if (generated && phrase == null && _error == null)
           const LinearProgressIndicator(),
         if (generated && phrase != null) ...[
@@ -602,7 +617,12 @@ class _TonSendSheetState extends State<_TonSendSheet> {
       title: quote == null ? l10n.transferTitle : l10n.transferReview,
       busy: _busy,
       children: [
-        Text(l10n.tonNetwork),
+        Text(
+          _tonNetworkLabel(
+            l10n,
+            quote?.account.network ?? widget.wallet.network,
+          ),
+        ),
         if (_error case final Object failure)
           _ErrorBanner(message: _tonError(l10n, failure)),
         if (accepted != null)
@@ -718,7 +738,7 @@ class _TonBiometricSheetState extends State<_TonBiometricSheet> {
       title: l10n.settingsBiometrics,
       busy: _busy,
       children: [
-        Text(l10n.tonNetwork),
+        Text(_tonNetworkLabel(l10n, widget.wallet.network)),
         if (_error case final Object failure)
           _ErrorBanner(message: _tonError(l10n, failure)),
         if (_busy)
@@ -740,6 +760,9 @@ Widget _tonPinField(TextEditingController controller, String label) =>
       enableSuggestions: false,
       decoration: InputDecoration(labelText: label),
     );
+
+String _tonNetworkLabel(AppLocalizations l10n, TonNetwork network) =>
+    network.isTestnet ? l10n.tonNetwork : l10n.tonMainnet;
 
 String _tonError(AppLocalizations l10n, Object failure) =>
     failure is CodedError && failure.errorCode != null

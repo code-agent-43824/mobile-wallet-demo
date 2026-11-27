@@ -411,9 +411,9 @@
   "deleteWalletConfirmCheck": "Я сохранил seed-фразу или согласен потерять средства",
   "deleteWalletAction": "Удалить навсегда",
   "busyDeletingWallet": "Удаляем кошелёк…",
-  "errTonApiUnavailable": "TON Testnet временно недоступен. Повторите попытку.",
+  "errTonApiUnavailable": "Сеть TON временно недоступна. Повторите попытку.",
   "errTonAccountUnavailable": "Аккаунт TON не может обработать этот перевод. Проверьте кошелёк и адрес получателя.",
-  "errTonOtherNetwork": "Для перевода нужен адрес TON Testnet.",
+  "errTonOtherNetwork": "Укажите адрес для выбранной сети TON.",
   "errTonQuoteExpired": "Состояние кошелька TON или срок перевода изменились. Подготовьте перевод заново.",
   "errTonTransferPending": "Перевод GRAM ещё ожидает подтверждения.",
   "errTonSignatureInvalid": "Подпись Ed25519 не соответствует аккаунту TON.",
@@ -434,7 +434,9 @@
   "tonTapCard": "Приложите Рутокен к телефону и удерживайте до завершения операции.",
   "tonSubmitted": "Сообщение отправлено. Сеть ещё обрабатывает перевод.",
   "tonSubmissionUncertain": "Ждём подтверждения от сети. Проверьте историю перед повторной попыткой.",
-  "tonRestoreContract": "Восстановление аккаунта Wallet V5R1 в TON Testnet.",
+  "tonRestoreContract": "Восстановление аккаунта Wallet V5R1 в выбранной сети.",
   "tonExpectedAddress": "Ожидаемый адрес (необязательно)",
-  "errTonRestoreAddressMismatch": "Эта фраза даёт другой адрес Wallet V5R1 в TON Testnet."
+  "errTonRestoreAddressMismatch": "Эта фраза даёт другой адрес Wallet V5R1 в выбранной сети.",
+  "tonOpenWallet": "TON",
+  "tonMainnet": "TON Mainnet"
 }

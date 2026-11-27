@@ -8,6 +8,7 @@ import '../key_storage/secure_key_value_store.dart';
 import '../transactions/transaction_service.dart';
 import 'ton_account.dart';
 import 'ton_center_client.dart';
+import 'ton_network.dart';
 
 final _gramScale = BigInt.from(1000000000);
 
@@ -92,17 +93,22 @@ class TonTransferService {
   int get _nowSeconds => _now().millisecondsSinceEpoch ~/ 1000;
 
   String _submissionKey(TonAccount account) =>
-      'wallet.ton_testnet.submission.${account.rawAddress}';
+      'wallet.ton_${account.network.name}.submission.${account.rawAddress}';
 
   Future<TonSnapshot> load(TonAccount account) async {
-    final state = await _client.wallet(account.rawAddress, forSigning: false);
+    final network = account.network;
+    final state = await _client.wallet(
+      account.rawAddress,
+      forSigning: false,
+      network: network,
+    );
     final transactions = state.status == 'nonexist'
         ? <Map<String, dynamic>>[]
-        : await _client.transactions(account.rawAddress);
+        : await _client.transactions(account.rawAddress, network: network);
     final submission = await _readSubmission(account);
     final status = submission == null
         ? null
-        : await _resolveSubmission(submission, transactions);
+        : await _resolveSubmission(submission, transactions, network);
     final activity = <TonActivity>[];
     for (final transaction in transactions) {
       final time = transaction['utime'];
@@ -121,7 +127,7 @@ class TonTransferService {
         }
         activity.add(
           TonActivity(
-            counterparty: address.toFriendly(testOnly: true).address,
+            counterparty: network.friendly(address),
             amount: amount,
             time: DateTime.fromMillisecondsSinceEpoch(time * 1000, isUtc: true),
             incoming: received,
@@ -138,18 +144,24 @@ class TonTransferService {
     required String amount,
   }) async {
     final destination = _parseAddress(recipient.trim());
+    final network = account.network;
     if (destination == null) {
       throw const TransactionFailure.coded(AppErrorCode.txRecipientInvalid);
     }
-    if (destination.isFriendly && !destination.isTestOnly) {
+    if (!network.accepts(destination)) {
       throw const TransactionFailure.coded(AppErrorCode.tonOtherNetwork);
     }
     final value = _parseAmount(amount.trim());
     await _assertNoPending(account);
-    final sender = await _client.wallet(account.rawAddress, forSigning: true);
+    final sender = await _client.wallet(
+      account.rawAddress,
+      forSigning: true,
+      network: network,
+    );
     final target = await _client.wallet(
       _canonicalAddress(destination),
       forSigning: false,
+      network: network,
     );
     if ((!sender.active && !sender.canDeploy) ||
         (!target.active && !target.canDeploy) ||
@@ -196,6 +208,7 @@ class TonTransferService {
         .endCell();
     final fee = await _client.estimateFee(
       sender: account.rawAddress,
+      network: network,
       unsignedBody: beginCell()
           .storeSlice(request.beginParse())
           .storeBuffer(Uint8List(64))
@@ -205,7 +218,7 @@ class TonTransferService {
     _requireFunds(sender.balance, value, fee);
     return TonTransferQuote._(
       account: account,
-      destination: destination.toFriendly(testOnly: true).address,
+      destination: network.friendly(destination),
       amount: value,
       fee: fee,
       seqno: seqno,
@@ -231,6 +244,7 @@ class TonTransferService {
       final state = await _client.wallet(
         quote.account.rawAddress,
         forSigning: true,
+        network: quote.account.network,
       );
       if ((state.active ? state.seqno : 0) != quote.seqno ||
           state.active != (quote._init == null) ||
@@ -264,7 +278,10 @@ class TonTransferService {
         }),
       );
       try {
-        await _client.broadcast(envelope.serialize().toBase64());
+        await _client.broadcast(
+          envelope.serialize().toBase64(),
+          network: quote.account.network,
+        );
         return true;
       } on TransactionFailure {
         return false;
@@ -283,8 +300,11 @@ class TonTransferService {
   Future<void> _assertNoPending(TonAccount account) async {
     final recorded = await _readSubmission(account);
     if (recorded == null) return;
-    final transactions = await _client.transactions(account.rawAddress);
-    if (await _resolveSubmission(recorded, transactions) ==
+    final transactions = await _client.transactions(
+      account.rawAddress,
+      network: account.network,
+    );
+    if (await _resolveSubmission(recorded, transactions, account.network) ==
         TonTransferStatus.pending) {
       throw const TransactionFailure.coded(AppErrorCode.tonTransferPending);
     }
@@ -293,6 +313,7 @@ class TonTransferService {
   Future<TonTransferStatus> _resolveSubmission(
     Map<String, dynamic> recorded,
     List<Map<String, dynamic>> transactions,
+    TonNetwork network,
   ) async {
     for (final transaction in transactions) {
       if (_message(transaction['in_msg'])?['body_hash'] !=
@@ -310,6 +331,7 @@ class TonTransferService {
         }
         final targetTransactions = await _client.transactions(
           recorded['recipient'] as String,
+          network: network,
         );
         for (final incoming in targetTransactions) {
           if (_message(incoming['in_msg'])?['hash'] != outboundHash) {

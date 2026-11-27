@@ -9,6 +9,7 @@ import 'package:mobile_wallet_demo/src/key_storage/phone_ton_vault.dart';
 import 'package:mobile_wallet_demo/src/key_storage/rutoken_ton_vault.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
 import 'package:mobile_wallet_demo/src/key_storage/ton_mnemonic.dart';
+import 'package:mobile_wallet_demo/src/ton/ton_network.dart';
 
 import 'fixtures/ton_test_vectors.dart';
 
@@ -49,6 +50,12 @@ void main() {
         pin: '123456',
       );
       expect(hex.encode(signature), _signature);
+      final mainnetSignature = await restarted.sign(
+        account: restored.onNetwork(TonNetwork.mainnet),
+        hash: _hash,
+        pin: '123456',
+      );
+      expect(hex.encode(mainnetSignature), _signature);
       await expectLater(
         restarted.importMnemonic(mnemonic: tonTestMnemonic, pin: '654321'),
         throwsA(

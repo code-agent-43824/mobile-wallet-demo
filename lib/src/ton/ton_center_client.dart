@@ -6,6 +6,7 @@ import 'package:ton_dart/ton_dart.dart';
 
 import '../errors/app_error.dart';
 import '../transactions/transaction_service.dart';
+import 'ton_network.dart';
 
 class TonWalletState {
   const TonWalletState({
@@ -29,7 +30,6 @@ class TonCenterClient {
   }) : _client = client ?? http.Client(),
        _requestInterval = requestInterval;
 
-  static const _testnetHost = 'testnet.toncenter.com';
   static const _timeout = Duration(seconds: 15);
   static const _maxRetryWait = Duration(seconds: 8);
   static const _defaultRateLimitWait = Duration(seconds: 2);
@@ -42,9 +42,11 @@ class TonCenterClient {
   Future<TonWalletState> wallet(
     String address, {
     required bool forSigning,
+    TonNetwork network = TonNetwork.testnet,
   }) async {
     final result = await _request<Map<String, dynamic>>(
       forSigning ? 'getWalletInformation' : 'getAddressInformation',
+      network: network,
       query: {'address': address},
     );
     final status = result['account_state'] ?? result['state'];
@@ -69,9 +71,13 @@ class TonCenterClient {
     );
   }
 
-  Future<List<Map<String, dynamic>>> transactions(String address) async {
+  Future<List<Map<String, dynamic>>> transactions(
+    String address, {
+    TonNetwork network = TonNetwork.testnet,
+  }) async {
     final reply = await _request<List<dynamic>>(
       'getTransactions',
+      network: network,
       query: {'address': address, 'limit': '20', 'archival': 'true'},
     );
     return reply.whereType<Map<String, dynamic>>().toList(growable: false);
@@ -81,9 +87,11 @@ class TonCenterClient {
     required String sender,
     required Cell unsignedBody,
     required StateInit? init,
+    TonNetwork network = TonNetwork.testnet,
   }) async {
     final result = await _request<Map<String, dynamic>>(
       'estimateFee',
+      network: network,
       body: {
         'address': sender,
         'body': unsignedBody.toBase64(),
@@ -110,18 +118,22 @@ class TonCenterClient {
     return total;
   }
 
-  Future<void> broadcast(String boc) async {
-    await _request<Object>('sendBoc', body: {'boc': boc});
+  Future<void> broadcast(
+    String boc, {
+    TonNetwork network = TonNetwork.testnet,
+  }) async {
+    await _request<Object>('sendBoc', network: network, body: {'boc': boc});
   }
 
   Future<T> _request<T>(
     String method, {
+    required TonNetwork network,
     Map<String, String>? query,
     Map<String, dynamic>? body,
   }) {
     final turn = _queue.then((_) async {
       try {
-        final uri = Uri.https(_testnetHost, '/api/v2/$method', query);
+        final uri = Uri.https(network.tonCenterHost, '/api/v2/$method', query);
         var response = await _send(uri, body);
         if (response.statusCode == 429) {
           final delay = _applyRateLimit(response);

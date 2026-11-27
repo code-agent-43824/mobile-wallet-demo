@@ -7,6 +7,7 @@ import '../key_storage/phone_ton_vault.dart';
 import '../key_storage/rutoken_ton_vault.dart';
 import '../transactions/transaction_service.dart';
 import 'ton_account.dart';
+import 'ton_network.dart';
 import 'ton_transfer_service.dart';
 
 enum TonSetupMethod {
@@ -49,6 +50,7 @@ class TonWalletController extends ChangeNotifier {
   TonWalletSelection? phone;
   List<TonWalletSelection> cards = const [];
   TonWalletSelection? selection;
+  TonNetwork network = TonNetwork.testnet;
   TonSnapshot? snapshot;
   Object? error;
   bool loading = true;
@@ -60,6 +62,9 @@ class TonWalletController extends ChangeNotifier {
   int _refreshId = 0;
 
   bool get cardAvailable => _card != null;
+
+  TonAccount accountFor(TonWalletSelection wallet) =>
+      wallet.account.onNetwork(network);
 
   Future<void> load() async {
     // A failure in one vault must still let the other wallet open.
@@ -86,7 +91,20 @@ class TonWalletController extends ChangeNotifier {
   void select(TonWalletSelection wallet) {
     if (identical(selection, wallet)) return;
     selection = wallet;
+    _reloadSelection();
+  }
+
+  void selectNetwork(TonNetwork selected) {
+    if (network == selected) return;
+    network = selected;
+    _reloadSelection();
+  }
+
+  void _reloadSelection() {
+    _refreshId++;
     snapshot = null;
+    error = null;
+    refreshing = false;
     awaitingTransfer = false;
     _changed();
     unawaited(refresh());
@@ -100,7 +118,7 @@ class TonWalletController extends ChangeNotifier {
     error = null;
     _changed();
     try {
-      final fresh = await _transfers.load(selected.account);
+      final fresh = await _transfers.load(accountFor(selected));
       if (requestId == _refreshId) {
         snapshot = fresh;
         awaitingTransfer = fresh.lastSubmission == TonTransferStatus.pending;
@@ -130,6 +148,7 @@ class TonWalletController extends ChangeNotifier {
           mnemonic: phrase,
           pin: pin,
           expectedAddress: expectedAddress,
+          network: network,
         ),
       };
       final wallet = TonWalletSelection.card(created);
@@ -143,6 +162,7 @@ class TonWalletController extends ChangeNotifier {
         mnemonic: phrase,
         pin: pin,
         expectedAddress: expectedAddress,
+        network: network,
       );
       final wallet = TonWalletSelection.phone(account);
       phone = wallet;
@@ -156,7 +176,7 @@ class TonWalletController extends ChangeNotifier {
     String recipient,
     String amount,
   ) => _transfers.prepare(
-    account: wallet.account,
+    account: accountFor(wallet),
     recipient: recipient,
     amount: amount,
   );
@@ -167,27 +187,47 @@ class TonWalletController extends ChangeNotifier {
     String? pin,
     void Function(bool waiting)? onCardPrompt,
   }) async {
-    if (!identical(wallet, selection) ||
-        !identical(wallet.account, quote.account)) {
-      throw const TransactionFailure.coded(AppErrorCode.txSenderMismatch);
+    void verifySelection() {
+      if (!identical(wallet, selection) ||
+          wallet.account.publicKeyHex != quote.account.publicKeyHex ||
+          quote.account.network != network) {
+        throw const TransactionFailure.coded(AppErrorCode.txSenderMismatch);
+      }
     }
+
+    verifySelection();
     final card = wallet.card;
     final accepted = await _transfers.submit(quote, (hash) async {
+      verifySelection();
       if (card == null) {
-        return _phone.sign(account: wallet.account, hash: hash, pin: pin);
+        final signature = await _phone.sign(
+          account: quote.account,
+          hash: hash,
+          pin: pin,
+        );
+        verifySelection();
+        return signature;
       }
       if (pin == null) {
         throw const TransactionFailure.coded(AppErrorCode.cardPinEmpty);
       }
       onCardPrompt?.call(true);
       try {
-        return await _card!.sign(profile: card, pin: pin, hash: hash);
+        final signature = await _card!.sign(
+          profile: card,
+          pin: pin,
+          hash: hash,
+        );
+        verifySelection();
+        return signature;
       } finally {
         onCardPrompt?.call(false);
       }
     });
-    awaitingTransfer = true;
-    unawaited(refresh());
+    if (identical(wallet, selection) && quote.account.network == network) {
+      awaitingTransfer = true;
+      unawaited(refresh());
+    }
     return accepted;
   }
 

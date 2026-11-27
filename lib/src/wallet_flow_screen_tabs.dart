@@ -841,7 +841,7 @@ class _WalletTabState extends State<_WalletTab> {
                   },
                 ),
               ListTile(
-                title: Text(AppLocalizations.of(sheetContext).tonNetwork),
+                title: Text(AppLocalizations.of(sheetContext).tonOpenWallet),
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   widget.onOpenTon();

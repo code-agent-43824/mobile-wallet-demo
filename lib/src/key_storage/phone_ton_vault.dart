@@ -7,6 +7,7 @@ import 'package:cryptography/cryptography.dart';
 import '../auth/biometric_auth.dart';
 import '../errors/app_error.dart';
 import '../ton/ton_account.dart';
+import '../ton/ton_network.dart';
 import 'biometric_secret_store.dart';
 import 'encrypted_mnemonic_vault.dart';
 import 'key_storage_backend.dart';
@@ -46,6 +47,7 @@ final class PhoneTonVault {
     required String mnemonic,
     required String pin,
     String? expectedAddress,
+    TonNetwork network = TonNetwork.testnet,
   }) async {
     if (await _vault.hasWallet()) {
       throw const VaultFailure.coded(AppErrorCode.walletAlreadyExists);
@@ -54,7 +56,8 @@ final class PhoneTonVault {
     final account = await _withKeyPair(phrase, (keyPair) async {
       return TonAccount((await keyPair.extractPublicKey()).bytes);
     });
-    account.checkRecoveryAddress(expectedAddress);
+    account.onNetwork(network).checkRecoveryAddress(expectedAddress);
+    // Existing records use the canonical Testnet address to bind the key.
     await _vault.create(
       mnemonic: phrase,
       pin: pin,
@@ -86,7 +89,8 @@ final class PhoneTonVault {
       String phrase,
       EncryptedMnemonicRecord record,
     ) async {
-      if (_accountFromRecord(record).rawAddress != account.rawAddress) {
+      if (_accountFromRecord(record).onNetwork(account.network).rawAddress !=
+          account.rawAddress) {
         throw const VaultFailure.coded(AppErrorCode.txSenderMismatch);
       }
       return _withKeyPair(phrase, (keyPair) async {

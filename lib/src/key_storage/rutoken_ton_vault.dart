@@ -6,6 +6,7 @@ import 'package:cryptography/cryptography.dart';
 
 import '../errors/app_error.dart';
 import '../ton/ton_account.dart';
+import '../ton/ton_network.dart';
 import 'custody_backend.dart';
 import 'key_storage_backend.dart';
 import 'secure_key_value_store.dart';
@@ -106,6 +107,7 @@ final class RutokenTonVault {
     required String mnemonic,
     required String pin,
     String? expectedAddress,
+    TonNetwork network = TonNetwork.testnet,
   }) => _operation(() async {
     final seed = await TonMnemonic.deriveSeed(mnemonic);
     try {
@@ -116,7 +118,10 @@ final class RutokenTonVault {
       } finally {
         pair.destroy();
       }
-      TonAccount(publicKey).checkRecoveryAddress(expectedAddress);
+      TonAccount(
+        publicKey,
+        network: network,
+      ).checkRecoveryAddress(expectedAddress);
       return await _openSession(pin, (session, serial) async {
         final key = await _adapter.importTonKey(
           session: session,

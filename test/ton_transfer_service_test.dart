@@ -11,6 +11,7 @@ import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
 import 'package:mobile_wallet_demo/src/key_storage/ton_mnemonic.dart';
 import 'package:mobile_wallet_demo/src/ton/ton_account.dart';
 import 'package:mobile_wallet_demo/src/ton/ton_center_client.dart';
+import 'package:mobile_wallet_demo/src/ton/ton_network.dart';
 import 'package:mobile_wallet_demo/src/ton/ton_transfer_service.dart';
 import 'package:mobile_wallet_demo/src/transactions/transaction_service.dart';
 import 'package:ton_dart/ton_dart.dart' hide TonAccount;
@@ -38,6 +39,42 @@ Future<Uint8List> _sign(Uint8List hash) async {
 }
 
 void main() {
+  test(
+    'Mainnet derives its own V5R1 address and uses only Mainnet endpoints',
+    () async {
+      final fixture = _Fixture(network: TonNetwork.mainnet);
+      final account = _account.onNetwork(TonNetwork.mainnet);
+      expect(
+        account.address,
+        'UQDSLOFVamNZzdy4LulclcCBEFkRReZ7WscBCLAw3Pg53h3h',
+      );
+      expect(account.rawAddress, isNot(_account.rawAddress));
+      await expectLater(
+        fixture.service.prepare(
+          account: account,
+          recipient: _account.address,
+          amount: '1',
+        ),
+        throwsA(
+          isA<TransactionFailure>().having(
+            (failure) => failure.errorCode,
+            'code',
+            AppErrorCode.tonOtherNetwork,
+          ),
+        ),
+      );
+      final quote = await fixture.service.prepare(
+        account: account,
+        recipient: _recipient,
+        amount: '1',
+      );
+      expect(TonAddress(quote.destination).isTestOnly, isFalse);
+      expect(await fixture.service.submit(quote, _sign), isTrue);
+      final envelope = fixture.envelope!.info as CommonMessageInfoExternalIn;
+      expect(envelope.dest.toRawAddress(), account.rawAddress);
+    },
+  );
+
   test('TON Center backs off on 429 and broadcasts a BoC at most once', () async {
     var reads = 0;
     var broadcasts = 0;
@@ -231,7 +268,7 @@ void main() {
 }
 
 class _Fixture {
-  _Fixture() {
+  _Fixture({this.network = TonNetwork.testnet}) {
     service = TonTransferService(
       client: TonCenterClient(
         client: MockClient(_reply),
@@ -244,6 +281,7 @@ class _Fixture {
   }
 
   late final TonTransferService service;
+  final TonNetwork network;
   bool deployed = true;
   int seqno = 1;
   int broadcasts = 0;
@@ -254,7 +292,7 @@ class _Fixture {
   List<Object> recipientTransactions = [];
 
   Future<http.Response> _reply(http.Request request) async {
-    expect(request.url.host, 'testnet.toncenter.com');
+    expect(request.url.host, network.tonCenterHost);
     final method = request.url.pathSegments.last;
     final Object result;
     switch (method) {

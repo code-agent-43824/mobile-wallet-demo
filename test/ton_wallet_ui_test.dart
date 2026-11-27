@@ -50,7 +50,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('TON Testnet'));
+      await tester.tap(find.text('TON'));
       await tester.pumpAndSettle();
       final l10n = AppLocalizations.of(
         tester.element(find.text('TON Testnet').first),
@@ -132,7 +132,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('TON Testnet'));
+    await tester.tap(find.text('TON'));
     await tester.pumpAndSettle();
     final l10n = AppLocalizations.of(
       tester.element(find.text('TON Testnet').first),
