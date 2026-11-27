@@ -18,6 +18,7 @@ import 'key_storage/rutoken_method_channel_adapter.dart';
 import 'qr/camera_qr_scanner.dart';
 import 'qr/file_qr_scanner.dart';
 import 'qr/qr_scanner.dart';
+import 'ton/ton_center_client.dart';
 import 'transactions/transaction_service.dart';
 import 'transactions/hardened_transaction_service.dart';
 import 'wallet_flow_screen.dart';
@@ -66,6 +67,7 @@ class MobileWalletDemoApp extends StatefulWidget {
     WalletConnectTransactionPreflight? walletConnectPreflight,
     QrScanner? qrScanner,
     RutokenNativeAdapter? rutokenNativeAdapter,
+    TonCenterClient? tonClient,
     Locale? locale,
   }) : _store = store,
        _locale = locale,
@@ -78,7 +80,8 @@ class MobileWalletDemoApp extends StatefulWidget {
        _walletConnectService = walletConnectService,
        _walletConnectPreflight = walletConnectPreflight,
        _qrScanner = qrScanner,
-       _rutokenNativeAdapter = rutokenNativeAdapter;
+       _rutokenNativeAdapter = rutokenNativeAdapter,
+       _tonClient = tonClient;
 
   final SecureKeyValueStore? _store;
   final BlockchainProvider? _blockchainProvider;
@@ -91,6 +94,7 @@ class MobileWalletDemoApp extends StatefulWidget {
   final WalletConnectTransactionPreflight? _walletConnectPreflight;
   final QrScanner? _qrScanner;
   final RutokenNativeAdapter? _rutokenNativeAdapter;
+  final TonCenterClient? _tonClient;
 
   /// Pins the UI language regardless of the stored choice or the system
   /// locale. Widget tests set this so copy assertions stay deterministic; the
@@ -225,6 +229,7 @@ class _MobileWalletDemoAppState extends State<MobileWalletDemoApp> {
           walletConnectPreflight: _walletConnectPreflight,
           qrScanner: _qrScanner,
           rutokenNativeAdapter: _rutokenNativeAdapter,
+          tonClient: widget._tonClient,
         ),
       ),
     );

@@ -4,6 +4,9 @@ import 'package:convert/convert.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:ton_dart/ton_dart.dart';
 
+import '../errors/app_error.dart';
+import '../key_storage/key_storage_backend.dart';
+
 /// A public, recoverable Wallet V5R1 identity for the first TON testnet account.
 final class TonAccount {
   TonAccount(List<int> bytes) : publicKey = _validatePublicKey(bytes) {
@@ -23,6 +26,22 @@ final class TonAccount {
   String get publicKeyHex => hex.encode(publicKey);
   String get address => wallet.address.address;
   String get rawAddress => wallet.address.toRawAddress();
+
+  void checkRecoveryAddress(String? address) {
+    final expected = address?.trim();
+    if (expected == null || expected.isEmpty) return;
+    try {
+      final candidate = TonAddress(expected);
+      if ((!candidate.isFriendly || candidate.isTestOnly) &&
+          candidate.workchain == wallet.address.workchain &&
+          hex.encode(candidate.hash) == hex.encode(wallet.address.hash)) {
+        return;
+      }
+    } catch (_) {
+      // An invalid checksum or address is also a mismatch.
+    }
+    throw const VaultFailure.coded(AppErrorCode.tonRestoreAddressMismatch);
+  }
 
   Future<bool> verify(List<int> hash, List<int> signature) {
     if (hash.length != 32 || signature.length != 64) {

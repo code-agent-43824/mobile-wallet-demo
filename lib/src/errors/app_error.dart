@@ -82,6 +82,7 @@ enum AppErrorCode {
   tonQuoteExpired,
   tonTransferPending,
   tonSignatureInvalid,
+  tonRestoreAddressMismatch,
 
   /// Shared by WalletConnect and AirGap. Args: `address`.
   requestOtherAccount,

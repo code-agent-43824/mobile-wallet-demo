@@ -1,7 +1,9 @@
 # mobile-wallet-demo
 
-Flutter-демо EVM-кошелька с хранилищем телефона, WalletConnect и
-MetaMask-совместимым AirGap. Объём продукта и критерии этапов описаны в дорожной карте.
+Flutter-демо кошелька Ethereum и TON Testnet с хранилищем телефона и Рутокеном.
+Для Ethereum предусмотрены WalletConnect и MetaMask-совместимый AirGap.
+Чтобы открыть кошелёк GRAM, выберите TON Testnet на начальном экране или в списке сетей.
+Объём продукта и критерии этапов описаны в дорожной карте.
 
 Текущее состояние и версия — в [STATUS](docs/STATUS.md), ближайшие действия — в
 [PLAN](docs/PLAN.md), этапы продукта — в [ROADMAP](docs/ROADMAP.md). Результаты

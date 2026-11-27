@@ -91,6 +91,7 @@ String describeAppError(
     AppErrorCode.tonQuoteExpired => l10n.errTonQuoteExpired,
     AppErrorCode.tonTransferPending => l10n.errTonTransferPending,
     AppErrorCode.tonSignatureInvalid => l10n.errTonSignatureInvalid,
+    AppErrorCode.tonRestoreAddressMismatch => l10n.errTonRestoreAddressMismatch,
     AppErrorCode.requestOtherAccount => l10n.errorRequestOtherAccount(
       arg('address'),
     ),

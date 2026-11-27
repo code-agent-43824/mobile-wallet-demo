@@ -38,6 +38,53 @@ Future<Uint8List> _sign(Uint8List hash) async {
 }
 
 void main() {
+  test('a matching recipient transaction confirms the outgoing payment', () async {
+    final fixture = _Fixture();
+    final quote = await fixture.service.prepare(
+      account: _account,
+      recipient: _recipient,
+      amount: '1.2',
+    );
+    await fixture.service.submit(quote, _sign);
+    // Synthetic recipient transaction serialized by @ton/core.
+    const inboundHash = 'ruqi5rmgk90XY/AI0+WQdTb1bfnidtT/4BGwSzmp7eI=';
+    const receipt =
+        'te6cckECBQEAAQEAA7FxERERERERERERERERERERERERERERERERERERERERERAAAAAAAAAA'
+        'EAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAa0nSAAAAAgKAEDBAEB'
+        'oAIAq0gBbYbj/UPycBpPIZTv18vqRBuxKx4sUReHjZresu9r/WcABERERERERERERERERERE'
+        'RERERERERERERERERERERERRHhowAAAAAAAAAAAAAAAAAABAAIJyAAAAAAAAAAAAAAAAAAAA'
+        'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADCBIp'
+        'fTxC';
+    expect(
+      TonTransaction.deserialize(
+        Cell.fromBase64(receipt).beginParse(),
+      ).description,
+      isA<TransactionDescriptionGeneric>(),
+    );
+    fixture.transactions = [
+      {
+        'in_msg': {'body_hash': fixture.bodyHash},
+        'out_msgs': [
+          {
+            'hash': inboundHash,
+            'destination': _recipient,
+            'value': '1200000000',
+          },
+        ],
+      },
+    ];
+    fixture.recipientTransactions = [
+      {
+        'in_msg': {'hash': inboundHash},
+        'data': receipt,
+      },
+    ];
+    expect(
+      (await fixture.service.load(_account)).lastSubmission,
+      TonTransferStatus.confirmed,
+    );
+  });
+
   test(
     'a transfer matches the Wallet V5R1 reference body and reconciles a failed action',
     () async {
@@ -167,6 +214,7 @@ class _Fixture {
   String? bodyHash;
   Map<String, dynamic>? estimate;
   List<Object> transactions = [];
+  List<Object> recipientTransactions = [];
 
   Future<http.Response> _reply(http.Request request) async {
     expect(request.url.host, 'testnet.toncenter.com');
@@ -183,7 +231,9 @@ class _Fixture {
       case 'getAddressInformation':
         result = {'balance': '9000000000', 'state': 'uninitialized'};
       case 'getTransactions':
-        result = transactions;
+        result = request.url.queryParameters['address'] == _recipient
+            ? recipientTransactions
+            : transactions;
       case 'estimateFee':
         estimate = jsonDecode(request.body) as Map<String, dynamic>;
         expect(estimate!['ignore_chksig'], isTrue);

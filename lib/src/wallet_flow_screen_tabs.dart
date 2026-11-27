@@ -681,6 +681,7 @@ class _WalletTab extends StatefulWidget {
     required this.trackingTransport,
     required this.canUnlockWithBiometrics,
     required this.onScan,
+    required this.onOpenTon,
   });
 
   /// Runs the send and drives the send sheet's signing step.
@@ -694,6 +695,7 @@ class _WalletTab extends StatefulWidget {
   /// Opens the surface where scanning happens (the Связи tab), so the design's
   /// third quick action leads somewhere real instead of being a dead button.
   final VoidCallback onScan;
+  final VoidCallback onOpenTon;
 
   @override
   State<_WalletTab> createState() => _WalletTabState();
@@ -838,6 +840,13 @@ class _WalletTabState extends State<_WalletTab> {
                     widget.chainData.selectNetwork(network);
                   },
                 ),
+              ListTile(
+                title: Text(AppLocalizations.of(sheetContext).tonNetwork),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  widget.onOpenTon();
+                },
+              ),
               const SizedBox(height: NocturneSpacing.x4),
             ],
           ),

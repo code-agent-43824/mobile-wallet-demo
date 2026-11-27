@@ -19,6 +19,7 @@ final class PhoneTonVault {
     required SecureKeyValueStore store,
     BiometricAuthGateway? biometricAuth,
     BiometricSecretStore? biometricSecretStore,
+    BiometricPromptText? biometricPromptText,
     int pbkdf2Iterations = EncryptedMnemonicVault.defaultPinIterations,
   }) : _vault = EncryptedMnemonicVault(
          store: store,
@@ -27,6 +28,7 @@ final class PhoneTonVault {
          biometricSecretId: 'ton.testnet',
          biometricAuth: biometricAuth,
          biometricSecretStore: biometricSecretStore,
+         biometricPromptText: biometricPromptText,
          pbkdf2Iterations: pbkdf2Iterations,
        );
 
@@ -43,6 +45,7 @@ final class PhoneTonVault {
   Future<TonAccount> importMnemonic({
     required String mnemonic,
     required String pin,
+    String? expectedAddress,
   }) async {
     if (await _vault.hasWallet()) {
       throw const VaultFailure.coded(AppErrorCode.walletAlreadyExists);
@@ -51,6 +54,7 @@ final class PhoneTonVault {
     final account = await _withKeyPair(phrase, (keyPair) async {
       return TonAccount((await keyPair.extractPublicKey()).bytes);
     });
+    account.checkRecoveryAddress(expectedAddress);
     await _vault.create(
       mnemonic: phrase,
       pin: pin,

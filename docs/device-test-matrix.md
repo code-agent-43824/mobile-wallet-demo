@@ -11,6 +11,8 @@ Result values: `PASS`, `FAIL`, `PARTIAL`, `RETEST`, `BLOCKED`, or `NOT RUN`.
 
 | Area | Platform | Version / date | Result | Evidence / remaining gap |
 | --- | --- | --- | --- | --- |
+| TON Wallet V5R1 restore, QR and GRAM transfer | Android / iOS phone vault | 2026-11-27 | NOT RUN | Widget test covers the flow with a fake endpoint. Verify a real Testnet transfer and restore after restart. |
+| TON Ed25519 generate, restore, sign, cancel and NFC loss | Android arm64 / Rutoken | 2026-11-27 | NOT RUN | Record card model, firmware, app build and GRAM Testnet confirmation. Compare the restored address and verify rejected signatures on the wrong card. |
 | WalletConnect pair/disconnect + `personal_sign` | mobile owner device | v1.29 / 2026-06-16 | PASS | Owner dogfood recorded in worklog; exact device/OS not recorded. |
 | WalletConnect transaction + per-op auth | iOS Simulator | v1.33 / 2026-06-16 | PASS | Approval/sign flow passed; simulator is not secure-storage hardware evidence. |
 | WalletConnect Sepolia broadcast + cold-start vault persistence | Android owner device | v1.36 / 2026-07-21 | PASS | Owner dogfood recorded in worklog; capture device/OS on next repetition. |

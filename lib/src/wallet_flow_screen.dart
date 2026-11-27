@@ -34,12 +34,18 @@ import 'key_storage/backend_registry.dart';
 import 'key_storage/custody_backend.dart';
 import 'key_storage/key_storage_backend.dart';
 import 'key_storage/phone_secure_vault.dart';
+import 'key_storage/phone_ton_vault.dart';
 import 'key_storage/rutoken_biometric_pin_store.dart';
 import 'key_storage/rutoken_method_channel_adapter.dart';
 import 'key_storage/rutoken_provisioning.dart';
+import 'key_storage/rutoken_ton_vault.dart';
 import 'key_storage/secure_key_value_store.dart';
+import 'key_storage/ton_mnemonic.dart';
 import 'qr/qr_scanner.dart';
 import 'qr/ur_qr.dart';
+import 'ton/ton_center_client.dart';
+import 'ton/ton_transfer_service.dart';
+import 'ton/ton_wallet_controller.dart';
 import 'transactions/erc20_calldata.dart';
 import 'transactions/hardened_transaction_service.dart';
 import 'transactions/transaction_service.dart';
@@ -62,6 +68,7 @@ part 'wallet_flow_screen_unlocked.dart';
 part 'wallet_flow_screen_tabs.dart';
 part 'wallet_flow_screen_connections.dart';
 part 'wallet_flow_screen_confirm.dart';
+part 'wallet_flow_screen_ton.dart';
 
 enum WalletFlowStage {
   loading,
@@ -92,6 +99,7 @@ class WalletFlowScreen extends StatefulWidget {
     required this.walletConnectPreflight,
     required this.qrScanner,
     this.rutokenNativeAdapter,
+    this.tonClient,
     super.key,
   });
 
@@ -106,6 +114,7 @@ class WalletFlowScreen extends StatefulWidget {
   final WalletConnectTransactionPreflight walletConnectPreflight;
   final QrScanner qrScanner;
   final RutokenNativeAdapter? rutokenNativeAdapter;
+  final TonCenterClient? tonClient;
 
   @override
   State<WalletFlowScreen> createState() => _WalletFlowScreenState();
@@ -120,6 +129,26 @@ class _WalletFlowScreenState extends State<WalletFlowScreen>
   /// it lives here rather than in the domain controller.
   AppTab _selectedTab = AppTab.wallet;
   bool _rutokenBiometricDialogOpen = false;
+  bool _tonRouteOpen = false;
+
+  Future<void> _openTonWallet() async {
+    if (!mounted || _tonRouteOpen) return;
+    _tonRouteOpen = true;
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => _TonWalletPage(
+            store: widget.store,
+            biometricAuth: widget.biometricAuthGateway,
+            adapter: widget.rutokenNativeAdapter,
+            client: widget.tonClient,
+          ),
+        ),
+      );
+    } finally {
+      _tonRouteOpen = false;
+    }
+  }
 
   /// The busy/NFC overlay lives in the ROOT overlay, not in the page, so it
   /// covers modal sheets too. Rendered inside the page it sat *below* the send
@@ -419,6 +448,7 @@ class _WalletFlowScreenState extends State<WalletFlowScreen>
           trackingTransport: widget.trackingTransport,
           canUnlockWithBiometrics: _controller.canUnlockWithBiometrics,
           onScan: () => _onTabSelected(AppTab.connections),
+          onOpenTon: _openTonWallet,
         );
       case AppTab.connections:
         return _buildStageBody();
@@ -500,6 +530,13 @@ class _WalletFlowScreenState extends State<WalletFlowScreen>
                           ],
                           const SizedBox(height: 24),
                           _buildStageBody(),
+                          if (_controller.stage == WalletFlowStage.welcome)
+                            TextButton(
+                              onPressed: _openTonWallet,
+                              child: Text(
+                                AppLocalizations.of(context).tonNetwork,
+                              ),
+                            ),
                         ],
                       ),
                     ),

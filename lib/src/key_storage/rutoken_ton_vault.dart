@@ -105,6 +105,7 @@ final class RutokenTonVault {
   Future<RutokenTonProfile> importMnemonic({
     required String mnemonic,
     required String pin,
+    String? expectedAddress,
   }) => _operation(() async {
     final seed = await TonMnemonic.deriveSeed(mnemonic);
     try {
@@ -115,6 +116,7 @@ final class RutokenTonVault {
       } finally {
         pair.destroy();
       }
+      TonAccount(publicKey).checkRecoveryAddress(expectedAddress);
       return await _openSession(pin, (session, serial) async {
         final key = await _adapter.importTonKey(
           session: session,
