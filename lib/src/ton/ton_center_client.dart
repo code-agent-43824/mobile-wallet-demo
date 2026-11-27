@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:convert/convert.dart';
 import 'package:http/http.dart' as http;
 import 'package:ton_dart/ton_dart.dart';
 
 import '../errors/app_error.dart';
 import '../transactions/transaction_service.dart';
 import 'ton_network.dart';
+
+part 'ton_api_read.dart';
 
 class TonWalletState {
   const TonWalletState({
@@ -36,24 +39,29 @@ class TonCenterClient {
   final http.Client _client;
   final Duration _requestInterval;
   final Stopwatch _clock = Stopwatch()..start();
-  Duration _nextRequest = Duration.zero;
-  Future<void> _queue = Future<void>.value();
+  final Map<String, _TonRequestQueue> _queues = {};
 
   Future<TonWalletState> wallet(
     String address, {
     required bool forSigning,
     TonNetwork network = TonNetwork.testnet,
+  }) => _withFallback(
+    () => _centerWallet(address, forSigning: forSigning, network: network),
+    () => _apiWallet(address, forSigning: forSigning, network: network),
+  );
+
+  Future<TonWalletState> _centerWallet(
+    String address, {
+    required bool forSigning,
+    required TonNetwork network,
   }) async {
     final result = await _request<Map<String, dynamic>>(
       forSigning ? 'getWalletInformation' : 'getAddressInformation',
       network: network,
       query: {'address': address},
     );
-    final status = result['account_state'] ?? result['state'];
-    final balance = BigInt.tryParse(result['balance'].toString());
-    if (status is! String || balance == null || balance.isNegative) {
-      throw const TransactionFailure.coded(AppErrorCode.tonApiUnavailable);
-    }
+    final status = _accountStatus(result['account_state'] ?? result['state']);
+    final balance = _nonNegativeAmount(result['balance']);
     final seqno = result['seqno'];
     if (forSigning &&
         status == 'active' &&
@@ -74,14 +82,14 @@ class TonCenterClient {
   Future<List<Map<String, dynamic>>> transactions(
     String address, {
     TonNetwork network = TonNetwork.testnet,
-  }) async {
+  }) => _withFallback(() async {
     final reply = await _request<List<dynamic>>(
       'getTransactions',
       network: network,
       query: {'address': address, 'limit': '20', 'archival': 'true'},
     );
-    return reply.whereType<Map<String, dynamic>>().toList(growable: false);
-  }
+    return _rows(reply);
+  }, () => _apiTransactions(address, network));
 
   Future<BigInt> estimateFee({
     required String sender,
@@ -130,33 +138,54 @@ class TonCenterClient {
     required TonNetwork network,
     Map<String, String>? query,
     Map<String, dynamic>? body,
+  }) async {
+    final result = await _jsonRequest(
+      Uri.https(network.tonCenterHost, '/api/v2/$method', query),
+      body: body,
+      retryRateLimit: method != 'sendBoc',
+    );
+    final payload = result['result'];
+    if (result['ok'] != true || payload is! T) {
+      throw const TransactionFailure.coded(AppErrorCode.tonApiUnavailable);
+    }
+    return payload;
+  }
+
+  Future<Map<String, dynamic>> _jsonRequest(
+    Uri uri, {
+    Map<String, dynamic>? body,
+    bool retryRateLimit = true,
   }) {
-    final turn = _queue.then((_) async {
+    final queue = _queues.putIfAbsent(uri.host, _TonRequestQueue.new);
+    final turn = queue.tail.then((_) async {
       try {
-        final uri = Uri.https(network.tonCenterHost, '/api/v2/$method', query);
-        var response = await _send(uri, body);
+        var response = await _send(uri, body, queue);
         if (response.statusCode == 429) {
-          final delay = _applyRateLimit(response);
-          if (method != 'sendBoc' && delay <= _maxRetryWait) {
-            response = await _send(uri, body);
-            if (response.statusCode == 429) _applyRateLimit(response);
+          final delay = _applyRateLimit(response, queue);
+          if (retryRateLimit && delay <= _maxRetryWait) {
+            response = await _send(uri, body, queue);
+            if (response.statusCode == 429) _applyRateLimit(response, queue);
           }
         }
         final json = jsonDecode(response.body);
-        if (response.statusCode != 200 || json is! Map || json['ok'] != true) {
-          throw const FormatException('TON Center response failed');
+        if (response.statusCode != 200 || json is! Map<String, dynamic>) {
+          throw const FormatException('TON API response failed');
         }
-        return json['result'] as T;
+        return json;
       } catch (_) {
         throw const TransactionFailure.coded(AppErrorCode.tonApiUnavailable);
       }
     });
-    _queue = turn.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    queue.tail = turn.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return turn;
   }
 
-  Future<http.Response> _send(Uri uri, Map<String, dynamic>? body) async {
-    final delay = _nextRequest - _clock.elapsed;
+  Future<http.Response> _send(
+    Uri uri,
+    Map<String, dynamic>? body,
+    _TonRequestQueue queue,
+  ) async {
+    final delay = queue.next - _clock.elapsed;
     if (delay > _maxRetryWait) {
       throw const TransactionFailure.coded(AppErrorCode.tonApiUnavailable);
     }
@@ -171,19 +200,36 @@ class TonCenterClient {
                 ))
           .timeout(_timeout);
     } finally {
-      _nextRequest = _clock.elapsed + _requestInterval;
+      queue.next = _clock.elapsed + _requestInterval;
     }
   }
 
-  Duration _applyRateLimit(http.Response response) {
+  Duration _applyRateLimit(http.Response response, _TonRequestQueue queue) {
     final seconds = int.tryParse(response.headers['retry-after'] ?? '');
     final wait = seconds == null || seconds < 0
         ? _defaultRateLimitWait
         : Duration(seconds: seconds.clamp(0, 86400));
     final next = _clock.elapsed + wait;
-    if (next > _nextRequest) _nextRequest = next;
+    if (next > queue.next) queue.next = next;
     return wait;
   }
 
   void close() => _client.close();
+}
+
+class _TonRequestQueue {
+  Future<void> tail = Future<void>.value();
+  Duration next = Duration.zero;
+}
+
+Future<T> _withFallback<T>(
+  Future<T> Function() primary,
+  Future<T> Function() backup,
+) async {
+  try {
+    return await primary();
+  } on TransactionFailure catch (failure) {
+    if (failure.errorCode != AppErrorCode.tonApiUnavailable) rethrow;
+  }
+  return backup();
 }

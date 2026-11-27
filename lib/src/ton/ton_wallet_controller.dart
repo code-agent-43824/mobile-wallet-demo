@@ -118,7 +118,16 @@ class TonWalletController extends ChangeNotifier {
     error = null;
     _changed();
     try {
-      final fresh = await _transfers.load(accountFor(selected));
+      final account = accountFor(selected);
+      if (snapshot == null) {
+        final cached = await _transfers.cached(account);
+        if (_disposed || requestId != _refreshId) return;
+        if (cached != null) {
+          snapshot = cached;
+          _changed();
+        }
+      }
+      final fresh = await _transfers.load(account);
       if (requestId == _refreshId) {
         snapshot = fresh;
         awaitingTransfer = fresh.lastSubmission == TonTransferStatus.pending;

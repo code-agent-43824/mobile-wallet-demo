@@ -136,6 +136,8 @@ class _TonWalletPageState extends State<_TonWalletPage> {
                       ),
                       const SizedBox(height: 20),
                       if (_wallet.refreshing) const LinearProgressIndicator(),
+                      if (snapshot?.fromCache == true)
+                        const _OfflineCacheBanner(),
                       if (snapshot != null)
                         _BalanceHero(
                           amount: formatGram(snapshot.balance),
@@ -153,7 +155,9 @@ class _TonWalletPageState extends State<_TonWalletPage> {
                           Expanded(
                             child: FilledButton(
                               onPressed:
-                                  snapshot == null || _wallet.awaitingTransfer
+                                  snapshot == null ||
+                                      snapshot.fromCache ||
+                                      _wallet.awaitingTransfer
                                   ? null
                                   : () => _send(selected),
                               child: Text(l10n.actionSend),

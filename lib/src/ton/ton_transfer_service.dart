@@ -10,6 +10,8 @@ import 'ton_account.dart';
 import 'ton_center_client.dart';
 import 'ton_network.dart';
 
+part 'ton_snapshot_cache.dart';
+
 final _gramScale = BigInt.from(1000000000);
 
 String formatGram(BigInt amount) {
@@ -39,11 +41,19 @@ class TonActivity {
 }
 
 class TonSnapshot {
-  const TonSnapshot(this.balance, this.activity, this.lastSubmission);
+  const TonSnapshot(
+    this.balance,
+    this.activity,
+    this.lastSubmission, {
+    required this.fetchedAt,
+    this.fromCache = false,
+  });
 
   final BigInt balance;
   final List<TonActivity> activity;
   final TonTransferStatus? lastSubmission;
+  final DateTime fetchedAt;
+  final bool fromCache;
 }
 
 class TonTransferQuote {
@@ -83,10 +93,12 @@ class TonTransferService {
     DateTime Function()? now,
   }) : _client = client,
        _store = store,
+       _cache = _TonSnapshotCache(store),
        _now = now ?? DateTime.now;
 
   final TonCenterClient _client;
   final SecureKeyValueStore _store;
+  final _TonSnapshotCache _cache;
   final DateTime Function() _now;
   bool _signing = false;
 
@@ -95,7 +107,22 @@ class TonTransferService {
   String _submissionKey(TonAccount account) =>
       'wallet.ton_${account.network.name}.submission.${account.rawAddress}';
 
+  Future<TonSnapshot?> cached(TonAccount account) => _cache.read(account);
+
   Future<TonSnapshot> load(TonAccount account) async {
+    try {
+      final snapshot = await _loadLive(account);
+      await _cache.write(account, snapshot);
+      return snapshot;
+    } on TransactionFailure catch (failure) {
+      if (failure.errorCode != AppErrorCode.tonApiUnavailable) rethrow;
+      final snapshot = await cached(account);
+      if (snapshot != null) return snapshot;
+      rethrow;
+    }
+  }
+
+  Future<TonSnapshot> _loadLive(TonAccount account) async {
     final network = account.network;
     final state = await _client.wallet(
       account.rawAddress,
@@ -135,7 +162,12 @@ class TonTransferService {
         );
       }
     }
-    return TonSnapshot(state.balance, activity, status);
+    return TonSnapshot(
+      state.balance,
+      activity,
+      status,
+      fetchedAt: _now().toUtc(),
+    );
   }
 
   Future<TonTransferQuote> prepare({
