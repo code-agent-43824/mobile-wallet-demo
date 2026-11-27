@@ -38,6 +38,43 @@ Future<Uint8List> _sign(Uint8List hash) async {
 }
 
 void main() {
+  test('TON Center backs off on 429 and broadcasts a BoC at most once', () async {
+    var reads = 0;
+    var broadcasts = 0;
+    final client = TonCenterClient(
+      requestInterval: Duration.zero,
+      client: MockClient((request) async {
+        if (request.url.pathSegments.last == 'getWalletInformation') {
+          reads++;
+          if (reads == 2) {
+            return http.Response(
+              '{"ok":true,"result":{"balance":"100","account_state":"uninitialized"}}',
+              200,
+            );
+          }
+        } else {
+          broadcasts++;
+        }
+        return http.Response(
+          '{"ok":false}',
+          429,
+          headers: {'retry-after': '0'},
+        );
+      }),
+    );
+    addTearDown(client.close);
+    expect(
+      (await client.wallet(_account.rawAddress, forSigning: true)).balance,
+      BigInt.from(100),
+    );
+    await expectLater(
+      client.broadcast('test-boc'),
+      throwsA(isA<TransactionFailure>()),
+    );
+    expect(reads, 2);
+    expect(broadcasts, 1);
+  });
+
   test('a matching recipient transaction confirms the outgoing payment', () async {
     final fixture = _Fixture();
     final quote = await fixture.service.prepare(

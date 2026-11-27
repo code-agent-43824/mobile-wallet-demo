@@ -31,6 +31,8 @@ class TonCenterClient {
 
   static const _testnetHost = 'testnet.toncenter.com';
   static const _timeout = Duration(seconds: 15);
+  static const _maxRetryWait = Duration(seconds: 8);
+  static const _defaultRateLimitWait = Duration(seconds: 2);
   final http.Client _client;
   final Duration _requestInterval;
   final Stopwatch _clock = Stopwatch()..start();
@@ -118,20 +120,16 @@ class TonCenterClient {
     Map<String, dynamic>? body,
   }) {
     final turn = _queue.then((_) async {
-      final delay = _nextRequest - _clock.elapsed;
-      if (delay > Duration.zero) await Future<void>.delayed(delay);
-      _nextRequest = _clock.elapsed + _requestInterval;
       try {
         final uri = Uri.https(_testnetHost, '/api/v2/$method', query);
-        final response =
-            await (body == null
-                    ? _client.get(uri)
-                    : _client.post(
-                        uri,
-                        headers: {'content-type': 'application/json'},
-                        body: jsonEncode(body),
-                      ))
-                .timeout(_timeout);
+        var response = await _send(uri, body);
+        if (response.statusCode == 429) {
+          final delay = _applyRateLimit(response);
+          if (method != 'sendBoc' && delay <= _maxRetryWait) {
+            response = await _send(uri, body);
+            if (response.statusCode == 429) _applyRateLimit(response);
+          }
+        }
         final json = jsonDecode(response.body);
         if (response.statusCode != 200 || json is! Map || json['ok'] != true) {
           throw const FormatException('TON Center response failed');
@@ -143,6 +141,36 @@ class TonCenterClient {
     });
     _queue = turn.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return turn;
+  }
+
+  Future<http.Response> _send(Uri uri, Map<String, dynamic>? body) async {
+    final delay = _nextRequest - _clock.elapsed;
+    if (delay > _maxRetryWait) {
+      throw const TransactionFailure.coded(AppErrorCode.tonApiUnavailable);
+    }
+    if (delay > Duration.zero) await Future<void>.delayed(delay);
+    try {
+      return await (body == null
+              ? _client.get(uri)
+              : _client.post(
+                  uri,
+                  headers: {'content-type': 'application/json'},
+                  body: jsonEncode(body),
+                ))
+          .timeout(_timeout);
+    } finally {
+      _nextRequest = _clock.elapsed + _requestInterval;
+    }
+  }
+
+  Duration _applyRateLimit(http.Response response) {
+    final seconds = int.tryParse(response.headers['retry-after'] ?? '');
+    final wait = seconds == null || seconds < 0
+        ? _defaultRateLimitWait
+        : Duration(seconds: seconds.clamp(0, 86400));
+    final next = _clock.elapsed + wait;
+    if (next > _nextRequest) _nextRequest = next;
+    return wait;
   }
 
   void close() => _client.close();
