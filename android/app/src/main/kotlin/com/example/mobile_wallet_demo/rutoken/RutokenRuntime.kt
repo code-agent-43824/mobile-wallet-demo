@@ -142,6 +142,23 @@ internal class RutokenRuntime private constructor() : DefaultLifecycleObserver {
         }
     }
 
+    fun readTonKey(sessionId: String): Map<String, Any> =
+        onCard(sessionId) { RutokenTonKeys(it.session).read() }
+
+    fun generateTonKey(sessionId: String): Map<String, Any> =
+        onCard(sessionId) { RutokenTonKeys(it.session).generate(randomObjectId()) }
+
+    fun importTonKey(sessionId: String, seed: ByteArray, publicKey: ByteArray): Map<String, Any> {
+        return try {
+            onCard(sessionId) { RutokenTonKeys(it.session).importKey(randomObjectId(), seed, publicKey) }
+        } finally {
+            seed.fill(0)
+        }
+    }
+
+    fun signTonHash(sessionId: String, keyId: ByteArray, hash: ByteArray): ByteArray =
+        onCard(sessionId) { RutokenTonKeys(it.session).sign(keyId, hash) }
+
     /**
      * Mirrors the supplied demo's importBip32PrivateKey implementation. The
      * token receives only the raw BIP32 master private key + chain code; all

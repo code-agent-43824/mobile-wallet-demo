@@ -7,6 +7,7 @@ import 'package:web3dart/web3dart.dart' show bytesToHex, publicKeyToAddress;
 
 import '../errors/app_error.dart';
 import 'custody_backend.dart';
+import 'rutoken_ton_vault.dart';
 
 /// Whether this process can load the card libraries.
 ///
@@ -52,7 +53,7 @@ class RutokenNativeException implements Exception, CodedError {
 /// Native code owns NFC, login and PKCS#11 object/session lifetimes. This Dart
 /// layer turns only public EC points into the account descriptor and keeps EVM
 /// signature canonicalization in the already-tested EVM layer.
-class MethodChannelRutokenNativeAdapter implements RutokenNativeAdapter {
+class MethodChannelRutokenNativeAdapter implements RutokenTonAdapter {
   MethodChannelRutokenNativeAdapter({MethodChannel? channel})
     : _channel = channel ?? const MethodChannel(_channelName);
 
@@ -169,6 +170,54 @@ class MethodChannelRutokenNativeAdapter implements RutokenNativeAdapter {
     );
   }
 
+  @override
+  Future<RutokenTonKey?> readTonKey(RutokenNativeSession session) async {
+    final response = await _invokeMap('readTonKey', {'sessionId': session.id});
+    return response.isEmpty ? null : _tonKey(response);
+  }
+
+  @override
+  Future<RutokenTonKey> generateTonKey(RutokenNativeSession session) async =>
+      _tonKey(await _invokeMap('generateTonKey', {'sessionId': session.id}));
+
+  @override
+  Future<RutokenTonKey> importTonKey({
+    required RutokenNativeSession session,
+    required Uint8List seed,
+    required Uint8List publicKey,
+  }) async => _tonKey(
+    await _invokeMap('importTonKey', {
+      'sessionId': session.id,
+      'seed': seed,
+      'publicKey': publicKey,
+    }),
+  );
+
+  @override
+  Future<Uint8List> signTonHash({
+    required RutokenNativeSession session,
+    required Uint8List keyId,
+    required Uint8List hash,
+  }) => _invokeBytes('signTonHash', {
+    'sessionId': session.id,
+    'keyId': keyId,
+    'hash': hash,
+  });
+
+  RutokenTonKey _tonKey(Map<Object?, Object?> response) {
+    try {
+      return RutokenTonKey(
+        id: _bytes(response, 'keyId'),
+        publicKey: _bytes(response, 'publicKey'),
+        generatedOnCard: response['generatedOnCard'] as bool,
+      );
+    } on FormatException {
+      throw const RutokenNativeException('Invalid TON key from the card.');
+    } on TypeError {
+      throw const RutokenNativeException('Invalid TON key from the card.');
+    }
+  }
+
   Future<Map<Object?, Object?>> _invokeMap(
     String method,
     Map<String, Object?> arguments,
@@ -225,6 +274,7 @@ class MethodChannelRutokenNativeAdapter implements RutokenNativeAdapter {
       'rutoken_pin_invalid' => AppErrorCode.cardPinInvalid,
       'rutoken_pin_locked' => AppErrorCode.cardPinLocked,
       'rutoken_nfc_lost' => AppErrorCode.cardNfcLost,
+      'rutoken_ton_key_exists' => AppErrorCode.walletAlreadyExists,
       _ => AppErrorCode.cardNativeFailure,
     };
     return RutokenNativeException.coded(errorCode, code: error.code);

@@ -1,18 +1,15 @@
-import 'dart:convert';
-import 'dart:isolate';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:bip32/bip32.dart' as bip32;
 import 'package:bip39/bip39.dart' as bip39;
 import 'package:convert/convert.dart';
-import 'package:cryptography/cryptography.dart';
 import 'package:web3dart/web3dart.dart';
 
 import '../auth/biometric_auth.dart';
 import '../auth/pin_unlock_session.dart';
 import '../errors/app_error.dart';
 import 'biometric_secret_store.dart';
+import 'encrypted_mnemonic_vault.dart';
 import 'key_storage_backend.dart';
 import 'secure_key_value_store.dart';
 
@@ -26,80 +23,52 @@ class PhoneSecureVault implements KeyStorageBackend {
     int maxUnlockAttempts = 5,
     Duration unlockLockout = const Duration(minutes: 5),
     DateTime Function()? now,
-    int pbkdf2Iterations = _defaultPinIterations,
+    int pbkdf2Iterations = EncryptedMnemonicVault.defaultPinIterations,
     Random? random,
     BiometricPromptText? biometricPromptText,
-  }) : _store = store,
-       _biometricPromptText = biometricPromptText ?? defaultBiometricPromptText,
-       _biometricAuth = biometricAuth ?? defaultBiometricAuthGateway(),
-       _session = session ?? PinUnlockSession(ttl: unlockTtl),
-       _maxUnlockAttempts = maxUnlockAttempts,
-       _unlockLockout = unlockLockout,
-       _pinIterations = debugIterationsOverride ?? pbkdf2Iterations,
-       _now = now ?? _defaultNow,
-       _random = random ?? Random.secure() {
-    _biometricSecretStore =
-        biometricSecretStore ??
-        GatedBiometricSecretStore(store: store, biometricAuth: _biometricAuth);
-  }
-
-  static DateTime _defaultNow() => DateTime.now().toUtc();
+  }) : _session = session ?? PinUnlockSession(ttl: unlockTtl),
+       _vault = EncryptedMnemonicVault(
+         store: store,
+         storageKey: storageKey,
+         backendId: _backendId,
+         biometricSecretId: 'primary',
+         biometricAuth: biometricAuth,
+         biometricSecretStore: biometricSecretStore,
+         biometricPromptText: biometricPromptText,
+         maxUnlockAttempts: maxUnlockAttempts,
+         unlockLockout: unlockLockout,
+         now: now,
+         pbkdf2Iterations: pbkdf2Iterations,
+         random: random,
+       );
 
   static const String storageKey = 'wallet.phone_secure_vault.v1';
   static const String derivationPath = "m/44'/60'/0'/0/0";
-  static const String _biometricSecretId = 'primary';
-  static const int _pinSaltLength = 16;
-  static const int _cipherNonceLength = 12;
-  static const int _dekLength = 32;
-  static const int _currentSchemaVersion = 3;
+  static const String _backendId = 'phone_secure_vault';
 
-  // The at-rest seed is encrypted under a random data-encryption key (DEK); the
-  // DEK is wrapped by a PIN-derived key. The PIN itself is never persisted.
-  //
-  // PBKDF2-HMAC-SHA256 at the OWASP-recommended 600k iterations, paired with
-  // the failed-attempt lockout below. The at-rest strength is still ultimately
-  // bounded by PIN entropy. Injectable so tests can use a cheaper value.
-  static const int _defaultPinIterations = 600000;
+  /// Used by widget tests to keep PIN derivation inline and fast.
+  static int? get debugIterationsOverride =>
+      EncryptedMnemonicVault.debugIterationsOverride;
+  static set debugIterationsOverride(int? value) =>
+      EncryptedMnemonicVault.debugIterationsOverride = value;
 
-  /// Test-only override for the PBKDF2 iteration count. Null in production (the
-  /// constructor default / injected value applies). When set, key derivation
-  /// also runs **inline** (not on a background isolate) — widget tests use a
-  /// tiny value so it finishes immediately and `pumpAndSettle` doesn't time out
-  /// chasing the isolate's spawn latency against the progress overlay's spinner.
-  static int? debugIterationsOverride;
-
-  final SecureKeyValueStore _store;
-  final BiometricAuthGateway _biometricAuth;
-  final BiometricPromptText _biometricPromptText;
+  final EncryptedMnemonicVault _vault;
   final PinUnlockSession _session;
-  final int _maxUnlockAttempts;
-  final Duration _unlockLockout;
-  final int _pinIterations;
-  final DateTime Function() _now;
-  final Random _random;
-  final Cipher _cipher = AesGcm.with256bits();
-  late final BiometricSecretStore _biometricSecretStore;
   WalletMaterial? _cachedMaterial;
 
   @override
-  String get backendId => 'phone_secure_vault';
+  String get backendId => _backendId;
 
   @override
   bool get isUnlocked => _session.isUnlocked && _cachedMaterial != null;
 
   @override
-  Future<bool> hasWallet() async {
-    final payload = await _store.read(storageKey);
-    return payload != null;
-  }
+  Future<bool> hasWallet() => _vault.hasWallet();
 
   @override
   Future<StoredWalletSummary?> getWalletSummary() async {
-    final payload = await _readPayload();
-    if (payload == null) {
-      return null;
-    }
-
+    final payload = await _vault.read();
+    if (payload == null) return null;
     return StoredWalletSummary(
       address: payload.address,
       backendId: payload.backendId,
@@ -108,157 +77,85 @@ class PhoneSecureVault implements KeyStorageBackend {
   }
 
   @override
-  Future<WalletMaterial> createWallet({required String pin}) async {
-    await _refuseIfWalletExists();
-    final mnemonic = bip39.generateMnemonic();
-    return _persistMnemonic(mnemonic: mnemonic, pin: pin);
-  }
+  Future<WalletMaterial> createWallet({required String pin}) =>
+      _persistMnemonic(mnemonic: bip39.generateMnemonic(), pin: pin);
 
   @override
   Future<WalletMaterial> importWallet({
     required String mnemonic,
     required String pin,
   }) async {
-    await _refuseIfWalletExists();
-    final normalizedMnemonic = _normalizeMnemonic(mnemonic);
-    if (!bip39.validateMnemonic(normalizedMnemonic)) {
-      throw const InvalidMnemonicFailure();
-    }
-
-    return _persistMnemonic(mnemonic: normalizedMnemonic, pin: pin);
-  }
-
-  /// Creating or importing over an existing wallet would replace its seed, and
-  /// the seed is the only copy of the key this backend holds. Onboarding only
-  /// reaches these calls when no wallet exists, so anything else is a bug or a
-  /// misroute — fail loudly instead of silently discarding the wallet.
-  Future<void> _refuseIfWalletExists() async {
     if (await hasWallet()) {
       throw const VaultFailure.coded(AppErrorCode.walletAlreadyExists);
     }
+    final normalized = _normalizeMnemonic(mnemonic);
+    if (!bip39.validateMnemonic(normalized)) {
+      throw const InvalidMnemonicFailure();
+    }
+    return _persistMnemonic(mnemonic: normalized, pin: pin);
   }
 
   @override
   Future<WalletMaterial> unlock({required String pin}) async {
-    if (isUnlocked) {
-      return _cachedMaterial!;
-    }
-
-    final payload = await _requirePayload();
-    _assertNotLockedOut(payload);
-
+    if (isUnlocked) return _cachedMaterial!;
     try {
-      final dek = await _unwrapDek(payload: payload, pin: pin);
-      final mnemonic = await _decryptMnemonicWithDek(
-        payload: payload,
-        dek: dek,
-      );
-      final material = _deriveWalletMaterial(
-        mnemonic: mnemonic,
-        derivationPath: payload.derivationPath,
-      );
-
-      if (material.address.toLowerCase() != payload.address.toLowerCase()) {
-        throw const InvalidPinFailure();
-      }
-
-      await _resetUnlockThrottle(payload);
+      final material = await _vault.withPin(pin: pin, use: _openMaterial);
       return _cacheUnlockedMaterial(material);
     } catch (_) {
       lock();
-      await _registerFailedUnlock(payload);
-      throw const InvalidPinFailure();
+      rethrow;
     }
   }
 
-  BiometricAuthMode get biometricAuthMode => _biometricAuth.mode;
+  BiometricAuthMode get biometricAuthMode => _vault.biometricAuthMode;
 
   @override
-  Future<bool> isBiometricUnlockAvailable() {
-    return _biometricAuth.isAvailable();
-  }
+  Future<bool> isBiometricUnlockAvailable() =>
+      _vault.isBiometricUnlockAvailable();
 
   @override
-  Future<bool> isBiometricUnlockEnabled() async {
-    final payload = await _readPayload();
-    return payload?.biometricEnabled ?? false;
-  }
+  Future<bool> isBiometricUnlockEnabled() => _vault.isBiometricUnlockEnabled();
 
   @override
   Future<void> setBiometricUnlockEnabled({
     required bool enabled,
     required String pin,
-  }) async {
-    final payload = await _requirePayload();
-    if (enabled) {
-      if (!await isBiometricUnlockAvailable()) {
-        throw const BiometricUnavailableFailure();
-      }
-
-      await _biometricAuth.authenticate(
-        reason: _biometricPromptText(BiometricPrompt.enableQuickUnlock),
-      );
-
-      // Unwrap the DEK with the PIN, then hand it to the gated biometric store.
-      // The PIN is used only transiently here and is never persisted.
-      List<int> dek;
-      try {
-        dek = await _unwrapDek(payload: payload, pin: pin);
-      } catch (_) {
-        throw const InvalidPinFailure();
-      }
-
-      await _biometricSecretStore.store(id: _biometricSecretId, secret: dek);
-      await _writePayload(payload.copyWith(biometricEnabled: true));
-      return;
-    }
-
-    await _biometricSecretStore.delete(_biometricSecretId);
-    await _writePayload(payload.copyWith(biometricEnabled: false));
-  }
+  }) => _vault.setBiometricUnlockEnabled(enabled: enabled, pin: pin);
 
   @override
   Future<WalletMaterial> unlockWithBiometrics() async {
-    if (isUnlocked) {
-      return _cachedMaterial!;
-    }
-
-    final payload = await _requirePayload();
-    if (!await isBiometricUnlockAvailable()) {
-      throw const BiometricUnavailableFailure();
-    }
-    if (!payload.biometricEnabled) {
-      throw const BiometricNotEnabledFailure();
-    }
-
-    // Releasing the DEK prompts for biometric authentication inside the store.
-    final dek = await _biometricSecretStore.retrieve(
-      id: _biometricSecretId,
-      reason: _biometricPromptText(BiometricPrompt.unlockWallet),
-    );
-    if (dek == null) {
-      throw const BiometricNotEnabledFailure();
-    }
-
-    final mnemonic = await _decryptMnemonicWithDek(payload: payload, dek: dek);
-    final material = _deriveWalletMaterial(
-      mnemonic: mnemonic,
-      derivationPath: payload.derivationPath,
-    );
+    if (isUnlocked) return _cachedMaterial!;
+    final material = await _vault.withBiometrics(_openMaterial);
     return _cacheUnlockedMaterial(material);
   }
 
   @override
   Future<void> clear() async {
-    await _store.delete(storageKey);
-    await _biometricSecretStore.delete(_biometricSecretId);
     lock();
+    await _vault.clear();
   }
 
   @override
   void lock() {
     _session.lock();
     _cachedMaterial = null;
+  }
+
+  WalletMaterial _openMaterial(
+    String mnemonic,
+    EncryptedMnemonicRecord record,
+  ) {
+    if (!bip39.validateMnemonic(mnemonic)) {
+      throw const InvalidPinFailure();
+    }
+    final material = _deriveWalletMaterial(
+      mnemonic: mnemonic,
+      derivationPath: record.derivationPath,
+    );
+    if (material.address.toLowerCase() != record.address.toLowerCase()) {
+      throw const InvalidPinFailure();
+    }
+    return material;
   }
 
   Future<WalletMaterial> _persistMnemonic({
@@ -269,205 +166,13 @@ class PhoneSecureVault implements KeyStorageBackend {
       mnemonic: mnemonic,
       derivationPath: derivationPath,
     );
-
-    // 1. Encrypt the mnemonic under a fresh random DEK.
-    final dek = _randomBytes(_dekLength);
-    final mnemonicNonce = _randomBytes(_cipherNonceLength);
-    final mnemonicBox = await _cipher.encrypt(
-      utf8.encode(material.mnemonic),
-      secretKey: SecretKey(dek),
-      nonce: mnemonicNonce,
-    );
-
-    // 2. Wrap the DEK with a PIN-derived key (the PIN is never stored).
-    final salt = _randomBytes(_pinSaltLength);
-    final dekNonce = _randomBytes(_cipherNonceLength);
-    final dekBox = await _cipher.encrypt(
-      dek,
-      secretKey: await _deriveEncryptionKey(
-        pin: pin,
-        salt: salt,
-        iterations: _pinIterations,
-      ),
-      nonce: dekNonce,
-    );
-
-    final payload = _VaultPayload(
-      schemaVersion: _currentSchemaVersion,
-      backendId: backendId,
-      address: material.address,
-      createdAtUtc: DateTime.now().toUtc().toIso8601String(),
-      derivationPath: derivationPath,
-      pinSaltHex: hex.encode(salt),
-      pinIterations: _pinIterations,
-      mnemonicNonceHex: hex.encode(mnemonicBox.nonce),
-      mnemonicCipherTextHex: hex.encode(mnemonicBox.cipherText),
-      mnemonicMacHex: hex.encode(mnemonicBox.mac.bytes),
-      dekNonceHex: hex.encode(dekBox.nonce),
-      dekCipherTextHex: hex.encode(dekBox.cipherText),
-      dekMacHex: hex.encode(dekBox.mac.bytes),
-      biometricEnabled: false,
-    );
-
-    await _writePayload(payload);
-    return _cacheUnlockedMaterial(material);
-  }
-
-  Future<_VaultPayload?> _readPayload() async {
-    final raw = await _store.read(storageKey);
-    if (raw == null) {
-      return null;
-    }
-
-    final Map<String, dynamic> decoded;
-    try {
-      final parsed = jsonDecode(raw);
-      if (parsed is! Map<String, dynamic>) {
-        throw const CorruptVaultPayloadFailure();
-      }
-      decoded = parsed;
-    } on VaultFailure {
-      rethrow;
-    } catch (_) {
-      throw const CorruptVaultPayloadFailure();
-    }
-
-    final schemaVersion = decoded['schemaVersion'];
-    if (schemaVersion is! int) {
-      throw const CorruptVaultPayloadFailure();
-    }
-    if (schemaVersion != _currentSchemaVersion) {
-      throw UnsupportedVaultSchemaFailure(schemaVersion);
-    }
-
-    try {
-      return _VaultPayload.fromJson(decoded);
-    } catch (_) {
-      throw const CorruptVaultPayloadFailure();
-    }
-  }
-
-  Future<_VaultPayload> _requirePayload() async {
-    final payload = await _readPayload();
-    if (payload == null) {
-      throw const WalletNotInitializedFailure();
-    }
-    return payload;
-  }
-
-  Future<void> _writePayload(_VaultPayload payload) async {
-    await _store.write(storageKey, jsonEncode(payload.toJson()));
-  }
-
-  void _assertNotLockedOut(_VaultPayload payload) {
-    final lockedUntilIso = payload.lockoutUntilUtcIso;
-    if (lockedUntilIso == null) {
-      return;
-    }
-    final lockedUntil = DateTime.tryParse(lockedUntilIso)?.toUtc();
-    if (lockedUntil == null) {
-      return;
-    }
-    final nowUtc = _now();
-    if (nowUtc.isBefore(lockedUntil)) {
-      throw VaultLockedOutFailure(lockedUntil.difference(nowUtc));
-    }
-  }
-
-  Future<void> _registerFailedUnlock(_VaultPayload payload) async {
-    final attempts = payload.failedUnlockAttempts + 1;
-    if (attempts >= _maxUnlockAttempts) {
-      await _writePayload(
-        payload.copyWith(
-          failedUnlockAttempts: 0,
-          lockoutUntilUtcIso: _now().add(_unlockLockout).toIso8601String(),
-        ),
-      );
-    } else {
-      await _writePayload(payload.copyWith(failedUnlockAttempts: attempts));
-    }
-  }
-
-  Future<void> _resetUnlockThrottle(_VaultPayload payload) async {
-    if (payload.failedUnlockAttempts == 0 &&
-        payload.lockoutUntilUtcIso == null) {
-      return;
-    }
-    await _writePayload(
-      payload.copyWith(failedUnlockAttempts: 0, clearLockout: true),
-    );
-  }
-
-  Future<List<int>> _unwrapDek({
-    required _VaultPayload payload,
-    required String pin,
-  }) async {
-    final secretKey = await _deriveEncryptionKey(
+    await _vault.create(
+      mnemonic: mnemonic,
       pin: pin,
-      salt: hex.decode(payload.pinSaltHex),
-      iterations: payload.pinIterations,
+      address: material.address,
+      derivationPath: derivationPath,
     );
-
-    return _cipher.decrypt(
-      SecretBox(
-        hex.decode(payload.dekCipherTextHex),
-        nonce: hex.decode(payload.dekNonceHex),
-        mac: Mac(hex.decode(payload.dekMacHex)),
-      ),
-      secretKey: secretKey,
-    );
-  }
-
-  Future<String> _decryptMnemonicWithDek({
-    required _VaultPayload payload,
-    required List<int> dek,
-  }) async {
-    final decryptedBytes = await _cipher.decrypt(
-      SecretBox(
-        hex.decode(payload.mnemonicCipherTextHex),
-        nonce: hex.decode(payload.mnemonicNonceHex),
-        mac: Mac(hex.decode(payload.mnemonicMacHex)),
-      ),
-      secretKey: SecretKey(dek),
-    );
-
-    final mnemonic = utf8.decode(decryptedBytes);
-    if (!bip39.validateMnemonic(mnemonic)) {
-      throw const InvalidPinFailure();
-    }
-
-    return mnemonic;
-  }
-
-  Future<SecretKey> _deriveEncryptionKey({
-    required String pin,
-    required List<int> salt,
-    required int iterations,
-  }) async {
-    Future<List<int>> derive() async {
-      final pbkdf2 = Pbkdf2(
-        macAlgorithm: Hmac.sha256(),
-        iterations: iterations,
-        bits: 256,
-      );
-      final key = await pbkdf2.deriveKey(
-        secretKey: SecretKey(utf8.encode(pin)),
-        nonce: salt,
-      );
-      return key.extractBytes();
-    }
-
-    // PBKDF2 at the configured (600k) iterations is CPU-heavy and would block
-    // the UI isolate, freezing create/unlock for seconds. Offload it to a
-    // background isolate so the UI stays responsive (the progress overlay
-    // animates). It's pure computation with sendable args/result and no platform
-    // channels, so it's isolate-safe. In tests ([debugIterationsOverride] set)
-    // run inline instead: the count is tiny, and an isolate's spawn latency
-    // would make `pumpAndSettle` time out against the overlay's spinner.
-    final keyBytes = debugIterationsOverride != null
-        ? await derive()
-        : await Isolate.run(derive);
-    return SecretKey(keyBytes);
+    return _cacheUnlockedMaterial(material);
   }
 
   WalletMaterial _deriveWalletMaterial({
@@ -503,119 +208,5 @@ class PhoneSecureVault implements KeyStorageBackend {
         .split(RegExp(r'\s+'))
         .where((word) => word.isNotEmpty)
         .join(' ');
-  }
-
-  Uint8List _randomBytes(int length) {
-    return Uint8List.fromList(
-      List<int>.generate(length, (_) => _random.nextInt(256)),
-    );
-  }
-}
-
-class _VaultPayload {
-  const _VaultPayload({
-    required this.schemaVersion,
-    required this.backendId,
-    required this.address,
-    required this.createdAtUtc,
-    required this.derivationPath,
-    required this.pinSaltHex,
-    required this.pinIterations,
-    required this.mnemonicNonceHex,
-    required this.mnemonicCipherTextHex,
-    required this.mnemonicMacHex,
-    required this.dekNonceHex,
-    required this.dekCipherTextHex,
-    required this.dekMacHex,
-    required this.biometricEnabled,
-    this.failedUnlockAttempts = 0,
-    this.lockoutUntilUtcIso,
-  });
-
-  factory _VaultPayload.fromJson(Map<String, dynamic> json) {
-    return _VaultPayload(
-      schemaVersion: json['schemaVersion'] as int,
-      backendId: json['backendId'] as String,
-      address: json['address'] as String,
-      createdAtUtc: json['createdAtUtc'] as String,
-      derivationPath: json['derivationPath'] as String,
-      pinSaltHex: json['pinSaltHex'] as String,
-      pinIterations: json['pinIterations'] as int,
-      mnemonicNonceHex: json['mnemonicNonceHex'] as String,
-      mnemonicCipherTextHex: json['mnemonicCipherTextHex'] as String,
-      mnemonicMacHex: json['mnemonicMacHex'] as String,
-      dekNonceHex: json['dekNonceHex'] as String,
-      dekCipherTextHex: json['dekCipherTextHex'] as String,
-      dekMacHex: json['dekMacHex'] as String,
-      biometricEnabled: json['biometricEnabled'] as bool? ?? false,
-      failedUnlockAttempts: json['failedUnlockAttempts'] as int? ?? 0,
-      lockoutUntilUtcIso: json['lockoutUntilUtcIso'] as String?,
-    );
-  }
-
-  final int schemaVersion;
-  final String backendId;
-  final String address;
-  final String createdAtUtc;
-  final String derivationPath;
-  final String pinSaltHex;
-  final int pinIterations;
-  final String mnemonicNonceHex;
-  final String mnemonicCipherTextHex;
-  final String mnemonicMacHex;
-  final String dekNonceHex;
-  final String dekCipherTextHex;
-  final String dekMacHex;
-  final bool biometricEnabled;
-  final int failedUnlockAttempts;
-  final String? lockoutUntilUtcIso;
-
-  _VaultPayload copyWith({
-    bool? biometricEnabled,
-    int? failedUnlockAttempts,
-    String? lockoutUntilUtcIso,
-    bool clearLockout = false,
-  }) {
-    return _VaultPayload(
-      schemaVersion: schemaVersion,
-      backendId: backendId,
-      address: address,
-      createdAtUtc: createdAtUtc,
-      derivationPath: derivationPath,
-      pinSaltHex: pinSaltHex,
-      pinIterations: pinIterations,
-      mnemonicNonceHex: mnemonicNonceHex,
-      mnemonicCipherTextHex: mnemonicCipherTextHex,
-      mnemonicMacHex: mnemonicMacHex,
-      dekNonceHex: dekNonceHex,
-      dekCipherTextHex: dekCipherTextHex,
-      dekMacHex: dekMacHex,
-      biometricEnabled: biometricEnabled ?? this.biometricEnabled,
-      failedUnlockAttempts: failedUnlockAttempts ?? this.failedUnlockAttempts,
-      lockoutUntilUtcIso: clearLockout
-          ? null
-          : (lockoutUntilUtcIso ?? this.lockoutUntilUtcIso),
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return <String, dynamic>{
-      'schemaVersion': schemaVersion,
-      'backendId': backendId,
-      'address': address,
-      'createdAtUtc': createdAtUtc,
-      'derivationPath': derivationPath,
-      'pinSaltHex': pinSaltHex,
-      'pinIterations': pinIterations,
-      'mnemonicNonceHex': mnemonicNonceHex,
-      'mnemonicCipherTextHex': mnemonicCipherTextHex,
-      'mnemonicMacHex': mnemonicMacHex,
-      'dekNonceHex': dekNonceHex,
-      'dekCipherTextHex': dekCipherTextHex,
-      'dekMacHex': dekMacHex,
-      'biometricEnabled': biometricEnabled,
-      'failedUnlockAttempts': failedUnlockAttempts,
-      'lockoutUntilUtcIso': lockoutUntilUtcIso,
-    };
   }
 }

@@ -45,6 +45,26 @@ internal class RutokenMethodChannel(
                     chainCode = call.requiredBytes("chainCode"),
                 )
             }
+            "readTonKey" -> execute(result) {
+                runtime.readTonKey(call.requiredString("sessionId"))
+            }
+            "generateTonKey" -> execute(result) {
+                runtime.generateTonKey(call.requiredString("sessionId"))
+            }
+            "importTonKey" -> execute(result) {
+                runtime.importTonKey(
+                    sessionId = call.requiredString("sessionId"),
+                    seed = call.requiredBytes("seed"),
+                    publicKey = call.requiredBytes("publicKey"),
+                )
+            }
+            "signTonHash" -> execute(result) {
+                runtime.signTonHash(
+                    sessionId = call.requiredString("sessionId"),
+                    keyId = call.requiredBytes("keyId"),
+                    hash = call.requiredBytes("hash"),
+                )
+            }
             "closeSession" -> execute(result) {
                 runtime.closeSession(call.requiredString("sessionId"))
                 null
@@ -84,6 +104,7 @@ internal class RutokenMethodChannel(
     }
 
     private fun nativeErrorCode(error: Throwable): String {
+        if (error is RutokenTonKeyExistsException) return "rutoken_ton_key_exists"
         if (error is RutokenOperationCancelledException) return "rutoken_cancelled"
         if (error is RutokenWaitTimeoutException) return "rutoken_timeout"
         if (error is RutokenNfcLostException) return "rutoken_nfc_lost"
