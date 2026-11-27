@@ -920,5 +920,11 @@
   },
   "deleteWalletConfirmCheck": "I have saved the seed phrase or accept losing the funds",
   "deleteWalletAction": "Delete for good",
-  "busyDeletingWallet": "Deleting the wallet…"
+  "busyDeletingWallet": "Deleting the wallet…",
+  "errTonApiUnavailable": "TON Testnet is temporarily unavailable. Try again.",
+  "errTonAccountUnavailable": "The TON account cannot process this transfer. Check the wallet and recipient address.",
+  "errTonOtherNetwork": "Use a TON Testnet address for this transfer.",
+  "errTonQuoteExpired": "The TON wallet state or the transfer deadline changed. Review a new quote.",
+  "errTonTransferPending": "A GRAM transfer is still awaiting confirmation.",
+  "errTonSignatureInvalid": "The Ed25519 signature does not match the TON account."
 }

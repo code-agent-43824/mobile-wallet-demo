@@ -410,5 +410,11 @@
   "deleteWalletBody": "Ключ кошелька {address} будет стёрт с этого телефона. Вернуть кошелёк можно только seed-фразой — приложение её больше не покажет. Если вы её не сохранили, все средства на этом адресе будут потеряны навсегда.",
   "deleteWalletConfirmCheck": "Я сохранил seed-фразу или согласен потерять средства",
   "deleteWalletAction": "Удалить навсегда",
-  "busyDeletingWallet": "Удаляем кошелёк…"
+  "busyDeletingWallet": "Удаляем кошелёк…",
+  "errTonApiUnavailable": "TON Testnet временно недоступен. Повторите попытку.",
+  "errTonAccountUnavailable": "Аккаунт TON не может обработать этот перевод. Проверьте кошелёк и адрес получателя.",
+  "errTonOtherNetwork": "Для перевода нужен адрес TON Testnet.",
+  "errTonQuoteExpired": "Состояние кошелька TON или срок перевода изменились. Подготовьте перевод заново.",
+  "errTonTransferPending": "Перевод GRAM ещё ожидает подтверждения.",
+  "errTonSignatureInvalid": "Подпись Ed25519 не соответствует аккаунту TON."
 }

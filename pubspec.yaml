@@ -46,6 +46,7 @@ dependencies:
   cryptography: ^2.7.0
   blockchain_utils: ^8.0.1
   ton_dart: ^3.0.0
+  http: ^1.6.0
   pointycastle: ^4.0.0
   flutter_secure_storage: ^10.3.1
   web3dart: ^3.0.1

@@ -76,6 +76,12 @@ enum AppErrorCode {
   txInsufficientNativeForFee,
   txNonceNegative,
   txSenderMismatch,
+  tonApiUnavailable,
+  tonAccountUnavailable,
+  tonOtherNetwork,
+  tonQuoteExpired,
+  tonTransferPending,
+  tonSignatureInvalid,
 
   /// Shared by WalletConnect and AirGap. Args: `address`.
   requestOtherAccount,

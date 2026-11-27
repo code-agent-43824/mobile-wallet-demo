@@ -10,12 +10,8 @@ import 'package:mobile_wallet_demo/src/key_storage/rutoken_ton_vault.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
 import 'package:mobile_wallet_demo/src/key_storage/ton_mnemonic.dart';
 
-// Public fixture from ton-org/ton-crypto mnemonic.spec.ts. Public key,
-// Wallet V5R1 testnet address and signature checked with @ton/crypto and @ton/ton.
-const _phrase =
-    'hospital stove relief fringe tongue always charge angry urge '
-    'sentence again match nerve inquiry senior coconut label tumble carry '
-    'category beauty bean road solution';
+import 'fixtures/ton_test_vectors.dart';
+
 const _publicKey =
     'f6c450a16bb1c514e22f1977e390a3025599aa1e7b00068a6aacf2119484c1bd';
 const _address = '0QC2w3H-ofk4DSeQynfr5fUiDdiVjxYoi8PGzW9Zd7X-sz0t';
@@ -31,13 +27,13 @@ void main() {
       final store = InMemorySecureKeyValueStore();
       final original = PhoneTonVault(store: store, pbkdf2Iterations: 1);
       final account = await original.importMnemonic(
-        mnemonic: _phrase,
+        mnemonic: tonTestMnemonic,
         pin: '123456',
       );
       expect(account.publicKeyHex, _publicKey);
       expect(account.address, _address);
       final stored = await store.read(PhoneTonVault.storageKey);
-      expect(stored, isNot(contains(_phrase)));
+      expect(stored, isNot(contains(tonTestMnemonic)));
       expect(stored, isNot(contains('123456')));
 
       final restarted = PhoneTonVault(store: store, pbkdf2Iterations: 1);
@@ -54,7 +50,7 @@ void main() {
       );
       expect(hex.encode(signature), _signature);
       await expectLater(
-        restarted.importMnemonic(mnemonic: _phrase, pin: '654321'),
+        restarted.importMnemonic(mnemonic: tonTestMnemonic, pin: '654321'),
         throwsA(
           isA<VaultFailure>().having(
             (error) => error.errorCode,
@@ -85,7 +81,7 @@ void main() {
       final adapter = _Card();
       final vault = RutokenTonVault(adapter: adapter, store: store);
       final profile = await vault.importMnemonic(
-        mnemonic: _phrase,
+        mnemonic: tonTestMnemonic,
         pin: '123456',
       );
       expect(profile.key.account.address, _address);
@@ -93,7 +89,7 @@ void main() {
       expect(adapter.closes, 1);
       final record = await store.read(RutokenTonVault.storageKey);
       expect(record, contains(_publicKey));
-      expect(record, isNot(contains(_phrase)));
+      expect(record, isNot(contains(tonTestMnemonic)));
       expect(record, isNot(contains('123456')));
       expect((await vault.profiles()).single.serial, 'serial-a');
 
