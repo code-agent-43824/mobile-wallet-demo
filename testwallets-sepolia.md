@@ -20,3 +20,10 @@ present endorse hobby crew escape child need claw resource cloth hollow toe
 ```
 drill share usage priority wire clever army hard dentist client infant avoid
 ```
+
+## TON Testnet (GRAM)
+
+| Тестовый кошелёк | Адрес TON Testnet |
+| --- | --- |
+| Первый | `0QCHFvex_61lZBvEPwYWCkFl2gU0n3BurUeHvBDsmhO9Maw8` |
+| Второй | `0QCx67uwYzLond0sonNTiB57uhnEksRbrMYeCfBspdnMC-fD` |
