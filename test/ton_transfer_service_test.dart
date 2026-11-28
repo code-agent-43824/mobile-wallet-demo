@@ -10,6 +10,7 @@ import 'package:mobile_wallet_demo/src/errors/app_error.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
 import 'package:mobile_wallet_demo/src/key_storage/ton_mnemonic.dart';
 import 'package:mobile_wallet_demo/src/ton/ton_account.dart';
+import 'package:mobile_wallet_demo/src/ton/ton_assets.dart';
 import 'package:mobile_wallet_demo/src/ton/ton_center_client.dart';
 import 'package:mobile_wallet_demo/src/ton/ton_network.dart';
 import 'package:mobile_wallet_demo/src/ton/ton_transfer_service.dart';
@@ -24,6 +25,9 @@ final _account = TonAccount(
   ),
 );
 final _recipient = '0:${'11' * 32}';
+final _master = '0:${'22' * 32}';
+final _senderJetton = '0:${'33' * 32}';
+final _recipientJetton = '0:${'44' * 32}';
 
 Future<Uint8List> _sign(Uint8List hash) async {
   final algorithm = Ed25519();
@@ -265,6 +269,258 @@ void main() {
     );
     expect(fixture.broadcasts, 0);
   });
+
+  test(
+    'Jetton confirmation requires a successful recipient wallet transaction',
+    () async {
+      final fixture = _Fixture(network: TonNetwork.mainnet);
+      final account = _account.onNetwork(fixture.network);
+      final asset = TonJetton(
+        network: fixture.network,
+        master: _master,
+        symbol: 'JET',
+        decimals: 6,
+      );
+      final quote = await fixture.service.prepare(
+        account: account,
+        recipient: _recipient,
+        amount: '1,250001',
+        jetton: asset,
+      );
+      expect(quote.amount, BigInt.from(1250001));
+      expect(formatGram(quote.nativeAmount), '0.1');
+      expect(quote.jetton?.master, _master);
+      expect(
+        quote.destination,
+        TonNetwork.mainnet.friendly(TonAddress(_recipient)),
+      );
+      expect(await fixture.service.submit(quote, _sign), isTrue);
+
+      final request = fixture.envelope!.body.beginParse();
+      expect(request.loadUint32(), WalletV5AuthType.external.tag);
+      request.loadUint32(); // Wallet ID.
+      expect(request.loadUint32(), quote.validUntil);
+      expect(request.loadUint32(), quote.seqno);
+      final action =
+          OutActionsV5.deserialize(request).actions.single as OutActionSendMsg;
+      final info = action.outMessage.info as CommonMessageInfoRelaxedInternal;
+      final transfer = JettonWalletTransfer.deserialize(
+        action.outMessage.body.beginParse(),
+      );
+      expect(info.dest.toRawAddress(), _senderJetton);
+      expect(info.bounce, isTrue);
+      expect(info.value.coins, quote.nativeAmount);
+      expect(transfer.amount, quote.amount);
+      expect(transfer.destination.toRawAddress(), _recipient);
+      expect(transfer.responseDestination?.toRawAddress(), account.rawAddress);
+      expect(transfer.forwardTonAmount, BigInt.one);
+
+      final firstHop = _internalMessage(
+        account.rawAddress,
+        _senderJetton,
+        action.outMessage.body,
+        quote.nativeAmount,
+      );
+      final secondHop = _internalMessage(
+        _senderJetton,
+        _recipientJetton,
+        beginCell()
+            .store(
+              JettonMinterInternalTransfer(
+                queryId: transfer.queryId,
+                jettonAmount: transfer.amount,
+                from: account.wallet.address,
+                responseAddress: account.wallet.address,
+                forwardTonAmount: BigInt.one,
+              ),
+            )
+            .endCell(),
+        BigInt.from(50000000),
+      );
+      fixture.transactions = [
+        {
+          'in_msg': {'body_hash': fixture.bodyHash},
+          'out_msgs': [_messageRow(firstHop)],
+        },
+      ];
+      fixture.jettonTransactions[_senderJetton] = [
+        _receipt(firstHop, outbound: [secondHop]),
+      ];
+      expect(
+        (await fixture.service.load(account)).lastSubmission,
+        TonTransferStatus.pending,
+      );
+      fixture.jettonTransactions[_recipientJetton] = [
+        _receipt(secondHop, aborted: true),
+      ];
+      expect(
+        (await fixture.service.load(account)).lastSubmission,
+        TonTransferStatus.failed,
+      );
+      fixture.jettonTransactions[_recipientJetton] = [_receipt(secondHop)];
+      expect(
+        (await fixture.service.load(account)).lastSubmission,
+        TonTransferStatus.confirmed,
+      );
+      expect(fixture.broadcasts, 1);
+    },
+  );
+
+  test(
+    'Jetton quote checks network, precision, owner and both balances',
+    () async {
+      final fixture = _Fixture();
+      Future<TonTransferQuote> prepare({
+        String amount = '1.25',
+        Object? decimals = 6,
+        TonNetwork network = TonNetwork.testnet,
+      }) => fixture.service.prepare(
+        account: _account,
+        recipient: _recipient,
+        amount: amount,
+        jetton: TonJetton(
+          network: network,
+          master: _master,
+          decimals: decimals,
+        ),
+      );
+      Matcher failsWith(AppErrorCode code) => throwsA(
+        isA<TransactionFailure>().having(
+          (error) => error.errorCode,
+          'code',
+          code,
+        ),
+      );
+
+      await expectLater(
+        prepare(network: TonNetwork.mainnet),
+        failsWith(AppErrorCode.tonOtherNetwork),
+      );
+      await expectLater(
+        prepare(decimals: null),
+        failsWith(AppErrorCode.tonJettonUnavailable),
+      );
+      await expectLater(
+        prepare(amount: '1.2500001'),
+        failsWith(AppErrorCode.txAmountTooManyDecimals),
+      );
+      expect((await prepare(amount: '3', decimals: 0)).amount, BigInt.from(3));
+      fixture.jettonOwner = _recipient;
+      await expectLater(
+        prepare(),
+        failsWith(AppErrorCode.tonJettonUnavailable),
+      );
+      fixture.jettonOwner = null;
+      fixture.jettonMaster = _recipient;
+      await expectLater(
+        prepare(),
+        failsWith(AppErrorCode.tonJettonUnavailable),
+      );
+      fixture.jettonMaster = _master;
+      fixture.nativeBalance = 100000000;
+      await expectLater(
+        prepare(),
+        failsWith(AppErrorCode.txInsufficientNativeForAmountAndFee),
+      );
+      fixture.nativeBalance = 9000000000;
+      final quote = await prepare();
+      fixture.jettonBalance = 1;
+      await expectLater(prepare(), failsWith(AppErrorCode.txInsufficientAsset));
+      await expectLater(
+        fixture.service.submit(
+          quote,
+          (_) async => fail('Signing should not start'),
+        ),
+        failsWith(AppErrorCode.txInsufficientAsset),
+      );
+      expect(fixture.broadcasts, 0);
+    },
+  );
+}
+
+Message _internalMessage(
+  String source,
+  String dest,
+  Cell body,
+  BigInt amount,
+) => Message(
+  info: CommonMessageInfoInternal(
+    ihrDisabled: true,
+    bounce: true,
+    bounced: false,
+    src: TonAddress(source),
+    dest: TonAddress(dest),
+    value: CurrencyCollection(coins: amount),
+    ihrFee: BigInt.zero,
+    forwardFee: BigInt.zero,
+    createdLt: BigInt.one,
+    createdAt: 1799999820,
+  ),
+  body: body,
+);
+
+Map<String, Object?> _messageRow(Message message) {
+  final info = message.info as CommonMessageInfoInternal;
+  return {
+    'hash': base64Encode(message.serialize().hash()),
+    'body_hash': base64Encode(message.body.hash()),
+    'source': info.src.toRawAddress(),
+    'destination': info.dest.toRawAddress(),
+    'value': info.value.coins.toString(),
+  };
+}
+
+Map<String, Object?> _receipt(
+  Message inbound, {
+  List<Message> outbound = const [],
+  bool aborted = false,
+}) {
+  final info = inbound.info as CommonMessageInfoInternal;
+  final zeros = List<int>.filled(32, 0);
+  final transaction = TonTransaction(
+    address: BigInt.parse(hex.encode(info.dest.hash), radix: 16),
+    lt: BigInt.two,
+    prevTransactionHash: BigInt.zero,
+    prevTransactionLt: BigInt.zero,
+    now: info.createdAt,
+    outMessagesCount: outbound.length,
+    oldStatus: AccountStatus.active,
+    endStatus: AccountStatus.active,
+    inMessage: inbound,
+    outMessages: outbound.asMap(),
+    totalFees: CurrencyCollection(coins: BigInt.one),
+    stateUpdate: HashUpdate(oldHash: zeros, newHash: zeros),
+    description: TransactionDescriptionGeneric(
+      creditFirst: false,
+      storagePhase: null,
+      creditPhase: null,
+      computePhase: TransactionComputeVm(
+        success: !aborted,
+        messageStateUsed: false,
+        accountActivated: false,
+        gasFees: BigInt.one,
+        gasUsed: BigInt.one,
+        gasLimit: BigInt.two,
+        gasCredit: null,
+        mode: 0,
+        exitCode: aborted ? 42 : 0,
+        exitArg: null,
+        vmSteps: 1,
+        vmInitStateHash: BigInt.zero,
+        vmFinalStateHash: BigInt.zero,
+      ),
+      actionPhase: null,
+      bouncePhase: null,
+      aborted: aborted,
+      destroyed: false,
+    ),
+    raw: beginCell().endCell(),
+  );
+  return {
+    'data': beginCell().store(transaction).endCell().toBase64(),
+    'in_msg': _messageRow(inbound),
+    'out_msgs': outbound.map(_messageRow).toList(),
+  };
 }
 
 class _Fixture {
@@ -285,11 +541,16 @@ class _Fixture {
   bool deployed = true;
   int seqno = 1;
   int broadcasts = 0;
+  int nativeBalance = 9000000000;
+  int jettonBalance = 9000000;
+  String? jettonOwner;
+  String jettonMaster = _master;
   Message? envelope;
   String? bodyHash;
   Map<String, dynamic>? estimate;
   List<Object> transactions = [];
   List<Object> recipientTransactions = [];
+  final jettonTransactions = <String, List<Object>>{};
 
   Future<http.Response> _reply(http.Request request) async {
     expect(request.url.host, network.tonCenterHost);
@@ -298,7 +559,7 @@ class _Fixture {
     switch (method) {
       case 'getWalletInformation':
         result = {
-          'balance': '9000000000',
+          'balance': nativeBalance.toString(),
           'account_state': deployed ? 'active' : 'uninitialized',
           'seqno': seqno,
           'wallet_type': 'wallet v5 r1',
@@ -306,9 +567,52 @@ class _Fixture {
       case 'getAddressInformation':
         result = {'balance': '9000000000', 'state': 'uninitialized'};
       case 'getTransactions':
-        result = request.url.queryParameters['address'] == _recipient
-            ? recipientTransactions
-            : transactions;
+        final address = request.url.queryParameters['address'];
+        result =
+            jettonTransactions[address] ??
+            (address == _recipient ? recipientTransactions : transactions);
+      case 'runGetMethod':
+        final input = jsonDecode(request.body) as Map<String, dynamic>;
+        Object addressCell(String value) => [
+          'cell',
+          {
+            'bytes': beginCell()
+                .storeAddress(TonAddress(value))
+                .endCell()
+                .toBase64(),
+          },
+        ];
+        final owner = _account.onNetwork(network).rawAddress;
+        switch (input['method']) {
+          case 'get_wallet_address':
+            expect(input['address'], _master);
+            final argument = (input['stack'] as List).single as List;
+            expect(argument.first, 'tvm.Slice');
+            final address = Cell.fromBase64(
+              argument.last as String,
+            ).beginParse().loadAddress().toRawAddress();
+            expect(address, anyOf(owner, _recipient));
+            result = {
+              'exit_code': 0,
+              'stack': [
+                addressCell(
+                  address == owner ? _senderJetton : _recipientJetton,
+                ),
+              ],
+            };
+          case 'get_wallet_data':
+            expect(input['address'], _senderJetton);
+            result = {
+              'exit_code': 0,
+              'stack': [
+                ['num', '0x${jettonBalance.toRadixString(16)}'],
+                addressCell(jettonOwner ?? owner),
+                addressCell(jettonMaster),
+              ],
+            };
+          default:
+            throw StateError('Unexpected getter');
+        }
       case 'estimateFee':
         estimate = jsonDecode(request.body) as Map<String, dynamic>;
         expect(estimate!['ignore_chksig'], isTrue);

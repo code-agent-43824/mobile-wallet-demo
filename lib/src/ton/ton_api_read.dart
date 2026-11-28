@@ -12,7 +12,17 @@ extension _TonApiReads on TonCenterClient {
     required bool forSigning,
     required TonNetwork network,
   }) async {
-    final result = await _tonApi(network, 'blockchain/accounts/$address');
+    final result = await _jsonRequest(
+      Uri.https(network.tonApiHost, '/v2/blockchain/accounts/$address'),
+      allowNotFound: true,
+    );
+    if (result['error'] == 'entity not found') {
+      return TonWalletState(
+        balance: BigInt.zero,
+        status: 'nonexist',
+        seqno: null,
+      );
+    }
     final status = _accountStatus(result['status']);
     final balance = _nonNegativeAmount(result['balance']);
     int? seqno;

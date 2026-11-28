@@ -7,9 +7,11 @@ import 'package:ton_dart/ton_dart.dart';
 
 import '../errors/app_error.dart';
 import '../transactions/transaction_service.dart';
+import 'ton_assets.dart';
 import 'ton_network.dart';
 
 part 'ton_api_read.dart';
+part 'ton_jetton_read.dart';
 
 class TonWalletState {
   const TonWalletState({
@@ -91,6 +93,48 @@ class TonCenterClient {
     return _rows(reply);
   }, () => _apiTransactions(address, network));
 
+  Future<List<TonJettonHolding>> jettonBalances(
+    String owner, {
+    required TonNetwork network,
+  }) => _withFallback(
+    () => _apiJettonBalances(owner, network),
+    () => _centerJettonBalances(owner, network),
+  );
+
+  Future<List<TonActivity>> jettonActivity(
+    String owner, {
+    required TonNetwork network,
+  }) => _withFallback(
+    () => _apiJettonActivity(owner, network),
+    () => _centerJettonActivity(owner, network),
+  );
+
+  Future<TonAddress> jettonWalletAddress({
+    required TonAddress master,
+    required TonAddress owner,
+    required TonNetwork network,
+  }) => _jettonGetter(
+    network,
+    master,
+    'get_wallet_address',
+    owner: owner,
+    parse: (stack) => _stackCell(stack, 0).beginParse().loadAddress(),
+  );
+
+  Future<TonJettonWalletData> jettonWalletData({
+    required TonAddress wallet,
+    required TonNetwork network,
+  }) => _jettonGetter(
+    network,
+    wallet,
+    'get_wallet_data',
+    parse: (stack) => TonJettonWalletData(
+      _nonNegativeAmount(_stackNumber(stack, 0)),
+      _stackCell(stack, 1).beginParse().loadAddress(),
+      _stackCell(stack, 2).beginParse().loadAddress(),
+    ),
+  );
+
   Future<BigInt> estimateFee({
     required String sender,
     required Cell unsignedBody,
@@ -155,6 +199,7 @@ class TonCenterClient {
     Uri uri, {
     Map<String, dynamic>? body,
     bool retryRateLimit = true,
+    bool allowNotFound = false,
   }) {
     final queue = _queues.putIfAbsent(uri.host, _TonRequestQueue.new);
     final turn = queue.tail.then((_) async {
@@ -168,7 +213,13 @@ class TonCenterClient {
           }
         }
         final json = jsonDecode(response.body);
-        if (response.statusCode != 200 || json is! Map<String, dynamic>) {
+        final ok =
+            response.statusCode == 200 ||
+            (allowNotFound &&
+                response.statusCode == 404 &&
+                json is Map &&
+                json['error'] == 'entity not found');
+        if (!ok || json is! Map<String, dynamic>) {
           throw const FormatException('TON API response failed');
         }
         return json;

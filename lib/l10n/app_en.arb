@@ -925,7 +925,8 @@
   "errTonAccountUnavailable": "The TON account cannot process this transfer. Check the wallet and recipient address.",
   "errTonOtherNetwork": "Use an address for the selected TON network.",
   "errTonQuoteExpired": "The TON wallet state or the transfer deadline changed. Review a new quote.",
-  "errTonTransferPending": "A GRAM transfer is still awaiting confirmation.",
+  "errTonTransferPending": "A TON transfer is still awaiting confirmation.",
+  "errTonJettonUnavailable": "The Jetton wallet or token details could not be verified.",
   "errTonSignatureInvalid": "The Ed25519 signature does not match the TON account.",
   "tonNetwork": "TON Testnet",
   "tonPhone": "On this phone",
@@ -948,5 +949,12 @@
   "tonExpectedAddress": "Expected address (optional)",
   "errTonRestoreAddressMismatch": "This phrase gives a different Wallet V5R1 address on the selected network.",
   "tonOpenWallet": "TON",
-  "tonMainnet": "TON Mainnet"
+  "tonMainnet": "TON Mainnet",
+  "tonJettons": "Jetton",
+  "tonJettonsUnavailable": "Jetton balances and history are temporarily unavailable.",
+  "tonJettonsCached": "Showing cached Jetton balances and history.",
+  "tonJettonMaster": "Jetton master address",
+  "tonJettonAttachment": "GRAM attached for Jetton execution",
+  "tonWalletFee": "Wallet fee (estimate)",
+  "tonJettonSmallestUnits": "smallest units"
 }

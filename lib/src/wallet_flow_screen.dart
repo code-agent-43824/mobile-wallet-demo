@@ -43,6 +43,7 @@ import 'key_storage/secure_key_value_store.dart';
 import 'key_storage/ton_mnemonic.dart';
 import 'qr/qr_scanner.dart';
 import 'qr/ur_qr.dart';
+import 'ton/ton_assets.dart';
 import 'ton/ton_center_client.dart';
 import 'ton/ton_network.dart';
 import 'ton/ton_transfer_service.dart';

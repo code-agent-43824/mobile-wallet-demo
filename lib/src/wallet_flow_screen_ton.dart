@@ -82,6 +82,9 @@ class _TonWalletPageState extends State<_TonWalletPage> {
           }
           final selected = _wallet.selection;
           final snapshot = _wallet.snapshot;
+          final jettons = _wallet.jettons;
+          final activity = [...?snapshot?.activity, ...?jettons?.activity]
+            ..sort((first, second) => second.time.compareTo(first.time));
           return SafeArea(
             top: false,
             child: Center(
@@ -165,6 +168,31 @@ class _TonWalletPageState extends State<_TonWalletPage> {
                           ),
                         ],
                       ),
+                      if (jettons == null && !_wallet.refreshing)
+                        _ErrorBanner(message: l10n.tonJettonsUnavailable),
+                      if (jettons?.fromCache == true)
+                        Text(l10n.tonJettonsCached),
+                      if (jettons != null && jettons.balances.isNotEmpty) ...[
+                        const SizedBox(height: 20),
+                        _SectionTitle(l10n.tonJettons),
+                        for (final balance in jettons.balances)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              _tonJettonAmount(
+                                l10n,
+                                balance.jetton,
+                                balance.amount,
+                              ),
+                            ),
+                            subtitle: Text(
+                              [
+                                balance.jetton.name,
+                                balance.jetton.master,
+                              ].nonNulls.join('\n'),
+                            ),
+                          ),
+                      ],
                       if (snapshot?.lastSubmission
                           case final TonTransferStatus status)
                         Padding(
@@ -185,11 +213,12 @@ class _TonWalletPageState extends State<_TonWalletPage> {
                       const SizedBox(height: 16),
                     ],
                     _setupActions(l10n),
-                    if (snapshot != null) ...[
+                    if (activity.isNotEmpty ||
+                        (snapshot != null && jettons != null)) ...[
                       const SizedBox(height: 24),
                       _SectionTitle(l10n.tabActivity),
-                      if (snapshot.activity.isEmpty) Text(l10n.activityEmpty),
-                      for (final entry in snapshot.activity)
+                      if (activity.isEmpty) Text(l10n.activityEmpty),
+                      for (final entry in activity)
                         ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: Icon(
@@ -198,11 +227,16 @@ class _TonWalletPageState extends State<_TonWalletPage> {
                                 : Icons.arrow_upward,
                           ),
                           title: Text(
-                            '${entry.incoming ? '+' : '−'}${formatGram(entry.amount)} GRAM',
+                            '${entry.incoming ? '+' : '−'}${_tonActivityAmount(l10n, entry)}',
+                            overflow: TextOverflow.ellipsis,
                           ),
                           subtitle: Text(
-                            entry.counterparty,
+                            [
+                              entry.counterparty,
+                              entry.jetton?.master,
+                            ].nonNulls.join('\n'),
                             overflow: TextOverflow.ellipsis,
+                            maxLines: 2,
                           ),
                           trailing: Text(
                             MaterialLocalizations.of(
@@ -258,10 +292,22 @@ class _TonWalletPageState extends State<_TonWalletPage> {
   void _setup(TonSetupMethod method) =>
       _tonShowSheet(context, _TonSetupSheet(wallet: _wallet, method: method));
 
-  void _send(TonWalletSelection selected) => _tonShowSheet(
-    context,
-    _TonSendSheet(wallet: _wallet, selection: selected),
-  );
+  void _send(TonWalletSelection selected) {
+    final jettons = _wallet.jettons;
+    _tonShowSheet(
+      context,
+      _TonSendSheet(
+        wallet: _wallet,
+        selection: selected,
+        jettons: jettons == null || jettons.fromCache
+            ? const []
+            : [
+                for (final balance in jettons.balances)
+                  if (balance.jetton.decimals != null) balance.jetton,
+              ],
+      ),
+    );
+  }
 
   void _biometrics(bool enabled) => _tonShowSheet(
     context,
@@ -543,10 +589,15 @@ class _TonSetupSheetState extends State<_TonSetupSheet> {
 }
 
 class _TonSendSheet extends StatefulWidget {
-  const _TonSendSheet({required this.wallet, required this.selection});
+  const _TonSendSheet({
+    required this.wallet,
+    required this.selection,
+    required this.jettons,
+  });
 
   final TonWalletController wallet;
   final TonWalletSelection selection;
+  final List<TonJetton> jettons;
 
   @override
   State<_TonSendSheet> createState() => _TonSendSheetState();
@@ -556,6 +607,7 @@ class _TonSendSheetState extends State<_TonSendSheet> {
   final _recipient = TextEditingController();
   final _amount = TextEditingController();
   final _pin = TextEditingController();
+  TonJetton? _jetton;
   TonTransferQuote? _quote;
   bool _busy = false;
   bool _waitingCard = false;
@@ -575,6 +627,7 @@ class _TonSendSheetState extends State<_TonSendSheet> {
       widget.selection,
       _recipient.text,
       _amount.text,
+      jetton: _jetton,
     );
     if (mounted) setState(() => _quote = quote);
   });
@@ -632,6 +685,31 @@ class _TonSendSheetState extends State<_TonSendSheet> {
         if (accepted != null)
           Text(accepted ? l10n.tonSubmitted : l10n.tonSubmissionUncertain)
         else if (quote == null) ...[
+          if (widget.jettons.isNotEmpty)
+            DropdownButtonFormField<TonJetton>(
+              initialValue: _jetton,
+              isExpanded: true,
+              hint: const Text('GRAM'),
+              decoration: InputDecoration(labelText: l10n.transferAsset),
+              items: [
+                const DropdownMenuItem(child: Text('GRAM')),
+                for (final jetton in widget.jettons)
+                  DropdownMenuItem(
+                    value: jetton,
+                    child: Text(
+                      '${jetton.symbol} · ${l10n.tonJettons} · ${jetton.master.substring(0, 10)}…',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+              onChanged: _busy
+                  ? null
+                  : (jetton) => setState(() {
+                      _jetton = jetton;
+                      _amount.clear();
+                      _error = null;
+                    }),
+            ),
           TextField(
             controller: _recipient,
             enabled: !_busy,
@@ -645,7 +723,7 @@ class _TonSendSheetState extends State<_TonSendSheet> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(
               labelText: l10n.transferAmount,
-              suffixText: 'GRAM',
+              suffixText: _jetton?.symbol ?? 'GRAM',
             ),
           ),
           FilledButton(
@@ -655,8 +733,23 @@ class _TonSendSheetState extends State<_TonSendSheet> {
         ] else ...[
           Text(l10n.transferRecipient),
           SelectableText(quote.destination),
-          Text(l10n.wcAmountLine(formatGram(quote.amount), 'GRAM')),
-          Text('${l10n.transferNetworkFee} · ${formatGram(quote.fee)} GRAM'),
+          if (quote.jetton case final TonJetton jetton) ...[
+            Text(
+              l10n.wcAmountLine(
+                formatTonAmount(quote.amount, jetton.decimals),
+                jetton.symbol,
+              ),
+            ),
+            Text(l10n.tonJettonMaster),
+            SelectableText(jetton.master),
+            Text(
+              '${l10n.tonJettonAttachment} · ${formatGram(quote.nativeAmount)} GRAM',
+            ),
+            Text('${l10n.tonWalletFee} · ${formatGram(quote.fee)} GRAM'),
+          ] else ...[
+            Text(l10n.wcAmountLine(formatGram(quote.amount), 'GRAM')),
+            Text('${l10n.transferNetworkFee} · ${formatGram(quote.fee)} GRAM'),
+          ],
           if (!_busy) ...[
             _tonPinField(
               _pin,
@@ -767,6 +860,24 @@ Widget _tonPinField(TextEditingController controller, String label) =>
 
 String _tonNetworkLabel(AppLocalizations l10n, TonNetwork network) =>
     network.isTestnet ? l10n.tonNetwork : l10n.tonMainnet;
+
+String _tonJettonAmount(
+  AppLocalizations l10n,
+  TonJetton jetton,
+  BigInt amount,
+) {
+  final value = formatTonAmount(amount, jetton.decimals);
+  return jetton.decimals == null
+      ? '$value ${l10n.tonJettonSmallestUnits} · ${jetton.symbol}'
+      : '$value ${jetton.symbol}';
+}
+
+String _tonActivityAmount(AppLocalizations l10n, TonActivity entry) {
+  final jetton = entry.jetton;
+  return jetton == null
+      ? '${formatGram(entry.amount)} GRAM'
+      : '${_tonJettonAmount(l10n, jetton, entry.amount)} · ${l10n.tonJettons}';
+}
 
 String _tonError(AppLocalizations l10n, Object failure) =>
     failure is CodedError && failure.errorCode != null

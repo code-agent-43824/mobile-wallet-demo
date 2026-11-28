@@ -18,3 +18,17 @@ enum TonNetwork {
   String friendly(TonAddress address) =>
       address.toFriendly(testOnly: isTestnet).address;
 }
+
+TonAddress? parseTonAddress(Object? value) {
+  if (value is! String || value.isEmpty || value.length > 70) return null;
+  try {
+    return TonAddress(value);
+  } catch (_) {
+    return null;
+  }
+}
+
+String rawTonAddress(TonAddress address) => TonAddress.fromBytes(
+  hash: address.hash,
+  config: TonAddressConfing.raw(address.workchain),
+).address;

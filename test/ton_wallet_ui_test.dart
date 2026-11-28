@@ -13,12 +13,18 @@ import 'package:mobile_wallet_demo/src/key_storage/phone_secure_vault.dart';
 import 'package:mobile_wallet_demo/src/key_storage/phone_ton_vault.dart';
 import 'package:mobile_wallet_demo/src/key_storage/rutoken_ton_vault.dart';
 import 'package:mobile_wallet_demo/src/key_storage/secure_key_value_store.dart';
+import 'package:mobile_wallet_demo/src/ton/ton_assets.dart';
 import 'package:mobile_wallet_demo/src/ton/ton_center_client.dart';
+import 'package:ton_dart/ton_dart.dart' show beginCell, TonAddress;
 
 import 'fixtures/ton_test_vectors.dart';
 import 'package:convert/convert.dart';
 
 const _address = '0QC2w3H-ofk4DSeQynfr5fUiDdiVjxYoi8PGzW9Zd7X-sz0t';
+final _master = '0:${'22' * 32}';
+final _mainnetOwner = TonAddress(
+  'UQDSLOFVamNZzdy4LulclcCBEFkRReZ7WscBCLAw3Pg53h3h',
+);
 
 void main() {
   testWidgets(
@@ -74,110 +80,188 @@ void main() {
     },
   );
 
-  testWidgets('TON welcome entry restores, receives, reviews and signs GRAM', (
-    tester,
-  ) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(800, 1100);
-    PhoneSecureVault.debugIterationsOverride = 1;
-    addTearDown(() {
-      tester.view.resetDevicePixelRatio();
-      tester.view.resetPhysicalSize();
-      PhoneSecureVault.debugIterationsOverride = null;
-    });
-    final store = InMemorySecureKeyValueStore();
-    var broadcasts = 0;
-    final client = TonCenterClient(
-      requestInterval: Duration.zero,
-      client: MockClient((request) async {
-        final Object result;
-        switch (request.url.pathSegments.last) {
-          case 'getAddressInformation':
-            result = {'balance': '4000000000', 'state': 'active'};
-          case 'getWalletInformation':
-            result = {
-              'balance': '4000000000',
-              'seqno': 3,
-              'account_state': 'active',
-              'wallet_type': 'wallet v5 r1',
-            };
-          case 'getTransactions':
-            result = [];
-          case 'estimateFee':
-            result = {
-              'source_fees': {
-                'in_fwd_fee': 500000,
-                'storage_fee': 0,
-                'gas_fee': 3500000,
-                'fwd_fee': 1000000,
-              },
-            };
-          case 'sendBoc':
-            broadcasts++;
-            expect((jsonDecode(request.body) as Map)['boc'], isA<String>());
-            result = {'@type': 'ok'};
-          default:
-            throw StateError('Unexpected TON RPC request');
-        }
-        return http.Response(jsonEncode({'ok': true, 'result': result}), 200);
-      }),
-    );
-    addTearDown(client.close);
+  testWidgets(
+    'TON wallet signs Testnet GRAM and reviews a Mainnet Jetton transfer',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(800, 1100);
+      PhoneSecureVault.debugIterationsOverride = 1;
+      addTearDown(() {
+        tester.view.resetDevicePixelRatio();
+        tester.view.resetPhysicalSize();
+        PhoneSecureVault.debugIterationsOverride = null;
+      });
+      final store = InMemorySecureKeyValueStore();
+      var broadcasts = 0;
+      final client = TonCenterClient(
+        requestInterval: Duration.zero,
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/jettons/history')) {
+            return http.Response('{"operations":[]}', 200);
+          }
+          if (request.url.path.endsWith('/jettons')) {
+            return http.Response(
+              jsonEncode({
+                'balances': [
+                  if (request.url.host == 'tonapi.io')
+                    {
+                      'balance': '2500000',
+                      'jetton': {
+                        'address': _master,
+                        'symbol': 'JET',
+                        'name': 'Demo Jetton',
+                        'decimals': 6,
+                      },
+                    },
+                ],
+              }),
+              200,
+            );
+          }
+          final Object result;
+          switch (request.url.pathSegments.last) {
+            case 'getAddressInformation':
+              result = {'balance': '4000000000', 'state': 'active'};
+            case 'getWalletInformation':
+              result = {
+                'balance': '4000000000',
+                'seqno': 3,
+                'account_state': 'active',
+                'wallet_type': 'wallet v5 r1',
+              };
+            case 'getTransactions':
+              result = [];
+            case 'estimateFee':
+              result = {
+                'source_fees': {
+                  'in_fwd_fee': 500000,
+                  'storage_fee': 0,
+                  'gas_fee': 3500000,
+                  'fwd_fee': 1000000,
+                },
+              };
+            case 'runGetMethod':
+              expect(request.url.host, 'toncenter.com');
+              final input = jsonDecode(request.body) as Map;
+              Object addressCell(String value) => [
+                'cell',
+                {
+                  'bytes': beginCell()
+                      .storeAddress(TonAddress(value))
+                      .endCell()
+                      .toBase64(),
+                },
+              ];
+              result = {
+                'exit_code': 0,
+                'stack': [
+                  if (input['method'] == 'get_wallet_address')
+                    addressCell('0:${'33' * 32}')
+                  else ...[
+                    ['num', '2500000'],
+                    addressCell(_mainnetOwner.toRawAddress()),
+                    addressCell(_master),
+                  ],
+                ],
+              };
+            case 'sendBoc':
+              broadcasts++;
+              expect((jsonDecode(request.body) as Map)['boc'], isA<String>());
+              result = {'@type': 'ok'};
+            default:
+              throw StateError('Unexpected TON RPC request');
+          }
+          return http.Response(jsonEncode({'ok': true, 'result': result}), 200);
+        }),
+      );
+      addTearDown(client.close);
 
-    await tester.pumpWidget(
-      MobileWalletDemoApp(
-        store: store,
-        tonClient: client,
-        locale: const Locale('ru'),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('TON'));
-    await tester.pumpAndSettle();
-    final l10n = AppLocalizations.of(
-      tester.element(find.text('TON Testnet').first),
-    );
-    await tester.tap(find.text(l10n.tonImportPhone));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).at(0), tonTestMnemonic);
-    await tester.enterText(find.byType(TextField).at(1), _address);
-    await tester.enterText(find.byType(TextField).at(2), '123456');
-    await tester.enterText(find.byType(TextField).at(3), '123456');
-    await tester.tap(find.text(l10n.authConfirmAction));
-    await _pumpUntil(
-      tester,
-      () async => await store.read(PhoneTonVault.storageKey) != null,
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('GRAM'), findsOneWidget);
+      await tester.pumpWidget(
+        MobileWalletDemoApp(
+          store: store,
+          tonClient: client,
+          locale: const Locale('ru'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('TON'));
+      await tester.pumpAndSettle();
+      final l10n = AppLocalizations.of(
+        tester.element(find.text('TON Testnet').first),
+      );
+      await tester.tap(find.text(l10n.tonImportPhone));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).at(0), tonTestMnemonic);
+      await tester.enterText(find.byType(TextField).at(1), _address);
+      await tester.enterText(find.byType(TextField).at(2), '123456');
+      await tester.enterText(find.byType(TextField).at(3), '123456');
+      await tester.tap(find.text(l10n.authConfirmAction));
+      await _pumpUntil(
+        tester,
+        () async => await store.read(PhoneTonVault.storageKey) != null,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('GRAM'), findsOneWidget);
 
-    await tester.tap(find.text(l10n.actionReceive));
-    await tester.pumpAndSettle();
-    expect(
-      find.byWidgetPredicate(
-        (widget) => widget is SelectableText && widget.data == _address,
-      ),
-      findsOneWidget,
-    );
-    await tester.tap(find.text(l10n.actionClose));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.actionReceive));
+      await tester.pumpAndSettle();
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is SelectableText && widget.data == _address,
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text(l10n.actionClose));
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text(l10n.actionSend));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).at(0), '0:${'11' * 32}');
-    await tester.enterText(find.byType(TextField).at(1), '1,25');
-    await tester.tap(find.text(l10n.transferPreviewAction));
-    await tester.pumpAndSettle();
-    expect(find.text(l10n.wcAmountLine('1.25', 'GRAM')), findsOneWidget);
-    expect(broadcasts, 0);
-    await tester.enterText(find.byType(TextField), '123456');
-    await tester.tap(find.text(l10n.transferSignAndSend));
-    await _pumpUntil(tester, () async => broadcasts == 1);
-    await tester.pumpAndSettle();
-    expect(find.text(l10n.tonSubmitted), findsOneWidget);
-    expect(broadcasts, 1);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
+      await tester.tap(find.text(l10n.actionSend));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).at(0), '0:${'11' * 32}');
+      await tester.enterText(find.byType(TextField).at(1), '1,25');
+      await tester.tap(find.text(l10n.transferPreviewAction));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.wcAmountLine('1.25', 'GRAM')), findsOneWidget);
+      expect(broadcasts, 0);
+      await tester.enterText(find.byType(TextField), '123456');
+      await tester.tap(find.text(l10n.transferSignAndSend));
+      await _pumpUntil(tester, () async => broadcasts == 1);
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.tonSubmitted), findsOneWidget);
+      expect(broadcasts, 1);
+
+      await tester.tap(find.text(l10n.actionClose));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.tonNetwork));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.tonMainnet).last);
+      await tester.pumpAndSettle();
+      expect(find.text('2.5 JET'), findsOneWidget);
+      await tester.tap(find.text(l10n.actionSend));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(DropdownButtonFormField<TonJetton>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('JET · Jetton').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).at(0), '0:${'11' * 32}');
+      await tester.enterText(find.byType(TextField).at(1), '1,250001');
+      await tester.tap(find.text(l10n.transferPreviewAction));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.wcAmountLine('1.250001', 'JET')), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is SelectableText && widget.data == _master,
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text('${l10n.tonJettonAttachment} · 0.1 GRAM'),
+        findsOneWidget,
+      );
+      expect(find.text('${l10n.tonWalletFee} · 0.005 GRAM'), findsOneWidget);
+      expect(broadcasts, 1);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 }
 
 class _TonCard implements RutokenTonAdapter {

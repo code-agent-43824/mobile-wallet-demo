@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:ton_dart/ton_dart.dart' hide TonAccount;
@@ -7,38 +9,16 @@ import '../errors/app_error.dart';
 import '../key_storage/secure_key_value_store.dart';
 import '../transactions/transaction_service.dart';
 import 'ton_account.dart';
+import 'ton_assets.dart';
 import 'ton_center_client.dart';
 import 'ton_network.dart';
 
+part 'ton_jetton_transfer.dart';
 part 'ton_snapshot_cache.dart';
 
-final _gramScale = BigInt.from(1000000000);
-
-String formatGram(BigInt amount) {
-  final fraction = (amount.abs() % _gramScale)
-      .toString()
-      .padLeft(9, '0')
-      .replaceFirst(RegExp(r'0+$'), '');
-  final whole = (amount.abs() ~/ _gramScale).toString();
-  final sign = amount.isNegative ? '-' : '';
-  return fraction.isEmpty ? '$sign$whole' : '$sign$whole.$fraction';
-}
+String formatGram(BigInt amount) => formatTonAmount(amount, gramDecimals);
 
 enum TonTransferStatus { pending, confirmed, failed, unknown }
-
-class TonActivity {
-  const TonActivity({
-    required this.amount,
-    required this.counterparty,
-    required this.time,
-    required this.incoming,
-  });
-
-  final BigInt amount;
-  final String counterparty;
-  final DateTime time;
-  final bool incoming;
-}
 
 class TonSnapshot {
   const TonSnapshot(
@@ -54,6 +34,14 @@ class TonSnapshot {
   final TonTransferStatus? lastSubmission;
   final DateTime fetchedAt;
   final bool fromCache;
+
+  TonSnapshot asCached() => TonSnapshot(
+    balance,
+    activity,
+    lastSubmission,
+    fetchedAt: fetchedAt,
+    fromCache: true,
+  );
 }
 
 class TonTransferQuote {
@@ -61,22 +49,29 @@ class TonTransferQuote {
     required this.account,
     required this.destination,
     required this.amount,
+    required this.nativeAmount,
     required this.fee,
     required this.seqno,
     required this.validUntil,
+    required _JettonTransfer? jetton,
     required Cell request,
     required StateInit? init,
-  }) : _request = request,
+  }) : _jetton = jetton,
+       _request = request,
        _init = init;
 
   final TonAccount account;
   final String destination;
   final BigInt amount;
+  final BigInt nativeAmount;
   final BigInt fee;
   final int seqno;
   final int validUntil;
+  final _JettonTransfer? _jetton;
   final Cell _request;
   final StateInit? _init;
+
+  TonJetton? get jetton => _jetton?.asset;
 
   Uint8List get signingHash => Uint8List.fromList(_request.hash());
 
@@ -109,6 +104,29 @@ class TonTransferService {
 
   Future<TonSnapshot?> cached(TonAccount account) => _cache.read(account);
 
+  Future<TonJettonSnapshot?> cachedJettons(TonAccount account) =>
+      _cache.readJettons(account);
+
+  Future<TonJettonSnapshot?> loadJettons(TonAccount account) async {
+    final owner = account.rawAddress;
+    final network = account.network;
+    try {
+      final (balances, history) = await (
+        _client.jettonBalances(owner, network: network),
+        _client.jettonActivity(owner, network: network),
+      ).wait;
+      final snapshot = TonJettonSnapshot(
+        balances: balances,
+        activity: history,
+        fetchedAt: _now().toUtc(),
+      );
+      await _cache.writeJettons(account, snapshot);
+      return snapshot;
+    } on ParallelWaitError {
+      return cachedJettons(account);
+    }
+  }
+
   Future<TonSnapshot> load(TonAccount account) async {
     try {
       final snapshot = await _loadLive(account);
@@ -135,7 +153,7 @@ class TonTransferService {
     final submission = await _readSubmission(account);
     final status = submission == null
         ? null
-        : await _resolveSubmission(submission, transactions, network);
+        : await _submissionStatus(submission, transactions, network);
     final activity = <TonActivity>[];
     for (final transaction in transactions) {
       final time = transaction['utime'];
@@ -145,7 +163,7 @@ class TonTransferService {
       for (final message in [incoming, ...outgoing]) {
         if (message == null) continue;
         final received = identical(message, incoming);
-        final address = _parseAddress(
+        final address = parseTonAddress(
           message[received ? 'source' : 'destination'],
         );
         final amount = BigInt.tryParse(message['value'].toString());
@@ -174,52 +192,52 @@ class TonTransferService {
     required TonAccount account,
     required String recipient,
     required String amount,
+    TonJetton? jetton,
   }) async {
-    final destination = _parseAddress(recipient.trim());
+    final destination = parseTonAddress(recipient.trim());
     final network = account.network;
     if (destination == null) {
       throw const TransactionFailure.coded(AppErrorCode.txRecipientInvalid);
     }
-    if (!network.accepts(destination)) {
+    if (!network.accepts(destination) ||
+        (jetton != null && jetton.network != network)) {
       throw const TransactionFailure.coded(AppErrorCode.tonOtherNetwork);
     }
-    final value = _parseAmount(amount.trim());
+    final decimals = jetton == null ? gramDecimals : jetton.decimals;
+    if (decimals == null) {
+      throw const TransactionFailure.coded(AppErrorCode.tonJettonUnavailable);
+    }
+    final value = _parseAmount(amount.trim(), decimals);
     await _assertNoPending(account);
     final sender = await _client.wallet(
       account.rawAddress,
       forSigning: true,
       network: network,
     );
-    final target = await _client.wallet(
-      _canonicalAddress(destination),
-      forSigning: false,
-      network: network,
-    );
-    if ((!sender.active && !sender.canDeploy) ||
-        (!target.active && !target.canDeploy) ||
-        (destination.isFriendly &&
-            destination.isBounceable &&
-            !target.active)) {
+    if (!sender.active && !sender.canDeploy) {
       throw const TransactionFailure.coded(AppErrorCode.tonAccountUnavailable);
     }
+    final route = jetton == null
+        ? null
+        : await _prepareJetton(account, destination, jetton, value);
+    final bounce = route != null || await _nativeBounce(destination, network);
+    final nativeAmount = route == null ? value : _jettonAttachment;
     final seqno = sender.active ? sender.seqno! : 0;
     final init = sender.active ? null : account.wallet.state!.initialState();
     final validUntil = _nowSeconds + 180;
     final message = MessageRelaxed(
       info: CommonMessageInfoRelaxedInternal(
         ihrDisabled: true,
-        bounce:
-            target.active &&
-            (destination.isBounceable || !destination.isFriendly),
+        bounce: bounce,
         bounced: false,
-        dest: destination,
-        value: CurrencyCollection(coins: value),
+        dest: route?.senderWallet ?? destination,
+        value: CurrencyCollection(coins: nativeAmount),
         ihrFee: BigInt.zero,
         forwardFee: BigInt.zero,
         createdLt: BigInt.zero,
         createdAt: 0,
       ),
-      body: beginCell().endCell(),
+      body: route?.body ?? beginCell().endCell(),
     );
     final request = beginCell()
         .storeUint32(WalletV5AuthType.external.tag)
@@ -247,17 +265,35 @@ class TonTransferService {
           .endCell(),
       init: init,
     );
-    _requireFunds(sender.balance, value, fee);
+    _requireFunds(sender.balance, nativeAmount, fee);
     return TonTransferQuote._(
       account: account,
       destination: network.friendly(destination),
       amount: value,
+      nativeAmount: nativeAmount,
       fee: fee,
       seqno: seqno,
       validUntil: validUntil,
+      jetton: route,
       request: request,
       init: init,
     );
+  }
+
+  Future<bool> _nativeBounce(TonAddress destination, TonNetwork network) async {
+    final target = await _client.wallet(
+      rawTonAddress(destination),
+      forSigning: false,
+      network: network,
+    );
+    if ((!target.active && !target.canDeploy) ||
+        (destination.isFriendly &&
+            destination.isBounceable &&
+            !target.active)) {
+      throw const TransactionFailure.coded(AppErrorCode.tonAccountUnavailable);
+    }
+    return target.active &&
+        (destination.isBounceable || !destination.isFriendly);
   }
 
   /// True means the gateway accepted the BoC. Chain confirmation is polled
@@ -283,7 +319,17 @@ class TonTransferService {
           (!state.active && !state.canDeploy)) {
         throw const TransactionFailure.coded(AppErrorCode.tonQuoteExpired);
       }
-      _requireFunds(state.balance, quote.amount, quote.fee);
+      _requireFunds(state.balance, quote.nativeAmount, quote.fee);
+      final jetton = quote._jetton;
+      if (jetton != null) {
+        await _requireJettons(
+          quote.account,
+          jetton.asset,
+          jetton.senderWallet,
+          quote.amount,
+        );
+        _checkExpiry(quote);
+      }
       final signature = await sign(quote.signingHash);
       _checkExpiry(quote);
       if (!await quote.account.verify(quote.signingHash, signature)) {
@@ -304,9 +350,19 @@ class TonTransferService {
         _submissionKey(quote.account),
         jsonEncode({
           'bodyHash': base64Encode(body.hash()),
-          'recipient': _canonicalAddress(TonAddress(quote.destination)),
-          'amount': quote.amount.toString(),
+          'recipient': rawTonAddress(
+            jetton?.senderWallet ?? TonAddress(quote.destination),
+          ),
+          'amount': quote.nativeAmount.toString(),
           'validUntil': quote.validUntil,
+          if (jetton != null)
+            'jetton': {
+              'queryId': jetton.queryId.toString(),
+              'amount': quote.amount.toString(),
+              'owner': quote.account.rawAddress,
+              'recipientWallet': rawTonAddress(jetton.recipientWallet),
+              'bodyHash': base64Encode(jetton.body.hash()),
+            },
         }),
       );
       try {
@@ -336,9 +392,22 @@ class TonTransferService {
       account.rawAddress,
       network: account.network,
     );
-    if (await _resolveSubmission(recorded, transactions, account.network) ==
+    if (await _submissionStatus(recorded, transactions, account.network) ==
         TonTransferStatus.pending) {
       throw const TransactionFailure.coded(AppErrorCode.tonTransferPending);
+    }
+  }
+
+  Future<TonTransferStatus> _submissionStatus(
+    Map<String, dynamic> recorded,
+    List<Map<String, dynamic>> transactions,
+    TonNetwork network,
+  ) async {
+    try {
+      return await _resolveSubmission(recorded, transactions, network);
+    } on TransactionFailure catch (failure) {
+      if (failure.errorCode != AppErrorCode.tonApiUnavailable) rethrow;
+      return _waitingStatus(recorded);
     }
   }
 
@@ -353,39 +422,35 @@ class TonTransferService {
         continue;
       }
       for (final outbound in _outMessages(transaction)) {
-        final target = _parseAddress(outbound['destination']);
+        final target = parseTonAddress(outbound['destination']);
         final outboundHash = outbound['hash'];
         if (target == null ||
             outboundHash is! String ||
-            _canonicalAddress(target) != recorded['recipient'] ||
+            rawTonAddress(target) != recorded['recipient'] ||
             outbound['value'].toString() != recorded['amount']) {
           continue;
         }
-        final targetTransactions = await _client.transactions(
+        final jetton = _message(recorded['jetton']);
+        if (jetton != null) {
+          final bodyHash = outbound['body_hash'];
+          if (bodyHash == null) return _waitingStatus(recorded);
+          if (bodyHash != jetton['bodyHash']) continue;
+        }
+        final receipts = await _client.transactions(
           recorded['recipient'] as String,
           network: network,
         );
-        for (final incoming in targetTransactions) {
-          if (_message(incoming['in_msg'])?['hash'] != outboundHash) {
-            continue;
-          }
-          final data = incoming['data'];
-          if (data is! String || data.length > 65536) break;
-          try {
-            final chainTransaction = TonTransaction.deserialize(
-              Cell.fromBase64(data).beginParse(),
-            );
-            final description = chainTransaction.description;
-            if (description is TransactionDescriptionGeneric) {
-              return description.bouncePhase != null
-                  ? TonTransferStatus.failed
-                  : TonTransferStatus.confirmed;
-            }
-          } catch (_) {
-            return _waitingStatus(recorded);
-          }
+        final receipt = _findReceipt(receipts, outboundHash);
+        final description = receipt?.transaction.description;
+        if (receipt == null || description is! TransactionDescriptionGeneric) {
+          return _waitingStatus(recorded);
         }
-        return _waitingStatus(recorded);
+        if (description.bouncePhase != null ||
+            (jetton != null && !_executedJetton(description))) {
+          return TonTransferStatus.failed;
+        }
+        if (jetton == null) return TonTransferStatus.confirmed;
+        return _resolveJetton(recorded, jetton, receipt, receipts, network);
       }
       return TonTransferStatus.failed;
     }
@@ -412,50 +477,62 @@ class TonTransferService {
     }
   }
 
-  static BigInt _parseAmount(String value) {
+  static BigInt _parseAmount(String value, int decimals) {
     if (value.isEmpty) {
       throw const TransactionFailure.coded(AppErrorCode.txAmountEmpty);
     }
-    if (value.length > 38 ||
+    if (value.length > 38 + decimals ||
         !RegExp(r'^[0-9]+([.,][0-9]+)?$').hasMatch(value)) {
       throw const TransactionFailure.coded(AppErrorCode.txAmountFormat);
     }
     final parts = value.replaceAll(',', '.').split('.');
     final fraction = parts.length == 2 ? parts[1] : '';
-    if (fraction.length > 9) {
-      throw const TransactionFailure.coded(
-        AppErrorCode.txAmountTooManyDecimals,
-        {'decimals': 9},
-      );
+    if (fraction.length > decimals) {
+      throw TransactionFailure.coded(AppErrorCode.txAmountTooManyDecimals, {
+        'decimals': decimals,
+      });
     }
+    final scale = BigInt.from(10).pow(decimals);
     final amount =
-        BigInt.parse(parts.first) * _gramScale +
-        BigInt.parse(fraction.padRight(9, '0'));
+        BigInt.parse(parts.first) * scale +
+        (decimals == 0
+            ? BigInt.zero
+            : BigInt.parse(fraction.padRight(decimals, '0')));
     if (amount <= BigInt.zero || amount.bitLength > 120) {
       throw const TransactionFailure.coded(AppErrorCode.txAmountFormat);
     }
     return amount;
   }
+}
 
-  static String _canonicalAddress(TonAddress address) => TonAddress.fromBytes(
-    hash: address.hash,
-    config: TonAddressConfing.raw(address.workchain),
-  ).address;
-
-  static TonAddress? _parseAddress(Object? value) {
-    if (value is! String || value.isEmpty || value.length > 70) return null;
+({Map<String, dynamic> row, TonTransaction transaction})? _findReceipt(
+  List<Map<String, dynamic>> rows,
+  String hash,
+) {
+  for (final row in rows) {
+    if (_message(row['in_msg'])?['hash'] != hash) continue;
+    final data = row['data'];
+    if (data is! String || data.length > 65536) return null;
     try {
-      return TonAddress(value);
+      return (
+        row: row,
+        transaction: TonTransaction.deserialize(
+          Cell.fromBase64(data).beginParse(),
+        ),
+      );
     } catch (_) {
       return null;
     }
   }
+  return null;
+}
 
-  static Map<String, dynamic>? _message(Object? value) =>
-      value is Map<String, dynamic> ? value : null;
+Map<String, dynamic>? _message(Object? value) =>
+    value is Map<String, dynamic> ? value : null;
 
-  static Iterable<Map<String, dynamic>> _outMessages(
-    Map<String, dynamic> transaction,
-  ) => (transaction['out_msgs'] as List? ?? const [])
-      .whereType<Map<String, dynamic>>();
+Iterable<Map<String, dynamic>> _outMessages(Map<String, dynamic> transaction) {
+  final messages = transaction['out_msgs'];
+  return messages is List
+      ? messages.whereType<Map<String, dynamic>>()
+      : const [];
 }

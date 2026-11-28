@@ -7,6 +7,7 @@ import '../key_storage/phone_ton_vault.dart';
 import '../key_storage/rutoken_ton_vault.dart';
 import '../transactions/transaction_service.dart';
 import 'ton_account.dart';
+import 'ton_assets.dart';
 import 'ton_network.dart';
 import 'ton_transfer_service.dart';
 
@@ -52,6 +53,7 @@ class TonWalletController extends ChangeNotifier {
   TonWalletSelection? selection;
   TonNetwork network = TonNetwork.testnet;
   TonSnapshot? snapshot;
+  TonJettonSnapshot? jettons;
   Object? error;
   bool loading = true;
   bool refreshing = false;
@@ -103,6 +105,7 @@ class TonWalletController extends ChangeNotifier {
   void _reloadSelection() {
     _refreshId++;
     snapshot = null;
+    jettons = null;
     error = null;
     refreshing = false;
     awaitingTransfer = false;
@@ -119,6 +122,20 @@ class TonWalletController extends ChangeNotifier {
     _changed();
     try {
       final account = accountFor(selected);
+      await Future.wait([
+        _refreshNative(account, requestId),
+        _refreshJettons(account, requestId),
+      ]);
+    } finally {
+      if (requestId == _refreshId) {
+        refreshing = false;
+        _changed();
+      }
+    }
+  }
+
+  Future<void> _refreshNative(TonAccount account, int requestId) async {
+    try {
       if (snapshot == null) {
         final cached = await _transfers.cached(account);
         if (_disposed || requestId != _refreshId) return;
@@ -130,15 +147,33 @@ class TonWalletController extends ChangeNotifier {
       final fresh = await _transfers.load(account);
       if (requestId == _refreshId) {
         snapshot = fresh;
-        awaitingTransfer = fresh.lastSubmission == TonTransferStatus.pending;
-      }
-    } catch (failure) {
-      if (requestId == _refreshId) error = failure;
-    } finally {
-      if (requestId == _refreshId) {
-        refreshing = false;
+        if (!fresh.fromCache) {
+          awaitingTransfer = fresh.lastSubmission == TonTransferStatus.pending;
+        }
         _changed();
       }
+    } catch (failure) {
+      if (requestId == _refreshId) {
+        error = failure;
+        snapshot = snapshot?.asCached();
+        _changed();
+      }
+    }
+  }
+
+  Future<void> _refreshJettons(TonAccount account, int requestId) async {
+    if (jettons == null) {
+      final cached = await _transfers.cachedJettons(account);
+      if (_disposed || requestId != _refreshId) return;
+      if (cached != null) {
+        jettons = cached;
+        _changed();
+      }
+    }
+    final fresh = await _transfers.loadJettons(account);
+    if (requestId == _refreshId) {
+      jettons = fresh ?? jettons?.asCached();
+      _changed();
     }
   }
 
@@ -183,11 +218,13 @@ class TonWalletController extends ChangeNotifier {
   Future<TonTransferQuote> prepare(
     TonWalletSelection wallet,
     String recipient,
-    String amount,
-  ) => _transfers.prepare(
+    String amount, {
+    TonJetton? jetton,
+  }) => _transfers.prepare(
     account: accountFor(wallet),
     recipient: recipient,
     amount: amount,
+    jetton: jetton,
   );
 
   Future<bool> submit(

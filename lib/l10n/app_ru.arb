@@ -415,7 +415,8 @@
   "errTonAccountUnavailable": "Аккаунт TON не может обработать этот перевод. Проверьте кошелёк и адрес получателя.",
   "errTonOtherNetwork": "Укажите адрес для выбранной сети TON.",
   "errTonQuoteExpired": "Состояние кошелька TON или срок перевода изменились. Подготовьте перевод заново.",
-  "errTonTransferPending": "Перевод GRAM ещё ожидает подтверждения.",
+  "errTonTransferPending": "Перевод в TON ещё ожидает подтверждения.",
+  "errTonJettonUnavailable": "Не удалось проверить кошелёк Jetton или данные токена.",
   "errTonSignatureInvalid": "Подпись Ed25519 не соответствует аккаунту TON.",
   "tonNetwork": "TON Testnet",
   "tonPhone": "На этом телефоне",
@@ -438,5 +439,12 @@
   "tonExpectedAddress": "Ожидаемый адрес (необязательно)",
   "errTonRestoreAddressMismatch": "Эта фраза даёт другой адрес Wallet V5R1 в выбранной сети.",
   "tonOpenWallet": "TON",
-  "tonMainnet": "TON Mainnet"
+  "tonMainnet": "TON Mainnet",
+  "tonJettons": "Jetton",
+  "tonJettonsUnavailable": "Балансы и история Jetton временно недоступны.",
+  "tonJettonsCached": "Показаны сохранённые балансы и история Jetton.",
+  "tonJettonMaster": "Адрес мастер-контракта Jetton",
+  "tonJettonAttachment": "GRAM приложено для выполнения перевода Jetton",
+  "tonWalletFee": "Комиссия кошелька (оценка)",
+  "tonJettonSmallestUnits": "мин. ед."
 }

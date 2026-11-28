@@ -78,6 +78,7 @@ enum AppErrorCode {
   txSenderMismatch,
   tonApiUnavailable,
   tonAccountUnavailable,
+  tonJettonUnavailable,
   tonOtherNetwork,
   tonQuoteExpired,
   tonTransferPending,

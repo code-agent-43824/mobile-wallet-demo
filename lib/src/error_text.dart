@@ -87,6 +87,7 @@ String describeAppError(
     AppErrorCode.txSenderMismatch => l10n.errTxSenderMismatch,
     AppErrorCode.tonApiUnavailable => l10n.errTonApiUnavailable,
     AppErrorCode.tonAccountUnavailable => l10n.errTonAccountUnavailable,
+    AppErrorCode.tonJettonUnavailable => l10n.errTonJettonUnavailable,
     AppErrorCode.tonOtherNetwork => l10n.errTonOtherNetwork,
     AppErrorCode.tonQuoteExpired => l10n.errTonQuoteExpired,
     AppErrorCode.tonTransferPending => l10n.errTonTransferPending,
